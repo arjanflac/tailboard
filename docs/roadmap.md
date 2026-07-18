@@ -4,35 +4,22 @@ See also: [Architecture](architecture.md), [Security & Privacy](security.md), [K
 
 This roadmap focuses on the gaps that matter most for adoption. It is intentionally aligned with the current codebase rather than an aspirational rewrite.
 
-## Current baseline
+## Shipped foundation
 
-- Desktop hub, agent, and CLI exist and are exercised in CI.
-- macOS and Linux currently have the richest clipboard fidelity.
-- Windows desktop support exists, but only for plain text clipboard sync today.
-- An iOS companion app, keyboard extension, and share extension already exist in the repository, but they are still a source-first/manual-build path.
-- Opt-in privacy controls already exist for ignore lists, sensitive-content filters, and explicit clear behavior.
+- Desktop clipboard parity for plain text, HTML, and PNG across macOS, Linux, and Windows.
+- Event-driven Windows/Wayland watching and cheap change-sequence polling fallbacks.
+- Stable device registry, protocol capabilities, privacy presets, detector reporting, and packaged background services.
+- Maintained iOS app/keyboard/share/widgets/Intents surface with CI, foreground reconnect, Keychain configuration, transfer inbox, and background share uploads.
+- Hub-spooled targeted transfers with consent policies, allowlists, integrity checks, quota/TTL, resumable CLI uploads, and deterministic directory manifests.
 
-## Near-term priorities
+## Next product layer
 
-- Turn the iOS companion into a clearly supported path:
-  - define packaging/signing expectations,
-  - narrow the parity story relative to desktop,
-  - document the security and user-experience trade-offs clearly.
-- Harden privacy controls beyond the current opt-in baseline:
-  - make coverage and platform caveats clearer,
-  - improve detection quality where foreground context is weak,
-  - tighten cleanup semantics and operator guidance.
+- Ship the thin desktop tray companion over a local agent API: device drop targets, transfer progress/prompts, and clipboard pause/resume.
+- Finish external distribution wiring: TestFlight signing plus authenticated pushes to the Homebrew tap and Scoop bucket.
+- Add direct desktop-to-desktop fetch as a capability-gated optimization with transparent spool fallback.
 
-## Medium-term gaps
+## Deliberately deferred
 
-- Improve Windows clipboard fidelity beyond plain text.
-- Expand release engineering so supported binaries and support claims line up more closely.
-- Tighten operator controls around retention, disclosure, and sensitive-data handling.
-
-## What this roadmap is not promising yet
-
-- End-to-end encryption that hides clipboard contents from the hub.
-- A full peer-to-peer architecture without a trusted broker.
-- File-sync workflows that replace Taildrop.
-
-If those capabilities are essential for your use case today, ClipHub is not there yet. See [Known Limitations](limitations.md) and [Security & Privacy](security.md) before adopting it for sensitive workflows.
+- Targeted-transfer E2EE using registered device public keys remains an exploration; the schema reserves key material but the hub currently sees spool contents.
+- Clipboard sync stays hub-mediated, last-write-wins, and broadcast.
+- There is no Android client, stranger pairing, LAN mDNS discovery, or permanent transfer archive.

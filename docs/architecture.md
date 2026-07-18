@@ -2,7 +2,7 @@
 
 See also: [Security & Privacy](security.md), [Known Limitations](limitations.md), [Platform Support](platform-support.md), [Roadmap](roadmap.md), [README](../README.md)
 
-ClipHub is built around a single clipboard broker inside your tailnet plus multiple clients that either watch the clipboard (`clipd`) or talk to the hub directly (`tailclip`, the iOS companion).
+ClipHub is built around a single tailnet broker role with two distinct primitives: broadcast, ephemeral clipboard state and explicit, durable-until-claimed transfers targeted to a registered device. The role may run as standalone `cliphub` or inside a normal desktop agent via `clipd --embed-hub`; a dedicated hub machine is optional.
 
 ## System layout
 
@@ -11,39 +11,59 @@ local clipboard <-> clipd ----------------------+
                                                 |
 tailclip ------------------------------------+  |
                                              |  v
-iOS app / share extension / keyboard --> cliphub --> SQLite history
+iOS app / share extension / keyboard --> cliphub --> SQLite history + device registry
                                              ^
                                              |
                                WebSocket stream + REST API
+
+sender -- resumable upload --> disk spool --> receiver
 ```
 
 ## Core components
 
 | Component | Responsibility |
 | --- | --- |
-| `cliphub` | Central broker. Assigns sequence numbers, stores the current clip plus history in SQLite, exposes REST + WebSocket APIs, and uses Tailscale/tsnet identity in normal mode. |
-| `clipd` | Desktop agent. Polls the local clipboard, chooses the richest available MIME type, sends new content to the hub, and applies remote updates without echo loops. |
-| `tailclip` | Direct CLI client for `get`, `put`, `history`, `status`, `pause`, and `resume`. It talks to the hub without running a background clipboard watcher. |
-| `ios/ClipHub`, `TailPasteKeyboard`, `TailClipShare` | Source-available iOS companion. The app shows current/history/settings, the keyboard pastes the current hub clip, and the share extension sends content to the hub. |
+| `cliphub` | Central broker. Stores clipboard history, device/transfer metadata, and transfer spool files; exposes REST + targeted WebSocket events. |
+| `clipd` | Desktop agent. Watches clipboard changes, enforces local privacy policy, applies remote updates, and receives targeted transfers under a consent policy. |
+| `tailclip` | Scriptable client for clipboard operations, device discovery, and resumable send/receive workflows. |
+| iOS app and extensions | Device-first companion with clipboard/history surfaces, transfer inbox, keyboard, share extension, widgets, App Intents, and background uploads. |
 
 ## Data flow
 
 1. A client discovers the hub URL from Tailscale metadata unless `--hub` or `CLIPHUB_HUB` overrides it.
-2. `clipd` polls the local clipboard every 500 ms and reads the richest available content in this order: `image/png`, `text/html`, then `text/plain`.
+2. `clipd` waits for a native change event where available. Polling backends check a cheap change sequence before reading the richest available content in this order: `image/png`, `text/html`, then `text/plain`.
 3. `clipd` can optionally apply local privacy rules before upload. Blocked items stay local and can optionally clear the local clipboard.
 4. The client hashes the content and MIME type. If the item is new and not one the client just wrote itself, it sends the item to `cliphub`.
 5. `cliphub` stores the clip, assigns a monotonic `seq`, and broadcasts it to WebSocket subscribers.
 6. Other clients receive the update, apply it locally, read back what the OS actually stored, and mark that result as self-written so the next poll does not loop the same item back to the hub.
 7. Reconnecting clients can resume from `since_seq` to catch up on missed items.
 
+## Transfer flow
+
+1. Clients register stable device IDs and capabilities; online state comes from live WebSocket connections.
+2. A sender creates a transfer manifest naming one target device and declaring each file's size, MIME type, and SHA-256.
+3. The sender uploads files in resumable chunks. Directories are represented as deterministic per-file manifests.
+4. The hub verifies each completed file. Only a fully uploaded transfer becomes `offered`.
+5. The target receives a WebSocket offer and accepts, declines, or follows its local allowlist policy.
+6. Downloads support byte ranges. The receiver verifies SHA-256, writes through safe temporary paths, then acknowledges completion.
+7. Completion, cancellation, or expiry removes spool data. Metadata is not a permanent transfer archive.
+
 ## Persistence and retention
 
 - The hub persists clipboard history in SQLite.
+- Device and transfer metadata are also stored in SQLite; transfer bodies are files under the configured spool directory.
 - In the default tailnet mode, the database lives at `~/.config/cliphub/tsnet/clips.db`.
 - Retention defaults to a 24 hour TTL and a history depth of 50 items, both configurable on the hub.
+- Transfer TTL defaults to 48 hours and is separately bounded by spool quota and per-transfer limits.
 - The hub stores both hashes and raw clipboard content because it needs to replay clipboard data, not just detect duplicates.
 
 ## Transport modes
+
+### Embedded hub role
+
+- `clipd --embed-hub` serves the full broker API on port 9437 of that machine's Tailscale address and stores broker state beneath the agent state directory.
+- Other clients prefer the historic named hub, then discover any peer advertising `hub_role` through `/api/capabilities`.
+- The role does not float automatically. When its carrier is offline, sync and asynchronous transfer delivery pause.
 
 ### Normal mode
 

@@ -11,41 +11,47 @@ The main supported ClipHub sync path today is the desktop stack:
 - `tailclip` as the direct CLI,
 - across macOS, Linux, and Windows.
 
-An iOS companion app, keyboard extension, and share extension also exist in this repository, but they are currently source-available/manual-build components rather than a fully packaged, parity-with-desktop support tier.
+An iOS companion app, keyboard extension, share extension, and widgets are maintained in CI as a supported companion. Its interaction model intentionally differs from desktop because iOS does not permit background clipboard monitoring.
 
 ## Desktop clipboard capability matrix
 
 | Platform | `clipd` status | `text/plain` | `text/html` | `image/png` | Notes |
 | --- | --- | :---: | :---: | :---: | --- |
-| macOS | supported | yes | yes | yes | Uses `pbcopy`/`pbpaste` plus AppKit-backed AppleScript for rich content. |
-| Linux (Wayland) | supported | yes | yes | yes | Requires `wl-copy` and `wl-paste`. |
+| macOS | supported | yes | yes | yes | Uses a cheap `NSPasteboard.changeCount` check before reading content. |
+| Linux (Wayland) | supported | yes | yes | yes | Requires `wl-copy` and `wl-paste`; uses compositor-driven watch events. |
 | Linux (X11) | supported | yes | yes | yes | Requires `xclip`. |
-| Windows | supported with reduced fidelity | yes | no | no | Current backend uses PowerShell clipboard cmdlets and only handles plain text. |
+| Windows | supported | yes | yes | yes | Uses native Win32 clipboard formats and `AddClipboardFormatListener`; no PowerShell polling. |
 
 ## Component support by surface
 
 | Surface | Current state | Notes |
 | --- | --- | --- |
-| `cliphub` | usable from source on macOS, Linux, and Windows; current release artifact target is `linux/amd64` | CI smoke-builds the hub on Ubuntu, macOS, and Windows, but the `make release` target only emits a Linux AMD64 hub binary today. |
-| `clipd` | first-class desktop agent on macOS/Linux; reduced-fidelity support on Windows | Rich HTML/image clipboard parity is not there on Windows yet. |
-| `tailclip` | supported on macOS, Linux, and Windows | It talks directly to the hub and is less constrained by local clipboard APIs than `clipd`. |
-| iOS app + keyboard + share extension | source available, manual setup | Requires iOS 17+, Tailscale connectivity, Xcode setup, and user-managed signing. No packaged release or CI pipeline is defined here. |
+| `cliphub` | supported on macOS, Linux, and Windows | Release archives cover Darwin AMD64/ARM64, Linux AMD64/ARM64, and Windows AMD64 and include service definitions. |
+| `clipd` | supported on macOS, Linux, and Windows | Rich text, HTML, and PNG are supported across the desktop matrix. |
+| `tailclip` | supported on macOS, Linux, and Windows | Includes clipboard commands plus device discovery and resumable, targeted file transfers. |
+| iOS app + keyboard + share extension + widgets | supported companion; TestFlight is the intended distribution path | Requires iOS 17+, Tailscale connectivity, and Full Access for live keyboard networking. Simulator builds and tests run in CI. |
 
 ## iOS scope today
 
-The iOS codebase currently covers:
+The iOS companion covers:
 
-- a container app for current clip, history, and settings,
-- a custom keyboard that can paste the current hub clip,
-- a share extension that can send content to the hub.
+- a device-first container app with transfer inbox, current clip, history, settings, widgets, and App Intents,
+- a custom keyboard that can paste clips, copy image clips, and push the local clipboard,
+- a share extension that sends clips or targeted file transfers with background uploads.
 
-That is useful, but it is not the same product shape as the desktop background agent. When this repository says "cross-platform" today, it means:
+It is deliberately not a desktop background agent:
 
-- desktop sync across macOS, Linux, and Windows is the primary supported path,
-- iOS is an in-repo companion path with manual setup and a narrower interaction model.
+| Direction | Surface | Trigger |
+| --- | --- | --- |
+| Hub → iPhone paste | TailPaste keyboard | User opens the keyboard and taps a text clip |
+| Hub → local clipboard | App, widget, or Shortcut | User taps Copy |
+| iPhone → clipboard hub | Share extension, app, Shortcut, or keyboard push | User initiates the read/send |
+| Device → iPhone files | App transfer inbox | User accepts while the app is foregrounded |
 
 ## Choosing a deployment target
 
-- If you want the smoothest end-user setup today, use the desktop stack.
-- If you want an iPhone companion for your own tailnet and are comfortable with Xcode/manual signing, the iOS codebase is usable as a source-first project.
-- If you need rich clipboard fidelity on Windows, wait for future work before treating that platform as equivalent to macOS/Linux.
+- For the common personal setup, run `clipd --embed-hub` on a frequently-on desktop. This provides the full broker and transfer spool without a dedicated machine.
+- Use standalone `cliphub` when you want an independently managed, always-on broker.
+- Use the desktop stack for automatic two-way clipboard monitoring and unattended file receipt.
+- Use the iOS companion for explicit paste, copy, share, Shortcut, and transfer-inbox workflows.
+- Keep the Tailscale app connected on iOS. ClipHub intentionally does not embed a second VPN tunnel.

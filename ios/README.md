@@ -1,6 +1,6 @@
 # ClipHub iOS
 
-iOS client for ClipHub: container app + Tail Paste keyboard + share extension.
+iOS companion for ClipHub: device-first container app, Tail Paste keyboard, share extension, widgets, Live Activity, and App Intents.
 
 ## Setup
 
@@ -28,15 +28,32 @@ open ClipHub.xcodeproj
 
 1. Set your Apple Developer Team ID in project.yml or Xcode signing settings
 2. Build and run on your iPhone
-3. On first launch, enter your hub URL (`http://cliphub` if MagicDNS is enabled, or `http://100.x.x.x`)
+3. Connect the Tailscale app, then enter the HTTPS hub URL shown by your ClipHub deployment.
 4. Enable the keyboard: Settings → General → Keyboard → Keyboards → Add → ClipHub → Allow Full Access
+
+Hub configuration is shared through Keychain. Clip previews remain cached in the app group so the keyboard can paste recent text while offline.
 
 ## Architecture
 
 - **ClipHubKit**: shared framework with REST client, WebSocket manager, models, storage
-- **ClipHub**: container app showing current clip, history, settings
-- **TailPasteKeyboard**: custom keyboard with "Tail Paste" button to insert the current hub clip
-- **TailClipShare**: share extension to send content from any app to the hub
+- **ClipHub**: device roster, transfer inbox, current clip, history, settings, widgets, and Shortcuts actions
+- **TailPasteKeyboard**: inserts text, copies image clips to the pasteboard, and can push the local clipboard
+- **TailClipShare**: sends text/images to the clipboard hub or file sets to a chosen device using background uploads
+
+## iOS interaction model
+
+iOS does not allow background clipboard observation. Every local clipboard read is user initiated:
+
+- Paste with the keyboard.
+- Copy a hub clip from the app, widget deep link, or Shortcut.
+- Send from the share sheet, keyboard Push action, app, or Shortcut.
+- Accept incoming files from the foreground app transfer inbox; downloaded files live in the app's Documents container and are visible through Files.
+
+The keyboard needs Full Access for live networking. Without it, cached clips remain available.
+
+## CI and distribution
+
+The iOS CI job generates the Xcode project, builds the app and all extensions for the simulator, and runs unit tests. TestFlight is the intended supported distribution path; local signing remains available for contributors and personal deployments.
 
 ## Requirements
 
