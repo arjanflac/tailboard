@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import ClipHubKit
+import UIKit
 
 @Observable
 final class AppViewModel {
@@ -11,6 +12,9 @@ final class AppViewModel {
 
     var currentClip: ClipItem?
     var history: [ClipItem] = []
+    var devices: [Device] = []
+    var transfers: [Transfer] = []
+    var receivingTransferIDs: Set<String> = []
     var connectionState: ConnectionState = .disconnected(reason: "Not started")
     var showOnboarding: Bool
     var isLoading = false
@@ -52,17 +56,86 @@ final class AppViewModel {
         defer { isLoading = false }
 
         do {
+            _ = try await client.registerDevice(
+                deviceID: store.deviceID,
+                name: UIDevice.current.name
+            )
             async let clipTask = client.getCurrentClip()
             async let histTask = client.getHistory(limit: 50)
+            async let devicesTask = client.getDevices()
+            async let transfersTask = client.getTransfers(deviceID: store.deviceID)
 
-            let (clip, hist) = try await (clipTask, histTask)
+            let (clip, hist, registeredDevices, currentTransfers) =
+                try await (clipTask, histTask, devicesTask, transfersTask)
             currentClip = clip
             history = hist
+            devices = registeredDevices
+            transfers = currentTransfers
             errorMessage = nil
 
             store.cachedCurrentClip = clip
             store.cachedRecentClips = hist
             cache.save(hist)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func accept(_ transfer: Transfer) async {
+        receivingTransferIDs.insert(transfer.transferID)
+        defer { receivingTransferIDs.remove(transfer.transferID) }
+        do {
+            let accepted = try await client.transferAction(
+                deviceID: store.deviceID,
+                transferID: transfer.transferID,
+                action: "accept"
+            )
+            let documents = FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+            )[0]
+            for (index, file) in accepted.files.enumerated() {
+                let name = URL(fileURLWithPath: file.name).lastPathComponent
+                guard !name.isEmpty, name != ".", name != ".." else {
+                    throw CocoaError(.fileWriteInvalidFileName)
+                }
+                let finalURL = documents.appendingPathComponent(name)
+                guard !FileManager.default.fileExists(atPath: finalURL.path) else {
+                    throw CocoaError(.fileWriteFileExists)
+                }
+                let partialURL = documents.appendingPathComponent(".\(UUID().uuidString).part")
+                defer { try? FileManager.default.removeItem(at: partialURL) }
+                try await client.downloadTransferFile(
+                    deviceID: store.deviceID,
+                    transferID: accepted.transferID,
+                    index: index,
+                    destination: partialURL
+                )
+                guard try ClipHash.sha256Hex(fileURL: partialURL)
+                    .caseInsensitiveCompare(file.sha256) == .orderedSame else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                try FileManager.default.moveItem(at: partialURL, to: finalURL)
+            }
+            _ = try await client.transferAction(
+                deviceID: store.deviceID,
+                transferID: accepted.transferID,
+                action: "complete"
+            )
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func decline(_ transfer: Transfer) async {
+        do {
+            _ = try await client.transferAction(
+                deviceID: store.deviceID,
+                transferID: transfer.transferID,
+                action: "decline"
+            )
+            await refresh()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -82,6 +155,7 @@ final class AppViewModel {
 
     private func setupWebSocket() {
         wsManager.baseURL = store.hubURL
+        wsManager.deviceID = store.deviceID
         wsManager.onUpdate = { [weak self] item in
             guard let self else { return }
             Task { @MainActor in
@@ -91,6 +165,16 @@ final class AppViewModel {
                 }
                 self.store.cachedCurrentClip = item
                 self.store.cachedRecentClips = self.history
+            }
+        }
+        wsManager.onTransfer = { [weak self] transfer in
+            guard let self else { return }
+            Task { @MainActor in
+                if let index = self.transfers.firstIndex(where: { $0.id == transfer.id }) {
+                    self.transfers[index] = transfer
+                } else {
+                    self.transfers.insert(transfer, at: 0)
+                }
             }
         }
         wsManager.start()

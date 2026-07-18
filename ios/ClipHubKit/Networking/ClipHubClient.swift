@@ -88,6 +88,71 @@ public actor ClipHubClient {
         return try decoder.decode(HubStatus.self, from: data)
     }
 
+    public func registerDevice(deviceID: String, name: String) async throws -> Device {
+        let body: [String: Any] = [
+            "device_id": deviceID,
+            "name": name,
+            "platform": "ios",
+            "capabilities": ["clipboard", "transfers"]
+        ]
+        let (data, response) = try await postJSON("/api/devices/register", body: body)
+        try validate(response, body: data)
+        return try decoder.decode(Device.self, from: data)
+    }
+
+    public func getDevices() async throws -> [Device] {
+        let (data, response) = try await get("/api/devices")
+        try validate(response, body: data)
+        return try decoder.decode([Device].self, from: data)
+    }
+
+    public func getTransfers(deviceID: String, role: String? = nil, state: String? = nil) async throws -> [Transfer] {
+        var components = URLComponents()
+        var items = [URLQueryItem(name: "device_id", value: deviceID)]
+        if let role { items.append(URLQueryItem(name: "role", value: role)) }
+        if let state { items.append(URLQueryItem(name: "state", value: state)) }
+        components.queryItems = items
+        let (data, response) = try await get("/api/transfers?\(components.percentEncodedQuery ?? "")")
+        try validate(response, body: data)
+        return try decoder.decode([Transfer].self, from: data)
+    }
+
+    public func transferAction(deviceID: String, transferID: String, action: String) async throws -> Transfer {
+        let url = try resolveURL("/api/transfers/\(transferID)/\(action)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(deviceID, forHTTPHeaderField: "X-Clip-Device-ID")
+        let (data, response) = try await perform(request)
+        try validate(response, body: data)
+        return try decoder.decode(Transfer.self, from: data)
+    }
+
+    public func downloadTransferFile(
+        deviceID: String,
+        transferID: String,
+        index: Int,
+        destination: URL
+    ) async throws {
+        let url = try resolveURL("/api/transfers/\(transferID)/files/\(index)")
+        var request = URLRequest(url: url)
+        request.setValue(deviceID, forHTTPHeaderField: "X-Clip-Device-ID")
+        do {
+            let (temporary, response) = try await session.download(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw ClipHubError.hubUnreachable(underlying: URLError(.badServerResponse))
+            }
+            if !(200..<300).contains(http.statusCode) {
+                let body = (try? Data(contentsOf: temporary)) ?? Data()
+                try validate(http, body: body)
+            }
+            try FileManager.default.moveItem(at: temporary, to: destination)
+        } catch let error as ClipHubError {
+            throw error
+        } catch {
+            throw ClipHubError.hubUnreachable(underlying: error)
+        }
+    }
+
     // MARK: - Probe
 
     public func probe() async -> Bool {
@@ -103,7 +168,10 @@ public actor ClipHubClient {
 
     private func resolveURL(_ path: String) throws -> URL {
         guard let baseURL else { throw ClipHubError.noHubURL }
-        return baseURL.appendingPathComponent(path)
+        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
+            throw ClipHubError.noHubURL
+        }
+        return url
     }
 
     private func get(_ path: String) async throws -> (Data, HTTPURLResponse) {
@@ -112,6 +180,12 @@ public actor ClipHubClient {
     }
 
     private func post(_ path: String, json body: [String: Any]) async throws -> ClipItem {
+        let (data, response) = try await postJSON(path, body: body)
+        try validate(response, body: data)
+        return try decoder.decode(ClipItem.self, from: data)
+    }
+
+    private func postJSON(_ path: String, body: [String: Any]) async throws -> (Data, HTTPURLResponse) {
         let url = try resolveURL(path)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -119,9 +193,7 @@ public actor ClipHubClient {
         request.setValue(sourceName, forHTTPHeaderField: "X-Clip-Source")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await perform(request)
-        try validate(response, body: data)
-        return try decoder.decode(ClipItem.self, from: data)
+        return try await perform(request)
     }
 
     private func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {

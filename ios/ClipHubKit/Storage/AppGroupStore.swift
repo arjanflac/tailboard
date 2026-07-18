@@ -40,6 +40,15 @@ public struct AppGroupStore: @unchecked Sendable {
         nonmutating set { defaults.set(newValue, forKey: "sourceName") }
     }
 
+    public var deviceID: String {
+        if let existing = defaults.string(forKey: "deviceID") {
+            return existing
+        }
+        let generated = UUID().uuidString.lowercased()
+        defaults.set(generated, forKey: "deviceID")
+        return generated
+    }
+
     // MARK: - Onboarding
 
     public var onboardingCompleted: Bool {

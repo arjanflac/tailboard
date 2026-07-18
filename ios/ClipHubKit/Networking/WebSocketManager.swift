@@ -11,6 +11,8 @@ public final class WebSocketManager: @unchecked Sendable {
 
     public var baseURL: URL?
     public var onUpdate: ((ClipItem) -> Void)?
+    public var onTransfer: ((Transfer) -> Void)?
+    public var deviceID: String?
     public var connectionState: ConnectionState = .disconnected(reason: "Not started")
 
     public init(session: URLSession = .shared) {
@@ -56,11 +58,16 @@ public final class WebSocketManager: @unchecked Sendable {
         } else if urlString.hasPrefix("http") {
             urlString = "ws" + urlString.dropFirst(4)
         }
+        guard var components = URLComponents(string: urlString) else { return }
+        var queryItems: [URLQueryItem] = []
         if lastSeq > 0 {
-            urlString += "?since_seq=\(lastSeq)"
+            queryItems.append(URLQueryItem(name: "since_seq", value: String(lastSeq)))
         }
-
-        guard let url = URL(string: urlString) else { return }
+        if let deviceID {
+            queryItems.append(URLQueryItem(name: "device_id", value: deviceID))
+        }
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        guard let url = components.url else { return }
         let wsTask = session.webSocketTask(with: url)
         self.task = wsTask
         wsTask.resume()
@@ -78,12 +85,14 @@ public final class WebSocketManager: @unchecked Sendable {
             @unknown default: continue
             }
 
-            guard let wsMsg = try? decoder.decode(WSMessage.self, from: data),
-                  wsMsg.type == "clip_update",
-                  let item = wsMsg.item else { continue }
-
-            lastSeq = item.seq
-            onUpdate?(item)
+            guard let wsMsg = try? decoder.decode(WSMessage.self, from: data) else { continue }
+            if wsMsg.type == "clip_update", let item = wsMsg.item {
+                lastSeq = item.seq
+                onUpdate?(item)
+            } else if (wsMsg.type == "transfer_offer" || wsMsg.type == "transfer_state"),
+                      let transfer = wsMsg.transfer {
+                onTransfer?(transfer)
+            }
         }
     }
 }

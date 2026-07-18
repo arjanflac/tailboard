@@ -9,6 +9,9 @@ struct ContentView: View {
             OnboardingView()
         } else {
             TabView {
+                DevicesView()
+                    .tabItem { Label("Devices", systemImage: "laptopcomputer.and.iphone") }
+
                 CurrentClipView()
                     .tabItem { Label("Current", systemImage: "doc.on.clipboard") }
 
