@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 	"github.com/thalysguimaraes/cliphub/internal/agent"
 	"github.com/thalysguimaraes/cliphub/internal/deviceid"
 	"github.com/thalysguimaraes/cliphub/internal/discover"
+	"github.com/thalysguimaraes/cliphub/internal/embeddedhub"
 	"github.com/thalysguimaraes/cliphub/internal/hubclient"
 	"github.com/thalysguimaraes/cliphub/internal/privacy"
 	"github.com/thalysguimaraes/cliphub/internal/service"
@@ -57,6 +60,11 @@ func run(ctx context.Context, args []string) error {
 	transferPolicy := fs.String("transfers", envString("CLIPHUB_TRANSFERS", "ask"), "incoming transfer policy: ask, accept, or off")
 	transferAllow := fs.String("transfer-allow", envString("CLIPHUB_TRANSFER_ALLOW", ""), "comma-separated device IDs allowed for auto-accept")
 	downloadDir := fs.String("download-dir", envString("CLIPHUB_DOWNLOAD_DIR", ""), "incoming transfer destination (default: ~/Downloads)")
+	embedHub := fs.Bool("embed-hub", envBool("CLIPHUB_EMBED_HUB", false), "carry the persistent hub role in this clipd process")
+	embedHubAddr := fs.String("embed-hub-addr", envString("CLIPHUB_EMBED_HUB_ADDR", embeddedhub.DefaultAddress), "listen address for the embedded hub role")
+	embedSpoolQuota := fs.Int64("embed-spool-quota", envInt64("CLIPHUB_EMBED_SPOOL_QUOTA", 10<<30), "embedded hub transfer spool quota")
+	embedMaxTransfer := fs.Int64("embed-max-transfer-size", envInt64("CLIPHUB_EMBED_MAX_TRANSFER_SIZE", 100<<30), "embedded hub maximum transfer size")
+	embedTransferTTL := fs.Duration("embed-transfer-ttl", envDuration("CLIPHUB_EMBED_TRANSFER_TTL", 48*time.Hour), "embedded hub pending transfer TTL")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -65,6 +73,33 @@ func run(ctx context.Context, args []string) error {
 		*hubURL = os.Getenv("CLIPHUB_HUB")
 	}
 	resolver := discover.NewResolver(discover.DefaultConfig())
+	var carriedHub *embeddedhub.Server
+	if *embedHub {
+		listenAddress := *embedHubAddr
+		if host, port, err := net.SplitHostPort(listenAddress); err == nil && host == "" {
+			tailnetIP, err := resolver.SelfIP(ctx)
+			if err != nil {
+				return fmt.Errorf("resolve tailnet address for embedded hub: %w", err)
+			}
+			listenAddress = net.JoinHostPort(tailnetIP, port)
+		}
+		var err error
+		carriedHub, err = embeddedhub.Start(ctx, embeddedhub.Config{
+			Address:         listenAddress,
+			StateDir:        filepath.Join(*stateDir, "embedded-hub"),
+			SpoolQuota:      *embedSpoolQuota,
+			MaxTransferSize: *embedMaxTransfer,
+			TransferTTL:     *embedTransferTTL,
+		})
+		if err != nil {
+			return err
+		}
+		defer carriedHub.Shutdown(context.Background())
+		slog.Info("embedded hub role active", "component", "clipd", "listen_addr", listenAddress, "local_url", carriedHub.URL)
+		if *hubURL == "" {
+			*hubURL = carriedHub.URL
+		}
+	}
 	if *hubURL == "" {
 		url, err := resolver.HubURL(ctx)
 		if err != nil {
@@ -167,6 +202,24 @@ func envBool(key string, fallback bool) bool {
 func envString(key string, fallback string) string {
 	if v, ok := os.LookupEnv(key); ok && strings.TrimSpace(v) != "" {
 		return v
+	}
+	return fallback
+}
+
+func envInt64(key string, fallback int64) int64 {
+	if value, ok := os.LookupEnv(key); ok {
+		if parsed, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return parsed
+		}
+	}
+	return fallback
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	if value, ok := os.LookupEnv(key); ok {
+		if parsed, err := time.ParseDuration(value); err == nil {
+			return parsed
+		}
 	}
 	return fallback
 }

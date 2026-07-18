@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,6 +14,32 @@ import (
 
 type stubAgentRunner struct {
 	runErr error
+}
+
+func TestRunEmbeddedHubUsesLocalEndpoint(t *testing.T) {
+	t.Setenv("CLIPHUB_HUB", "")
+	origNewAgent := newAgent
+	var captured agent.Config
+	newAgent = func(cfg agent.Config) (agentRunner, error) {
+		captured = cfg
+		return stubAgentRunner{}, nil
+	}
+	t.Cleanup(func() {
+		newAgent = origNewAgent
+	})
+
+	err := run(context.Background(), []string{
+		"-embed-hub",
+		"-embed-hub-addr", "127.0.0.1:0",
+		"-state-dir", filepath.Join(t.TempDir(), "agent"),
+		"-node", "embedded-test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(captured.HubURL, "http://127.0.0.1:") {
+		t.Fatalf("agent did not use embedded hub endpoint: %q", captured.HubURL)
+	}
 }
 
 func (s stubAgentRunner) Run(context.Context) error {

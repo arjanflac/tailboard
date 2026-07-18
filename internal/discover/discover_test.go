@@ -2,6 +2,7 @@ package discover
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -90,6 +91,9 @@ func TestResolverHubURLMissingDiscoveryData(t *testing.T) {
 			t.Fatal("probeURL should not run when no matching hub exists")
 			return "", nil
 		},
+		probeRole: func(context.Context, string, int) (string, error) {
+			return "", fmt.Errorf("not a hub role")
+		},
 	})
 
 	_, err := resolver.HubURL(context.Background())
@@ -98,6 +102,51 @@ func TestResolverHubURLMissingDiscoveryData(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `no "custom-hub" node found on tailnet`) {
 		t.Fatalf("unexpected error %q", err)
+	}
+}
+
+func TestResolverFindsEmbeddedHubByRole(t *testing.T) {
+	var probes []string
+	resolver := NewResolver(Config{
+		HubHostname: "cliphub",
+		RolePort:    9437,
+		readStatus: func(context.Context) (tailnetStatus, error) {
+			return tailnetStatus{
+				Self: tailnetNode{HostName: "laptop", DNSName: "laptop.tail.ts.net."},
+				Peer: map[string]tailnetNode{
+					"desktop": {HostName: "desktop", DNSName: "desktop.tail.ts.net."},
+				},
+			}, nil
+		},
+		probeRole: func(_ context.Context, dns string, port int) (string, error) {
+			probes = append(probes, dns)
+			if dns == "desktop.tail.ts.net" && port == 9437 {
+				return "http://desktop.tail.ts.net:9437", nil
+			}
+			return "", fmt.Errorf("not a hub role")
+		},
+	})
+
+	got, err := resolver.HubURL(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "http://desktop.tail.ts.net:9437" {
+		t.Fatalf("unexpected role URL %q", got)
+	}
+	if len(probes) != 1 || probes[0] != "desktop.tail.ts.net" {
+		t.Fatalf("expected deterministic role probing, got %v", probes)
+	}
+}
+
+func TestRolePortFromEnv(t *testing.T) {
+	t.Setenv("CLIPHUB_ROLE_PORT", "10437")
+	if got := DefaultConfig().RolePort; got != 10437 {
+		t.Fatalf("expected configured role port, got %d", got)
+	}
+	t.Setenv("CLIPHUB_ROLE_PORT", "invalid")
+	if got := DefaultConfig().RolePort; got != DefaultRolePort {
+		t.Fatalf("expected default role port, got %d", got)
 	}
 }
 
@@ -114,6 +163,21 @@ func TestResolverSelfNameMissingHostname(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "empty hostname") {
 		t.Fatalf("unexpected error %q", err)
+	}
+}
+
+func TestResolverSelfIPPrefersIPv4(t *testing.T) {
+	resolver := NewResolver(Config{
+		readStatus: func(context.Context) (tailnetStatus, error) {
+			return tailnetStatus{Self: tailnetNode{TailscaleIPs: []string{"fd7a:115c:a1e0::1", "100.64.0.7"}}}, nil
+		},
+	})
+	got, err := resolver.SelfIP(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "100.64.0.7" {
+		t.Fatalf("expected IPv4 address, got %q", got)
 	}
 }
 

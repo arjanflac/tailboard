@@ -9,14 +9,19 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/thalysguimaraes/cliphub/internal/protocol"
 )
 
 const (
 	// DefaultHubHostname preserves the historic tailnet hostname.
 	DefaultHubHostname  = "cliphub"
+	DefaultRolePort     = 9437
 	defaultCacheTTL     = 30 * time.Second
 	defaultProbeTimeout = 3 * time.Second
 )
@@ -24,11 +29,13 @@ const (
 // Config controls discovery behavior.
 type Config struct {
 	HubHostname  string
+	RolePort     int
 	CacheTTL     time.Duration
 	ProbeTimeout time.Duration
 
 	readStatus func(context.Context) (tailnetStatus, error)
 	probeURL   func(context.Context, string) (string, error)
+	probeRole  func(context.Context, string, int) (string, error)
 	now        func() time.Time
 }
 
@@ -36,9 +43,11 @@ type Config struct {
 // calls within a process do not shell out over and over.
 type Resolver struct {
 	hubHostname string
+	rolePort    int
 	cacheTTL    time.Duration
 	readStatus  func(context.Context) (tailnetStatus, error)
 	probeURL    func(context.Context, string) (string, error)
+	probeRole   func(context.Context, string, int) (string, error)
 	now         func() time.Time
 
 	mu    sync.Mutex
@@ -58,14 +67,16 @@ type tailnetStatus struct {
 }
 
 type tailnetNode struct {
-	HostName string `json:"HostName"`
-	DNSName  string `json:"DNSName"`
+	HostName     string   `json:"HostName"`
+	DNSName      string   `json:"DNSName"`
+	TailscaleIPs []string `json:"TailscaleIPs"`
 }
 
 // DefaultConfig returns discovery defaults using the current environment.
 func DefaultConfig() Config {
 	return Config{
 		HubHostname:  HubHostnameFromEnv(),
+		RolePort:     rolePortFromEnv(),
 		CacheTTL:     defaultCacheTTL,
 		ProbeTimeout: defaultProbeTimeout,
 	}
@@ -91,6 +102,9 @@ func NewResolver(cfg Config) *Resolver {
 	if cfg.ProbeTimeout <= 0 {
 		cfg.ProbeTimeout = defaultProbeTimeout
 	}
+	if cfg.RolePort <= 0 {
+		cfg.RolePort = DefaultRolePort
+	}
 	if cfg.now == nil {
 		cfg.now = time.Now
 	}
@@ -100,9 +114,17 @@ func NewResolver(cfg Config) *Resolver {
 
 	resolver := &Resolver{
 		hubHostname: cfg.HubHostname,
+		rolePort:    cfg.RolePort,
 		cacheTTL:    cfg.CacheTTL,
 		readStatus:  cfg.readStatus,
 		now:         cfg.now,
+	}
+	if cfg.probeRole != nil {
+		resolver.probeRole = cfg.probeRole
+	} else {
+		resolver.probeRole = func(ctx context.Context, dns string, port int) (string, error) {
+			return probeRoleHubURL(ctx, dns, port, cfg.ProbeTimeout)
+		}
 	}
 	if cfg.probeURL != nil {
 		resolver.probeURL = cfg.probeURL
@@ -125,23 +147,35 @@ func (r *Resolver) HubURL(ctx context.Context) (string, error) {
 		return cachedURL, nil
 	}
 
-	dns, err := r.findHubDNS(status)
-	if err != nil {
-		return "", err
+	var namedErr error
+	if dns, err := r.findHubDNS(status); err == nil {
+		hubURL, err := r.probeURL(ctx, dns)
+		if err == nil {
+			r.cacheURL(hubURL)
+			return hubURL, nil
+		}
+		namedErr = err
+	} else {
+		namedErr = err
 	}
 
-	hubURL, err := r.probeURL(ctx, dns)
-	if err != nil {
-		return "", err
+	for _, dns := range roleCandidates(status) {
+		hubURL, err := r.probeRole(ctx, dns, r.rolePort)
+		if err == nil {
+			r.cacheURL(hubURL)
+			return hubURL, nil
+		}
 	}
 
+	return "", fmt.Errorf("no reachable hub-role node: %w", namedErr)
+}
+
+func (r *Resolver) cacheURL(hubURL string) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.cache.valid && r.now().Before(r.cache.expiresAt) {
 		r.cache.hubURL = hubURL
 	}
-	r.mu.Unlock()
-
-	return hubURL, nil
 }
 
 // SelfName returns this node's tailscale hostname.
@@ -154,6 +188,23 @@ func (r *Resolver) SelfName(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("empty hostname in tailscale status")
 	}
 	return status.Self.HostName, nil
+}
+
+// SelfIP returns this node's first Tailscale address, preferring IPv4.
+func (r *Resolver) SelfIP(ctx context.Context) (string, error) {
+	status, _, err := r.status(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, address := range status.Self.TailscaleIPs {
+		if !strings.Contains(address, ":") {
+			return address, nil
+		}
+	}
+	if len(status.Self.TailscaleIPs) > 0 {
+		return status.Self.TailscaleIPs[0], nil
+	}
+	return "", fmt.Errorf("no Tailscale IP in tailscale status")
 }
 
 // HubURL preserves the legacy convenience helper.
@@ -210,6 +261,31 @@ func (r *Resolver) findHubDNS(status tailnetStatus) (string, error) {
 	return "", fmt.Errorf("no %q node found on tailnet", r.hubHostname)
 }
 
+func roleCandidates(status tailnetStatus) []string {
+	seen := make(map[string]struct{}, len(status.Peer)+1)
+	candidates := make([]string, 0, len(status.Peer)+1)
+	add := func(node tailnetNode) {
+		dns := trimDNS(node.DNSName)
+		if dns == "" {
+			dns = node.HostName
+		}
+		if dns == "" {
+			return
+		}
+		if _, ok := seen[dns]; ok {
+			return
+		}
+		seen[dns] = struct{}{}
+		candidates = append(candidates, dns)
+	}
+	add(status.Self)
+	for _, peer := range status.Peer {
+		add(peer)
+	}
+	sort.Strings(candidates)
+	return candidates
+}
+
 func readTailnetStatus(ctx context.Context) (tailnetStatus, error) {
 	out, err := exec.CommandContext(ctx, "tailscale", "status", "--json").Output()
 	if err != nil {
@@ -241,9 +317,44 @@ func probeHubURL(ctx context.Context, dns string, timeout time.Duration) (string
 		return httpURL, nil
 	}
 
-	// Preserve the existing bias toward HTTPS when the host exists but the probe
-	// cannot complete successfully.
-	return httpsURL, nil
+	return "", fmt.Errorf("hub endpoint unavailable at %s", dns)
+}
+
+func probeRoleHubURL(ctx context.Context, dns string, port int, timeout time.Duration) (string, error) {
+	baseURL := "http://" + netJoinHostPort(dns, port)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	endpoint, err := url.JoinPath(baseURL, "api", "capabilities")
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("role probe returned %s", resp.Status)
+	}
+	var capabilities protocol.Capabilities
+	if err := json.NewDecoder(resp.Body).Decode(&capabilities); err != nil {
+		return "", err
+	}
+	if !capabilities.Features["hub_role"] {
+		return "", fmt.Errorf("node does not advertise hub role")
+	}
+	return baseURL, nil
+}
+
+func netJoinHostPort(host string, port int) string {
+	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
+		host = "[" + host + "]"
+	}
+	return host + ":" + strconv.Itoa(port)
 }
 
 func probeStatusEndpoint(ctx context.Context, client *http.Client, baseURL string, timeout time.Duration) error {
@@ -274,4 +385,16 @@ func probeStatusEndpoint(ctx context.Context, client *http.Client, baseURL strin
 
 func trimDNS(dns string) string {
 	return strings.TrimSuffix(dns, ".")
+}
+
+func rolePortFromEnv() int {
+	value := strings.TrimSpace(os.Getenv("CLIPHUB_ROLE_PORT"))
+	if value == "" {
+		return DefaultRolePort
+	}
+	port, err := strconv.Atoi(value)
+	if err != nil || port <= 0 || port > 65535 {
+		return DefaultRolePort
+	}
+	return port
 }
