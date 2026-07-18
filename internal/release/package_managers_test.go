@@ -34,11 +34,11 @@ func TestBuildAndVerifyPackageManagersFromLocalArtifacts(t *testing.T) {
 	if len(result.HomebrewFiles) != 3 {
 		t.Fatalf("expected 3 homebrew formulas, got %d", len(result.HomebrewFiles))
 	}
-	if len(result.ScoopFiles) != 2 {
-		t.Fatalf("expected 2 scoop manifests, got %d", len(result.ScoopFiles))
+	if len(result.ScoopFiles) != 3 {
+		t.Fatalf("expected 3 scoop manifests, got %d", len(result.ScoopFiles))
 	}
-	if len(result.WingetFiles) != 6 {
-		t.Fatalf("expected 6 winget manifests, got %d", len(result.WingetFiles))
+	if len(result.WingetFiles) != 9 {
+		t.Fatalf("expected 9 winget manifests, got %d", len(result.WingetFiles))
 	}
 
 	clipdFormula, err := os.ReadFile(filepath.Join(outDir, "homebrew", "clipd.rb"))
@@ -48,6 +48,7 @@ func TestBuildAndVerifyPackageManagersFromLocalArtifacts(t *testing.T) {
 	for _, want := range []string{
 		`url "https://github.com/thalysguimaraes/cliphub/releases/download/v1.2.3/cliphub_v1.2.3_artifacts.json"`,
 		`clipd_v1.2.3_darwin_arm64.tar.gz`,
+		`clipd_v1.2.3_linux_arm64.tar.gz`,
 		`clipd_v1.2.3_linux_amd64.tar.gz`,
 		`resource("archive").stage do`,
 	} {
@@ -165,11 +166,17 @@ func writePackageManagerFixture(t *testing.T, version string) string {
 			fixtureArtifact("clipd", version, "darwin", "amd64", "tar.gz", "1111111111111111111111111111111111111111111111111111111111111111"),
 			fixtureArtifact("clipd", version, "darwin", "arm64", "tar.gz", "2222222222222222222222222222222222222222222222222222222222222222"),
 			fixtureArtifact("clipd", version, "linux", "amd64", "tar.gz", "3333333333333333333333333333333333333333333333333333333333333333"),
+			fixtureArtifact("clipd", version, "linux", "arm64", "tar.gz", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
 			fixtureArtifact("clipd", version, "windows", "amd64", "zip", "4444444444444444444444444444444444444444444444444444444444444444"),
+			fixtureArtifact("cliphub", version, "darwin", "amd64", "tar.gz", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+			fixtureArtifact("cliphub", version, "darwin", "arm64", "tar.gz", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"),
 			fixtureArtifact("cliphub", version, "linux", "amd64", "tar.gz", "5555555555555555555555555555555555555555555555555555555555555555"),
+			fixtureArtifact("cliphub", version, "linux", "arm64", "tar.gz", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
+			fixtureArtifact("cliphub", version, "windows", "amd64", "zip", "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
 			fixtureArtifact("tailclip", version, "darwin", "amd64", "tar.gz", "6666666666666666666666666666666666666666666666666666666666666666"),
 			fixtureArtifact("tailclip", version, "darwin", "arm64", "tar.gz", "7777777777777777777777777777777777777777777777777777777777777777"),
 			fixtureArtifact("tailclip", version, "linux", "amd64", "tar.gz", "8888888888888888888888888888888888888888888888888888888888888888"),
+			fixtureArtifact("tailclip", version, "linux", "arm64", "tar.gz", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
 			fixtureArtifact("tailclip", version, "windows", "amd64", "zip", "9999999999999999999999999999999999999999999999999999999999999999"),
 		},
 	}

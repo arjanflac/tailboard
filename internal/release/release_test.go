@@ -147,3 +147,25 @@ func TestCopyServiceDefinitionsByPlatform(t *testing.T) {
 		}
 	}
 }
+
+func TestArchiveEntriesIncludesNestedServiceFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "clipd"), []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "service"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "service", "clipd.service"), []byte("unit"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := archiveEntries(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"clipd", filepath.Join("service", "clipd.service")}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("unexpected entries: got %v want %v", got, want)
+	}
+}

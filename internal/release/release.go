@@ -477,13 +477,23 @@ func writeZip(dstPath, rootName, stagingDir string, modTime time.Time) error {
 }
 
 func archiveEntries(dir string) ([]string, error) {
-	list, err := os.ReadDir(dir)
+	var entries []string
+	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		relative, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, relative)
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	entries := make([]string, 0, len(list))
-	for _, entry := range list {
-		entries = append(entries, entry.Name())
 	}
 	sort.Strings(entries)
 	return entries, nil

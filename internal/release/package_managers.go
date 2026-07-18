@@ -159,11 +159,20 @@ var packageSpecs = []packageSpec{
 		Binary:      "cliphub",
 		Description: "Hub broker for ClipHub clipboard sync over Tailscale.",
 		HomebrewTargets: []Target{
+			{Binary: "cliphub", GOOS: "darwin", GOARCH: "amd64"},
+			{Binary: "cliphub", GOOS: "darwin", GOARCH: "arm64"},
 			{Binary: "cliphub", GOOS: "linux", GOARCH: "amd64"},
+			{Binary: "cliphub", GOOS: "linux", GOARCH: "arm64"},
 		},
 		HomebrewTestCommand:  "#{bin}/cliphub -h 2>&1",
 		HomebrewTestExitCode: 1,
 		HomebrewTestExpect:   "listen address in dev mode",
+		ScoopTarget:          &Target{Binary: "cliphub", GOOS: "windows", GOARCH: "amd64"},
+		WingetTarget:         &Target{Binary: "cliphub", GOOS: "windows", GOARCH: "amd64"},
+		WingetIdentifier:     "ThalysGuimaraes.ClipHub",
+		WingetPackageName:    "ClipHub Broker",
+		WingetMoniker:        "cliphub",
+		WingetTags:           []string{"clipboard", "tailscale", "sync", "server"},
 	},
 	{
 		Binary:      "clipd",
@@ -172,6 +181,7 @@ var packageSpecs = []packageSpec{
 			{Binary: "clipd", GOOS: "darwin", GOARCH: "amd64"},
 			{Binary: "clipd", GOOS: "darwin", GOARCH: "arm64"},
 			{Binary: "clipd", GOOS: "linux", GOARCH: "amd64"},
+			{Binary: "clipd", GOOS: "linux", GOARCH: "arm64"},
 		},
 		HomebrewTestCommand:  "#{bin}/clipd -h 2>&1",
 		HomebrewTestExitCode: 1,
@@ -190,6 +200,7 @@ var packageSpecs = []packageSpec{
 			{Binary: "tailclip", GOOS: "darwin", GOARCH: "amd64"},
 			{Binary: "tailclip", GOOS: "darwin", GOARCH: "arm64"},
 			{Binary: "tailclip", GOOS: "linux", GOARCH: "amd64"},
+			{Binary: "tailclip", GOOS: "linux", GOARCH: "arm64"},
 		},
 		HomebrewTestCommand:  "#{bin}/tailclip 2>&1",
 		HomebrewTestExitCode: 1,
@@ -450,15 +461,6 @@ func renderHomebrewFormula(inputs releasePackageInputs, spec packageSpec) (strin
 	builder.WriteString("\n")
 	builder.WriteString("  license \"MIT\"\n\n")
 
-	if spec.Binary == "cliphub" {
-		builder.WriteString("  depends_on :linux\n")
-		builder.WriteString("  depends_on arch: :x86_64\n\n")
-	} else {
-		builder.WriteString("  on_linux do\n")
-		builder.WriteString("    depends_on arch: :x86_64\n")
-		builder.WriteString("  end\n\n")
-	}
-
 	builder.WriteString("  resource \"archive\" do\n")
 	if err := writeHomebrewResourceBlocks(&builder, inputs, spec); err != nil {
 		return "", err
@@ -491,6 +493,7 @@ func renderHomebrewFormula(inputs releasePackageInputs, spec packageSpec) (strin
 
 func writeHomebrewResourceBlocks(builder *strings.Builder, inputs releasePackageInputs, spec packageSpec) error {
 	armDarwin, hasArmDarwin := inputs.artifact(spec.Binary, "darwin", "arm64")
+	armLinux, hasArmLinux := inputs.artifact(spec.Binary, "linux", "arm64")
 	intelDarwin, hasIntelDarwin := inputs.artifact(spec.Binary, "darwin", "amd64")
 	intelLinux, hasIntelLinux := inputs.artifact(spec.Binary, "linux", "amd64")
 
@@ -502,6 +505,27 @@ func writeHomebrewResourceBlocks(builder *strings.Builder, inputs releasePackage
 		builder.WriteString("\n")
 		builder.WriteString("        sha256 ")
 		builder.WriteString(rubyString(armDarwin.SHA256))
+		builder.WriteString("\n")
+		builder.WriteString("      end\n")
+		if hasArmLinux {
+			builder.WriteString("      on_linux do\n")
+			builder.WriteString("        url ")
+			builder.WriteString(rubyString(inputs.assetURL(armLinux)))
+			builder.WriteString("\n")
+			builder.WriteString("        sha256 ")
+			builder.WriteString(rubyString(armLinux.SHA256))
+			builder.WriteString("\n")
+			builder.WriteString("      end\n")
+		}
+		builder.WriteString("    end\n")
+	} else if hasArmLinux {
+		builder.WriteString("    on_arm do\n")
+		builder.WriteString("      on_linux do\n")
+		builder.WriteString("        url ")
+		builder.WriteString(rubyString(inputs.assetURL(armLinux)))
+		builder.WriteString("\n")
+		builder.WriteString("        sha256 ")
+		builder.WriteString(rubyString(armLinux.SHA256))
 		builder.WriteString("\n")
 		builder.WriteString("      end\n")
 		builder.WriteString("    end\n")
@@ -531,7 +555,7 @@ func writeHomebrewResourceBlocks(builder *strings.Builder, inputs releasePackage
 		builder.WriteString("    end\n")
 	}
 
-	if !hasArmDarwin && !hasIntelDarwin && !hasIntelLinux {
+	if !hasArmDarwin && !hasArmLinux && !hasIntelDarwin && !hasIntelLinux {
 		return fmt.Errorf("no Homebrew artifacts available for %s", spec.Binary)
 	}
 	return nil

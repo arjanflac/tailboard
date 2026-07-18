@@ -6,9 +6,9 @@ ClipHub releases are built from a single Linux host and published as determinist
 
 | Binary | Targets |
 |--------|---------|
-| `cliphub` | `linux/amd64` |
-| `clipd` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `windows/amd64` |
-| `tailclip` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `windows/amd64` |
+| `cliphub` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64` |
+| `clipd` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64` |
+| `tailclip` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64` |
 
 ## Local dry run
 
@@ -44,9 +44,9 @@ make release-package-managers-verify \
 
 The package-manager step mirrors the shipped artifact matrix instead of inventing bundle-specific archives:
 
-- Homebrew formulas: `cliphub` (Linux x86_64), `clipd` (macOS arm64/x86_64 and Linux x86_64), `tailclip` (macOS arm64/x86_64 and Linux x86_64).
-- Scoop manifests: `clipd`, `tailclip` (Windows x86_64).
-- winget manifests: `ThalysGuimaraes.Clipd`, `ThalysGuimaraes.Tailclip` (Windows x86_64 portable zip packages).
+- Homebrew formulas: `cliphub`, `clipd`, and `tailclip` for macOS and Linux on arm64/x86_64.
+- Scoop manifests: `cliphub`, `clipd`, and `tailclip` (Windows x86_64).
+- winget manifests: `ThalysGuimaraes.ClipHub`, `ThalysGuimaraes.Clipd`, and `ThalysGuimaraes.Tailclip` (Windows x86_64 portable zip packages).
 
 ## GitHub release pipeline
 
@@ -62,6 +62,16 @@ The package-manager step mirrors the shipped artifact matrix instead of inventin
 8. uploads the generated package-manager definition files to the same GitHub release.
 
 The workflow updates existing releases in place with `gh release upload --clobber`, so reruns are idempotent for both the deterministic archives and the package-manager definitions.
+
+When configured, it also commits formulas/manifests to real distribution repositories:
+
+- repository variable `HOMEBREW_TAP_REPOSITORY` (for example `owner/homebrew-cliphub`),
+- repository variable `SCOOP_BUCKET_REPOSITORY` (for example `owner/scoop-cliphub`),
+- secret `PACKAGE_REPOS_TOKEN` with content-write access to those repositories.
+
+Absent configuration skips the external pushes without blocking core GitHub releases.
+
+Release archives also carry the matching launchd or systemd definitions. After extraction, `clipd install-service` and `cliphub install-service` install and load the appropriate background service.
 
 ## Reproducibility notes
 

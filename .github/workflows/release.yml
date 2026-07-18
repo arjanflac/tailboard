@@ -93,3 +93,43 @@ jobs:
           if [ "${#files[@]}" -gt 0 ]; then
             gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
           fi
+
+      - name: Publish Homebrew tap
+        if: ${{ secrets.PACKAGE_REPOS_TOKEN != '' && vars.HOMEBREW_TAP_REPOSITORY != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOS_TOKEN }}
+          TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          repo_dir="$(mktemp -d)"
+          gh repo clone "$TAP_REPOSITORY" "$repo_dir"
+          mkdir -p "$repo_dir/Formula"
+          cp dist/release/package-managers/homebrew/*.rb "$repo_dir/Formula/"
+          git -C "$repo_dir" config user.name "github-actions[bot]"
+          git -C "$repo_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$repo_dir" add Formula
+          if ! git -C "$repo_dir" diff --cached --quiet; then
+            git -C "$repo_dir" commit -m "cliphub ${RELEASE_TAG}"
+            git -C "$repo_dir" push
+          fi
+
+      - name: Publish Scoop bucket
+        if: ${{ secrets.PACKAGE_REPOS_TOKEN != '' && vars.SCOOP_BUCKET_REPOSITORY != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOS_TOKEN }}
+          BUCKET_REPOSITORY: ${{ vars.SCOOP_BUCKET_REPOSITORY }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          repo_dir="$(mktemp -d)"
+          gh repo clone "$BUCKET_REPOSITORY" "$repo_dir"
+          mkdir -p "$repo_dir/bucket"
+          cp dist/release/package-managers/scoop/*.json "$repo_dir/bucket/"
+          git -C "$repo_dir" config user.name "github-actions[bot]"
+          git -C "$repo_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$repo_dir" add bucket
+          if ! git -C "$repo_dir" diff --cached --quiet; then
+            git -C "$repo_dir" commit -m "cliphub ${RELEASE_TAG}"
+            git -C "$repo_dir" push
+          fi
