@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/tar"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -159,8 +160,21 @@ func cmdSend(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", path)
+	sendName := filepath.Base(path)
+	cleanup := func() {}
+	if info.IsDir() {
+		sendName += ".tar"
+		path, cleanup, err = archiveDirectory(path)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		info, err = os.Stat(path)
+		if err != nil {
+			return err
+		}
+	} else if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file or directory", path)
 	}
 	targetID, err := resolveDevice(ctx, target)
 	if err != nil {
@@ -173,7 +187,7 @@ func cmdSend(ctx context.Context, args []string) error {
 	create, err := hub.CreateTransfer(ctx, localDeviceID, protocol.CreateTransferRequest{
 		ToDevice: targetID,
 		Files: []protocol.TransferFile{{
-			Name: filepath.Base(path), Size: info.Size(), MIME: mimeFromExt(filepath.Ext(path)), SHA256: sum,
+			Name: sendName, Size: info.Size(), MIME: mimeFromExt(filepath.Ext(sendName)), SHA256: sum,
 		}},
 	})
 	if err != nil {
@@ -187,8 +201,75 @@ func cmdSend(ctx context.Context, args []string) error {
 	if _, err := hub.UploadTransferFile(ctx, localDeviceID, create.Transfer.TransferID, 0, 0, info.Size(), file); err != nil {
 		return err
 	}
-	fmt.Printf("sent %s (%d bytes) to %s as %s\n", filepath.Base(path), info.Size(), target, create.Transfer.TransferID)
+	fmt.Printf("sent %s (%d bytes) to %s as %s\n", sendName, info.Size(), target, create.Transfer.TransferID)
 	return nil
+}
+
+func archiveDirectory(source string) (string, func(), error) {
+	source, err := filepath.Abs(source)
+	if err != nil {
+		return "", func() {}, err
+	}
+	temp, err := os.CreateTemp("", filepath.Base(source)+"-*.tar")
+	if err != nil {
+		return "", func() {}, err
+	}
+	cleanup := func() { _ = os.Remove(temp.Name()) }
+	writer := tar.NewWriter(temp)
+	walkErr := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == source {
+			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to archive symlink %s", path)
+		}
+		relative, err := filepath.Rel(filepath.Dir(source), path)
+		if err != nil {
+			return err
+		}
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		header.Name = filepath.ToSlash(relative)
+		header.ModTime = time.Unix(0, 0)
+		header.AccessTime = time.Time{}
+		header.ChangeTime = time.Time{}
+		if err := writer.WriteHeader(header); err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(writer, file)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
+	})
+	closeErr := writer.Close()
+	fileCloseErr := temp.Close()
+	if walkErr != nil {
+		cleanup()
+		return "", func() {}, walkErr
+	}
+	if closeErr != nil {
+		cleanup()
+		return "", func() {}, closeErr
+	}
+	if fileCloseErr != nil {
+		cleanup()
+		return "", func() {}, fileCloseErr
+	}
+	return temp.Name(), cleanup, nil
 }
 
 func cmdTransfers(ctx context.Context, args []string) error {
@@ -573,6 +654,8 @@ func mimeFromExt(ext string) string {
 		return "text/html"
 	case ".txt":
 		return "text/plain"
+	case ".tar":
+		return "application/x-tar"
 	default:
 		return "application/octet-stream"
 	}
