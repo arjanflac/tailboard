@@ -13,8 +13,24 @@ public struct AppGroupStore: @unchecked Sendable {
     // MARK: - Hub URL
 
     public var hubURL: URL? {
-        get { defaults.url(forKey: "hubURL") }
-        nonmutating set { defaults.set(newValue, forKey: "hubURL") }
+        get {
+            if let data = SharedKeychain.read("hubURL"),
+               let value = String(data: data, encoding: .utf8),
+               let url = URL(string: value) {
+                return url
+            }
+            // One-time migration from older app-group defaults.
+            if let legacy = defaults.url(forKey: "hubURL") {
+                SharedKeychain.write(Data(legacy.absoluteString.utf8), account: "hubURL")
+                defaults.removeObject(forKey: "hubURL")
+                return legacy
+            }
+            return nil
+        }
+        nonmutating set {
+            SharedKeychain.write(newValue.map { Data($0.absoluteString.utf8) }, account: "hubURL")
+            defaults.removeObject(forKey: "hubURL")
+        }
     }
 
     // MARK: - Source name

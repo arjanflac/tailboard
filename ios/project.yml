@@ -39,6 +39,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.thalys.cliphub
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)group.com.thalys.cliphub
 
   TailPasteKeyboard:
     type: app-extension
@@ -55,6 +57,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.thalys.cliphub
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)group.com.thalys.cliphub
 
   TailClipShare:
     type: app-extension
@@ -71,6 +75,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.thalys.cliphub
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)group.com.thalys.cliphub
 
   ClipHubTests:
     type: bundle.unit-test

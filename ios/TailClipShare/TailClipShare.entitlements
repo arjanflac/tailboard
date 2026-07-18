@@ -6,5 +6,9 @@
 	<array>
 		<string>group.com.thalys.cliphub</string>
 	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)group.com.thalys.cliphub</string>
+	</array>
 </dict>
 </plist>
