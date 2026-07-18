@@ -8,6 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,5 +119,38 @@ func TestTransferMetadataSurvivesRestart(t *testing.T) {
 	got, err := reloaded.get(created.TransferID)
 	if err != nil || got.ToDevice != "receiver" {
 		t.Fatalf("reloaded transfer = %+v, %v", got, err)
+	}
+}
+
+func TestTransferSidecarMigratesToSQLite(t *testing.T) {
+	dir := t.TempDir()
+	transfer := protocol.Transfer{
+		TransferID: "legacy-transfer", FromDevice: "sender", ToDevice: "receiver",
+		Files: []protocol.TransferFile{{Name: "file.txt", Size: 1, SHA256: strings.Repeat("a", 64)}},
+		State: "offered", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	transferDir := filepath.Join(dir, transfer.TransferID)
+	if err := os.MkdirAll(transferDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(transfer)
+	sidecar := filepath.Join(transferDir, "metadata.json")
+	if err := os.WriteFile(sidecar, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := newTransferStore(dir, 1<<20, 1<<20, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.close()
+	if _, err := store.get(transfer.TransferID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
+		t.Fatalf("legacy sidecar was not removed: %v", err)
+	}
+	var count int
+	if err := store.db.QueryRow("SELECT COUNT(*) FROM transfers WHERE transfer_id = ?", transfer.TransferID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("SQLite migration count=%d err=%v", count, err)
 	}
 }

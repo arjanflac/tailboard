@@ -3,6 +3,7 @@ package hub
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -32,6 +33,7 @@ type transferStore struct {
 	ttl       time.Duration
 	transfers map[string]protocol.Transfer
 	temporary bool
+	db        *sql.DB
 }
 
 func newTransferStore(dir string, quota, maxSize int64, ttl time.Duration) (*transferStore, error) {
@@ -56,7 +58,22 @@ func newTransferStore(dir string, quota, maxSize int64, ttl time.Duration) (*tra
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	s := &transferStore{dir: dir, quota: quota, maxSize: maxSize, ttl: ttl, transfers: map[string]protocol.Transfer{}, temporary: temporary}
+	db, err := sql.Open("sqlite", filepath.Join(dir, "metadata.db"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS transfers (
+			transfer_id TEXT PRIMARY KEY,
+			metadata    TEXT NOT NULL,
+			state       TEXT NOT NULL,
+			expires_at  TEXT NOT NULL
+		)
+	`); err != nil {
+		db.Close()
+		return nil, err
+	}
+	s := &transferStore{dir: dir, quota: quota, maxSize: maxSize, ttl: ttl, transfers: map[string]protocol.Transfer{}, temporary: temporary, db: db}
 	if err := s.load(); err != nil {
 		return nil, err
 	}
@@ -64,6 +81,11 @@ func newTransferStore(dir string, quota, maxSize int64, ttl time.Duration) (*tra
 }
 
 func (s *transferStore) close() error {
+	if s.db != nil {
+		if err := s.db.Close(); err != nil {
+			return err
+		}
+	}
 	if s.temporary {
 		return os.RemoveAll(s.dir)
 	}
@@ -276,6 +298,29 @@ func (s *transferStore) reapExpired(now time.Time) int {
 }
 
 func (s *transferStore) load() error {
+	rows, err := s.db.Query("SELECT metadata FROM transfers")
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			rows.Close()
+			return err
+		}
+		var transfer protocol.Transfer
+		if json.Unmarshal([]byte(data), &transfer) == nil && transfer.TransferID != "" {
+			s.transfers[transfer.TransferID] = transfer
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Migrate spools created before transfer metadata moved into SQLite.
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		return err
@@ -291,17 +336,28 @@ func (s *transferStore) load() error {
 		var transfer protocol.Transfer
 		if json.Unmarshal(data, &transfer) == nil && transfer.TransferID != "" {
 			s.transfers[transfer.TransferID] = transfer
+			if err := s.persistLocked(transfer); err != nil {
+				return err
+			}
+			_ = os.Remove(filepath.Join(s.dir, entry.Name(), "metadata.json"))
 		}
 	}
 	return nil
 }
 
 func (s *transferStore) persistLocked(transfer protocol.Transfer) error {
-	data, err := json.MarshalIndent(transfer, "", "  ")
+	data, err := json.Marshal(transfer)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(s.transferDir(transfer.TransferID), "metadata.json"), data, 0o600)
+	_, err = s.db.Exec(`
+		INSERT INTO transfers (transfer_id, metadata, state, expires_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(transfer_id) DO UPDATE SET
+			metadata=excluded.metadata, state=excluded.state,
+			expires_at=excluded.expires_at
+	`, transfer.TransferID, string(data), transfer.State, transfer.ExpiresAt.Format(time.RFC3339Nano))
+	return err
 }
 
 func (s *transferStore) usedLocked() (int64, error) {
