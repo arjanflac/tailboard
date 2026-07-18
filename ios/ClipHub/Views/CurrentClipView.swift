@@ -23,6 +23,15 @@ struct CurrentClipView: View {
             }
             .navigationTitle("Current Clip")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        Task { await viewModel.startLiveActivity() }
+                    } label: {
+                        Image(systemName: "waveform.path.ecg")
+                    }
+                    .disabled(viewModel.currentClip == nil)
+                    .accessibilityLabel("Start Live Activity")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { Task { await viewModel.refresh() } }) {
                         Image(systemName: "arrow.clockwise")

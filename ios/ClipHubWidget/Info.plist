@@ -7,30 +7,17 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>ClipHubAppIdentifierPrefix</key>
-	<string>$(AppIdentifierPrefix)</string>
-	<key>CFBundleName</key>
-	<string>ClipHub</string>
-	<key>CFBundleDisplayName</key>
-	<string>ClipHub</string>
+	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>NSAppTransportSecurity</key>
+	<key>ClipHubAppIdentifierPrefix</key>
+	<string>$(AppIdentifierPrefix)</string>
+	<key>NSExtension</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
 	</dict>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array><string>cliphub</string></array>
-		</dict>
-	</array>
 </dict>
 </plist>

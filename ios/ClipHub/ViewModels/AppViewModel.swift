@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import ClipHubKit
 import UIKit
+import ActivityKit
 
 @Observable
 final class AppViewModel {
@@ -26,9 +27,6 @@ final class AppViewModel {
         self.history = cache.load()
         self.currentClip = store.cachedCurrentClip
 
-        if store.onboardingCompleted {
-            setupWebSocket()
-        }
     }
 
     // MARK: - Configuration
@@ -151,6 +149,58 @@ final class AppViewModel {
         }
     }
 
+    func setSceneActive(_ active: Bool) {
+        if active {
+            setupWebSocket()
+            Task { await refresh() }
+        } else {
+            wsManager.stop()
+        }
+    }
+
+    func copyCurrentToPasteboard() {
+        guard let clip = currentClip else { return }
+        if clip.isText, let content = clip.content {
+            UIPasteboard.general.string = content
+        } else if clip.mimeType == "image/png", let data = clip.data {
+            UIPasteboard.general.image = UIImage(data: data)
+        }
+    }
+
+    func startLiveActivity() async {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled,
+              let clip = currentClip else { return }
+        let state = ClipHubActivityAttributes.ContentState(
+            preview: clip.preview,
+            source: clip.source,
+            updatedAt: clip.createdAt
+        )
+        do {
+            _ = try Activity.request(
+                attributes: ClipHubActivityAttributes(),
+                content: ActivityContent(state: state, staleDate: clip.expiresAt),
+                pushType: nil
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func updateLiveActivities(with clip: ClipItem) {
+        let state = ClipHubActivityAttributes.ContentState(
+            preview: clip.preview,
+            source: clip.source,
+            updatedAt: clip.createdAt
+        )
+        Task {
+            for activity in Activity<ClipHubActivityAttributes>.activities {
+                await activity.update(
+                    ActivityContent(state: state, staleDate: clip.expiresAt)
+                )
+            }
+        }
+    }
+
     // MARK: - WebSocket
 
     private func setupWebSocket() {
@@ -165,6 +215,7 @@ final class AppViewModel {
                 }
                 self.store.cachedCurrentClip = item
                 self.store.cachedRecentClips = self.history
+                self.updateLiveActivities(with: item)
             }
         }
         wsManager.onTransfer = { [weak self] transfer in

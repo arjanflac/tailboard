@@ -30,6 +30,8 @@ targets:
         embed: true
       - target: TailClipShare
         embed: true
+      - target: ClipHubWidget
+        embed: true
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub
       INFOPLIST_FILE: ClipHub/Resources/Info.plist
@@ -72,6 +74,25 @@ targets:
       INFOPLIST_FILE: TailClipShare/Info.plist
     entitlements:
       path: TailClipShare/TailClipShare.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.thalys.cliphub
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)group.com.thalys.cliphub
+
+  ClipHubWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ClipHubWidget
+    dependencies:
+      - target: ClipHubKit
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.widget
+      INFOPLIST_FILE: ClipHubWidget/Info.plist
+      APPLICATION_EXTENSION_API_ONLY: true
+    entitlements:
+      path: ClipHubWidget/ClipHubWidget.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.thalys.cliphub
