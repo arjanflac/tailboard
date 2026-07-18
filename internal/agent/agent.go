@@ -21,6 +21,7 @@ type Config struct {
 	HubURL          string              // Base URL of the hub.
 	Client          *hubclient.Client   // Shared hub client (preferred when set).
 	NodeName        string              // This node's name.
+	DeviceID        string              // Stable install UUID.
 	PollInterval    time.Duration       // Clipboard poll interval.
 	Clipboard       clipboard.Clipboard // Clipboard backend (nil = system default).
 	Privacy         privacy.Config      // Optional privacy policy for outbound clips.
@@ -31,6 +32,7 @@ type Config struct {
 type Agent struct {
 	hubURL       string
 	nodeName     string
+	deviceID     string
 	pollInterval time.Duration
 	monitor      *ClipboardMonitor
 	client       *hubclient.Client
@@ -91,6 +93,7 @@ func New(cfg Config) (*Agent, error) {
 	return &Agent{
 		hubURL:       cfg.HubURL,
 		nodeName:     cfg.NodeName,
+		deviceID:     cfg.DeviceID,
 		pollInterval: cfg.PollInterval,
 		monitor:      NewClipboardMonitor(clip),
 		client:       client,
@@ -218,7 +221,7 @@ func (a *Agent) isPaused() bool {
 }
 
 func (a *Agent) sendToHub(ctx context.Context, ct clipboard.Content) error {
-	payload := hubclient.PutRequest{MimeType: ct.MimeType, Source: a.nodeName}
+	payload := hubclient.PutRequest{MimeType: ct.MimeType, Source: a.nodeName, DeviceID: a.deviceID}
 	if ct.IsText() {
 		payload.Content = ct.Text()
 	} else {

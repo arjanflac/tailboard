@@ -40,6 +40,7 @@ func Register(mux *http.ServeMux, h *Hub, identFn IdentityFunc, observers ...*Ob
 	handle("GET /api/clip/history", "/api/clip/history", historyHandler(h))
 	handle("GET /api/clip/history/page", "/api/clip/history/page", historyPageHandler(h))
 	handle("GET /api/clip/stream", "/api/clip/stream", streamHandler(h, obs))
+	handle("GET /api/capabilities", "/api/capabilities", capabilitiesHandler())
 	handle("GET /api/status", "/api/status", statusHandler(h, obs))
 	handle("GET /healthz", "/healthz", healthHandler(h, obs))
 	handle("GET /readyz", "/readyz", readinessHandler(obs))
@@ -50,6 +51,7 @@ type postClipRequest struct {
 	Content  string `json:"content,omitempty"`
 	Data     []byte `json:"data,omitempty"`
 	MimeType string `json:"mime_type,omitempty"`
+	DeviceID string `json:"device_id,omitempty"`
 }
 
 func postClipHandler(h *Hub, identFn IdentityFunc, obs *Observer) http.HandlerFunc {
@@ -87,6 +89,7 @@ func postClipHandler(h *Hub, identFn IdentityFunc, obs *Observer) http.HandlerFu
 			Content:  req.Content,
 			Data:     req.Data,
 			Source:   source,
+			DeviceID: firstNonEmpty(req.DeviceID, r.Header.Get("X-Clip-Device-ID")),
 		})
 
 		if isNew {
@@ -126,6 +129,7 @@ func postBlobHandler(h *Hub, identFn IdentityFunc, obs *Observer) http.HandlerFu
 		input := PutInput{
 			MimeType: mimeType,
 			Source:   identFn(r),
+			DeviceID: r.Header.Get("X-Clip-Device-ID"),
 		}
 		if strings.HasPrefix(mimeType, "text/") {
 			input.Content = string(body)
@@ -153,6 +157,29 @@ func postBlobHandler(h *Hub, identFn IdentityFunc, obs *Observer) http.HandlerFu
 			)
 		}
 	}
+}
+
+func capabilitiesHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, protocol.Capabilities{
+			HubVersion:      "dev",
+			ProtocolVersion: protocol.ProtocolVersion,
+			Features:        map[string]bool{"transfers": false, "devices": true, "e2ee": false},
+			Limits: protocol.CapabilityLimits{
+				MaxClipSize:     protocol.MaxContentSize,
+				MaxTransferSize: protocol.DefaultMaxTransferSize,
+			},
+		})
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func getClipHandler(h *Hub) http.HandlerFunc {

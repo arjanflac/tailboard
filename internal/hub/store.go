@@ -58,6 +58,11 @@ func migrate(db *sql.DB) error {
 	if _, err := tx.Exec("DROP TABLE IF EXISTS meta"); err != nil {
 		return fmt.Errorf("drop legacy meta table: %w", err)
 	}
+	if !strings.Contains(strings.ToLower(schema), "device_id") {
+		if _, err := tx.Exec("ALTER TABLE clips ADD COLUMN device_id TEXT NOT NULL DEFAULT ''"); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("add device_id column: %w", err)
+		}
+	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit migration: %w", err)
@@ -142,8 +147,8 @@ func (s *Store) LoadItem(seq uint64) (*protocol.ClipItem, error) {
 func (s *Store) SaveItem(item protocol.ClipItem) (protocol.ClipItem, error) {
 	if item.Seq == 0 {
 		result, err := s.db.Exec(
-			"INSERT INTO clips (mime_type, content, data, hash, source, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			item.MimeType, item.Content, item.Data, item.Hash, item.Source,
+			"INSERT INTO clips (mime_type, content, data, hash, source, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			item.MimeType, item.Content, item.Data, item.Hash, item.Source, item.DeviceID,
 			item.CreatedAt.Format(time.RFC3339Nano), item.ExpiresAt.Format(time.RFC3339Nano),
 		)
 		if err != nil {
@@ -158,8 +163,8 @@ func (s *Store) SaveItem(item protocol.ClipItem) (protocol.ClipItem, error) {
 	}
 
 	_, err := s.db.Exec(
-		"INSERT OR REPLACE INTO clips (seq, mime_type, content, data, hash, source, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		item.Seq, item.MimeType, item.Content, item.Data, item.Hash, item.Source,
+		"INSERT OR REPLACE INTO clips (seq, mime_type, content, data, hash, source, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		item.Seq, item.MimeType, item.Content, item.Data, item.Hash, item.Source, item.DeviceID,
 		item.CreatedAt.Format(time.RFC3339Nano), item.ExpiresAt.Format(time.RFC3339Nano),
 	)
 	return item, err
@@ -190,6 +195,7 @@ const clipsTableDDL = `
 		data       BLOB,
 		hash       TEXT    NOT NULL,
 		source     TEXT    NOT NULL,
+		device_id  TEXT    NOT NULL DEFAULT '',
 		created_at TEXT    NOT NULL,
 		expires_at TEXT    NOT NULL
 	);
@@ -203,8 +209,8 @@ func migrateLegacyClipsTable(tx *sql.Tx) error {
 		return fmt.Errorf("create migrated clips table: %w", err)
 	}
 	if _, err := tx.Exec(`
-		INSERT INTO clips (seq, mime_type, content, data, hash, source, created_at, expires_at)
-		SELECT seq, mime_type, content, data, hash, source, created_at, expires_at
+		INSERT INTO clips (seq, mime_type, content, data, hash, source, device_id, created_at, expires_at)
+		SELECT seq, mime_type, content, data, hash, source, '', created_at, expires_at
 		FROM clips_legacy
 		ORDER BY seq
 	`); err != nil {
@@ -232,7 +238,7 @@ func (s *Store) loadSeq() (uint64, error) {
 	return seq, nil
 }
 
-const selectClipColumns = "SELECT seq, mime_type, content, data, hash, source, created_at, expires_at FROM clips"
+const selectClipColumns = "SELECT seq, mime_type, content, data, hash, source, device_id, created_at, expires_at FROM clips"
 
 type clipScanner interface {
 	Scan(dest ...any) error
@@ -244,7 +250,7 @@ func scanClip(scanner clipScanner) (protocol.ClipItem, error) {
 	var data []byte
 	var createdAt, expiresAt string
 
-	if err := scanner.Scan(&item.Seq, &item.MimeType, &content, &data, &item.Hash, &item.Source, &createdAt, &expiresAt); err != nil {
+	if err := scanner.Scan(&item.Seq, &item.MimeType, &content, &data, &item.Hash, &item.Source, &item.DeviceID, &createdAt, &expiresAt); err != nil {
 		return protocol.ClipItem{}, err
 	}
 	item.Content = content.String

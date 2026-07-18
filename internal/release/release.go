@@ -91,11 +91,17 @@ var DefaultTargets = []Target{
 	{Binary: "clipd", GOOS: "darwin", GOARCH: "amd64"},
 	{Binary: "clipd", GOOS: "darwin", GOARCH: "arm64"},
 	{Binary: "clipd", GOOS: "linux", GOARCH: "amd64"},
+	{Binary: "clipd", GOOS: "linux", GOARCH: "arm64"},
 	{Binary: "clipd", GOOS: "windows", GOARCH: "amd64"},
+	{Binary: "cliphub", GOOS: "darwin", GOARCH: "amd64"},
+	{Binary: "cliphub", GOOS: "darwin", GOARCH: "arm64"},
 	{Binary: "cliphub", GOOS: "linux", GOARCH: "amd64"},
+	{Binary: "cliphub", GOOS: "linux", GOARCH: "arm64"},
+	{Binary: "cliphub", GOOS: "windows", GOARCH: "amd64"},
 	{Binary: "tailclip", GOOS: "darwin", GOARCH: "amd64"},
 	{Binary: "tailclip", GOOS: "darwin", GOARCH: "arm64"},
 	{Binary: "tailclip", GOOS: "linux", GOARCH: "amd64"},
+	{Binary: "tailclip", GOOS: "linux", GOARCH: "arm64"},
 	{Binary: "tailclip", GOOS: "windows", GOARCH: "amd64"},
 }
 

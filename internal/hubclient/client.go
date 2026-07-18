@@ -31,6 +31,7 @@ type PutRequest struct {
 	Content  string `json:"content,omitempty"`
 	Data     []byte `json:"data,omitempty"`
 	Source   string `json:"-"`
+	DeviceID string `json:"device_id,omitempty"`
 }
 
 // Client wraps all HTTP interactions with the hub.
@@ -165,6 +166,9 @@ func (c *Client) Put(ctx context.Context, payload PutRequest) (*protocol.ClipIte
 	if payload.Source != "" {
 		headers.Set("X-Clip-Source", payload.Source)
 	}
+	if payload.DeviceID != "" {
+		headers.Set("X-Clip-Device-ID", payload.DeviceID)
+	}
 
 	resp, err := c.do(ctx, http.MethodPost, c.endpoint("api", "clip"), bytes.NewReader(body), headers)
 	if err != nil {
@@ -187,6 +191,9 @@ func (c *Client) putBlob(ctx context.Context, payload PutRequest) (*protocol.Cli
 	headers := http.Header{"Content-Type": []string{payload.MimeType}}
 	if payload.Source != "" {
 		headers.Set("X-Clip-Source", payload.Source)
+	}
+	if payload.DeviceID != "" {
+		headers.Set("X-Clip-Device-ID", payload.DeviceID)
 	}
 
 	resp, err := c.do(ctx, http.MethodPost, c.endpoint("api", "clip", "blob"), bytes.NewReader(payload.Data), headers)
@@ -340,6 +347,22 @@ func (c *Client) Status(ctx context.Context) (map[string]any, error) {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return status, nil
+}
+
+func (c *Client) Capabilities(ctx context.Context) (*protocol.Capabilities, error) {
+	resp, err := c.do(ctx, http.MethodGet, c.endpoint("api", "capabilities"), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, readHTTPError(resp)
+	}
+	var capabilities protocol.Capabilities
+	if err := json.NewDecoder(resp.Body).Decode(&capabilities); err != nil {
+		return nil, fmt.Errorf("decode capabilities: %w", err)
+	}
+	return &capabilities, nil
 }
 
 func (c *Client) do(ctx context.Context, method string, endpoint string, body io.Reader, headers http.Header, values ...url.Values) (*http.Response, error) {

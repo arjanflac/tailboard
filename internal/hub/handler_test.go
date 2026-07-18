@@ -24,6 +24,43 @@ func setupServer(t *testing.T) (*Hub, *httptest.Server) {
 	return h, srv
 }
 
+func TestCapabilitiesAndDeviceID(t *testing.T) {
+	h, _ := New(Config{})
+	mux := http.NewServeMux()
+	Register(mux, h, func(*http.Request) string { return "test-node" })
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/api/capabilities")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var capabilities protocol.Capabilities
+	if err := json.NewDecoder(resp.Body).Decode(&capabilities); err != nil {
+		t.Fatal(err)
+	}
+	if capabilities.ProtocolVersion != protocol.ProtocolVersion || !capabilities.Features["devices"] {
+		t.Fatalf("unexpected capabilities: %+v", capabilities)
+	}
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/clip", bytes.NewBufferString(`{"content":"hello"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Clip-Device-ID", "2bd59f07-f7c4-4cc9-98a9-c52af6e56642")
+	putResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer putResp.Body.Close()
+	var item protocol.ClipItem
+	if err := json.NewDecoder(putResp.Body).Decode(&item); err != nil {
+		t.Fatal(err)
+	}
+	if item.DeviceID != "2bd59f07-f7c4-4cc9-98a9-c52af6e56642" {
+		t.Fatalf("device id = %q", item.DeviceID)
+	}
+}
+
 func setupServerWithObserver(t *testing.T) (*Hub, *Observer, *httptest.Server) {
 	t.Helper()
 	h := newTestHub()

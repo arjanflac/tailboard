@@ -8,12 +8,14 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/thalysguimaraes/cliphub/internal/agent"
+	"github.com/thalysguimaraes/cliphub/internal/deviceid"
 	"github.com/thalysguimaraes/cliphub/internal/discover"
 	"github.com/thalysguimaraes/cliphub/internal/hubclient"
 	"github.com/thalysguimaraes/cliphub/internal/privacy"
@@ -41,6 +43,7 @@ func run(ctx context.Context, args []string) error {
 	ignoreProcesses := fs.String("ignore-processes", envString("CLIPHUB_IGNORE_PROCESSES", ""), "comma-separated process names to keep local")
 	filterSensitive := fs.String("filter-sensitive", envString("CLIPHUB_FILTER_SENSITIVE", ""), "comma-separated sensitive classes to block (secret,password-manager,otp)")
 	clearOnBlock := fs.Bool("clear-on-block", envBool("CLIPHUB_CLEAR_ON_BLOCK", false), "clear the local clipboard when a privacy rule blocks sync")
+	stateDir := fs.String("state-dir", defaultStateDir(), "directory for persistent agent state")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -74,6 +77,10 @@ func run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	stableDeviceID, err := deviceid.LoadOrCreate(filepath.Join(*stateDir, "device-id"))
+	if err != nil {
+		return err
+	}
 
 	sensitiveClasses, err := privacy.ParseSensitiveClasses(*filterSensitive)
 	if err != nil {
@@ -84,6 +91,7 @@ func run(ctx context.Context, args []string) error {
 		HubURL:       *hubURL,
 		Client:       client,
 		NodeName:     *nodeName,
+		DeviceID:     stableDeviceID,
 		PollInterval: time.Duration(*pollMs) * time.Millisecond,
 		Privacy: privacy.NewConfig(
 			privacy.ParseCSV(*ignoreApps),
@@ -97,6 +105,13 @@ func run(ctx context.Context, args []string) error {
 	}
 
 	return a.Run(ctx)
+}
+
+func defaultStateDir() string {
+	if dir, err := os.UserConfigDir(); err == nil {
+		return filepath.Join(dir, "cliphub")
+	}
+	return filepath.Join(os.TempDir(), "cliphub")
 }
 
 func runMain(args []string) int {

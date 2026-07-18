@@ -111,6 +111,7 @@ type PutInput struct {
 	Content  string // For text/* types.
 	Data     []byte // For binary types.
 	Source   string
+	DeviceID string
 }
 
 // Put stores a new clipboard item. Returns the item and true if it was new,
@@ -139,6 +140,7 @@ func (h *Hub) Put(in PutInput) (protocol.ClipItem, bool) {
 		Data:      cloneBytes(in.Data),
 		Hash:      hash,
 		Source:    in.Source,
+		DeviceID:  in.DeviceID,
 		CreatedAt: now,
 		ExpiresAt: now.Add(h.ttl),
 	}
