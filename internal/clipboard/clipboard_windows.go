@@ -29,6 +29,7 @@ var (
 	procGetClipboardData           = user32.NewProc("GetClipboardData")
 	procSetClipboardData           = user32.NewProc("SetClipboardData")
 	procRegisterClipboardFormatW   = user32.NewProc("RegisterClipboardFormatW")
+	procGetClipboardSequenceNumber = user32.NewProc("GetClipboardSequenceNumber")
 	procGlobalAlloc                = kernel32.NewProc("GlobalAlloc")
 	procGlobalFree                 = kernel32.NewProc("GlobalFree")
 	procGlobalLock                 = kernel32.NewProc("GlobalLock")
@@ -37,8 +38,22 @@ var (
 )
 
 type windowsClipboard struct {
-	htmlFormat uint32
-	pngFormat  uint32
+	htmlFormat   uint32
+	pngFormat    uint32
+	lastSequence uint32
+}
+
+func (c *windowsClipboard) Changed() (bool, error) {
+	sequence, _, callErr := procGetClipboardSequenceNumber.Call()
+	if sequence == 0 {
+		return false, winCallError("GetClipboardSequenceNumber", callErr)
+	}
+	current := uint32(sequence)
+	if current == c.lastSequence {
+		return false, nil
+	}
+	c.lastSequence = current
+	return true, nil
 }
 
 func New() (Clipboard, error) {

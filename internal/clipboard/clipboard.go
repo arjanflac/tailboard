@@ -36,6 +36,12 @@ type Clipboard interface {
 	Clear() error
 }
 
+// ChangeDetector allows polling agents to avoid reading clipboard contents when
+// the platform's cheap change sequence has not moved.
+type ChangeDetector interface {
+	Changed() (bool, error)
+}
+
 // typePriority defines the preference order for reading clipboard content.
 // Higher index = higher priority.
 var typePriority = []string{

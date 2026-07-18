@@ -13,6 +13,21 @@ type fakeClipboard struct {
 	content clipboard.Content
 }
 
+type changeAwareClipboard struct {
+	fakeClipboard
+	changed   bool
+	readCount int
+}
+
+func (c *changeAwareClipboard) Changed() (bool, error) {
+	return c.changed, nil
+}
+
+func (c *changeAwareClipboard) ReadBest() (clipboard.Content, error) {
+	c.readCount++
+	return c.fakeClipboard.ReadBest()
+}
+
 func (f *fakeClipboard) ReadBest() (clipboard.Content, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -75,6 +90,23 @@ func TestPollNoChange(t *testing.T) {
 	result, _ = m.Poll()
 	if result != PollNoChange {
 		t.Fatalf("expected no change, got %v", result)
+	}
+}
+
+func TestPollSkipsContentReadWhenSequenceUnchanged(t *testing.T) {
+	clip := &changeAwareClipboard{
+		fakeClipboard: fakeClipboard{content: textContent("hidden")},
+		changed:       false,
+	}
+	monitor := NewClipboardMonitor(clip)
+	result, _ := monitor.Poll()
+	if result != PollNoChange || clip.readCount != 0 {
+		t.Fatalf("result=%v reads=%d", result, clip.readCount)
+	}
+	clip.changed = true
+	result, _ = monitor.Poll()
+	if result != PollNewContent || clip.readCount != 1 {
+		t.Fatalf("result=%v reads=%d", result, clip.readCount)
 	}
 }
 

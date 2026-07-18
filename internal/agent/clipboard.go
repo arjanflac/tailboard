@@ -39,6 +39,16 @@ func (m *ClipboardMonitor) Poll() (PollResult, clipboard.Content) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if detector, ok := m.clip.(clipboard.ChangeDetector); ok {
+		changed, err := detector.Changed()
+		if err != nil {
+			return PollError, clipboard.Content{}
+		}
+		if !changed {
+			return PollNoChange, clipboard.Content{}
+		}
+	}
+
 	ct, err := m.clip.ReadBest()
 	if err != nil {
 		return PollError, clipboard.Content{}

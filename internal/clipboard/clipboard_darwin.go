@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 // UTI to MIME mappings.
@@ -25,11 +27,36 @@ var (
 	}
 )
 
-type darwinClipboard struct{}
+type darwinClipboard struct {
+	changeMu    sync.Mutex
+	changeCount int64
+}
 
 // New returns a Clipboard for macOS.
 func New() (Clipboard, error) {
-	return &darwinClipboard{}, nil
+	return &darwinClipboard{changeCount: -1}, nil
+}
+
+func (c *darwinClipboard) Changed() (bool, error) {
+	out, err := exec.Command("osascript", "-e", `
+use framework "AppKit"
+set pb to current application's NSPasteboard's generalPasteboard()
+return (pb's changeCount()) as text
+`).Output()
+	if err != nil {
+		return false, err
+	}
+	count, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("parse pasteboard change count: %w", err)
+	}
+	c.changeMu.Lock()
+	defer c.changeMu.Unlock()
+	if count == c.changeCount {
+		return false, nil
+	}
+	c.changeCount = count
+	return true, nil
 }
 
 func (c *darwinClipboard) ReadBest() (Content, error) {
