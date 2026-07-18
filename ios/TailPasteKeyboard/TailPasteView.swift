@@ -7,23 +7,32 @@ struct TailPasteView: View {
     var body: some View {
         VStack(spacing: 8) {
             // Main paste button.
-            Button(action: viewModel.insertCurrent) {
-                HStack {
-                    Image(systemName: "doc.on.clipboard.fill")
-                    if let clip = viewModel.currentClip, clip.isText {
-                        Text(clip.preview)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    } else {
-                        Text("Tail Paste")
+            HStack(spacing: 8) {
+                Button(action: viewModel.insertCurrent) {
+                    HStack {
+                        Image(systemName: "doc.on.clipboard.fill")
+                        if let clip = viewModel.currentClip {
+                            Text(clip.preview)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        } else {
+                            Text("Tail Paste")
+                        }
                     }
+                    .font(.body.weight(.medium))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
                 }
-                .font(.body.weight(.medium))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .buttonStyle(.borderedProminent)
+                .disabled(viewModel.currentClip == nil)
+
+                Button(action: viewModel.pushClipboard) {
+                    Image(systemName: "arrow.up.doc.fill")
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Push clipboard to ClipHub")
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(viewModel.currentClip == nil || viewModel.currentClip?.isText != true)
 
             // Recent clips strip.
             if !viewModel.recentClips.isEmpty {

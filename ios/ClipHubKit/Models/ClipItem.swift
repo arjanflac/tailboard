@@ -8,6 +8,7 @@ public struct ClipItem: Codable, Identifiable, Hashable, Sendable {
     public let data: Data?
     public let hash: String
     public let source: String
+    public let deviceID: String?
     public let createdAt: Date
     public let expiresAt: Date
 
@@ -31,6 +32,7 @@ public struct ClipItem: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case seq, content, data, hash, source
+        case deviceID = "device_id"
         case mimeType = "mime_type"
         case createdAt = "created_at"
         case expiresAt = "expires_at"

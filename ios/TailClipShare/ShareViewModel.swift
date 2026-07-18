@@ -45,6 +45,17 @@ final class ShareViewModel {
                         return
                     }
                 }
+                // Generic files: stream the provider representation into memory and
+                // use its declared content type. Transfer uploads handle larger files.
+                if provider.hasItemConformingToTypeIdentifier(UTType.data.identifier),
+                   let registeredType = provider.registeredTypeIdentifiers.first,
+                   let type = UTType(registeredType),
+                   let data = try? await provider.loadDataRepresentation(for: type) {
+                    dataToSend = data
+                    mimeType = type.preferredMIMEType ?? "application/octet-stream"
+                    previewText = "[\(type.localizedDescription ?? "File"), \(data.count) bytes]"
+                    return
+                }
             }
         }
         previewText = "No shareable content found"

@@ -26,6 +26,10 @@ targets:
       - ClipHub
     dependencies:
       - target: ClipHubKit
+      - target: TailPasteKeyboard
+        embed: true
+      - target: TailClipShare
+        embed: true
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub
       INFOPLIST_FILE: ClipHub/Resources/Info.plist
@@ -77,3 +81,13 @@ targets:
       - target: ClipHubKit
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.tests
+
+schemes:
+  ClipHub:
+    build:
+      targets:
+        ClipHub: all
+        ClipHubTests: [test]
+    test:
+      targets:
+        - ClipHubTests

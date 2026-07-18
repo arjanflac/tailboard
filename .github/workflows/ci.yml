@@ -93,3 +93,25 @@ jobs:
         run: make release-package-managers VERSION=ci-snapshot RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/cliphub/releases/download/ci-snapshot
       - name: Verify package-manager metadata
         run: make release-package-managers-verify VERSION=ci-snapshot RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/cliphub/releases/download/ci-snapshot
+
+  ios-ci:
+    name: iOS Build and Tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        working-directory: ios
+        run: xcodegen generate
+      - name: Build and test without signing
+        working-directory: ios
+        run: |
+          device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for runtime in d.values() for x in runtime if x["isAvailable"]))')"
+          xcodebuild \
+            -project ClipHub.xcodeproj \
+            -scheme ClipHub \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$device_id" \
+            CODE_SIGNING_ALLOWED=NO \
+            test

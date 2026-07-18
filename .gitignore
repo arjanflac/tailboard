@@ -2,3 +2,4 @@ bin/
 dist/
 *.exe
 test_e2e.sh
+ios/*.xcodeproj/

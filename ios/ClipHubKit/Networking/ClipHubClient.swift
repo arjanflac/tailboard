@@ -66,8 +66,18 @@ public actor ClipHubClient {
     // MARK: - POST /api/clip (binary)
 
     public func postClip(data: Data, mimeType: String) async throws -> ClipItem {
-        let body: [String: Any] = ["data": data.base64EncodedString(), "mime_type": mimeType]
-        return try await post("/api/clip", json: body)
+        let url = try resolveURL("/api/clip/blob")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+        request.setValue(sourceName, forHTTPHeaderField: "X-Clip-Source")
+        request.httpBody = data
+        let (responseData, response) = try await perform(request)
+        try validate(response, body: responseData)
+        guard let item = try await getCurrentClip() else {
+            throw ClipHubError.emptyClipboard
+        }
+        return item
     }
 
     // MARK: - GET /api/status
