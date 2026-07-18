@@ -64,6 +64,8 @@ type clipStore interface {
 	SaveItem(item protocol.ClipItem) (protocol.ClipItem, error)
 	DeleteExpired(before time.Time) (int, error)
 	DeleteAll() error
+	LoadDevices() ([]protocol.Device, error)
+	SaveDevice(protocol.Device) error
 }
 
 // New creates a Hub, optionally backed by SQLite, and starts the TTL reaper.
@@ -103,6 +105,15 @@ func New(cfg Config) (*Hub, error) {
 		if len(items) > 0 {
 			h.current = &items[0]
 		}
+		devices, err := st.LoadDevices()
+		if err != nil {
+			st.Close()
+			return nil, fmt.Errorf("load devices: %w", err)
+		}
+		for _, device := range devices {
+			device.Online = false
+			h.devices[device.DeviceID] = device
+		}
 		slog.Info("loaded state from db", "component", "hub_store", "sequence", seq, "history_items", len(items))
 	}
 
@@ -124,6 +135,11 @@ func (h *Hub) RegisterDevice(req protocol.RegisterDeviceRequest) protocol.Device
 	device.PublicKey = req.PublicKey
 	device.LastSeen = time.Now()
 	h.devices[req.DeviceID] = device
+	if h.store != nil {
+		if err := h.store.SaveDevice(device); err != nil {
+			slog.Error("failed to persist device", "component", "hub_store", "device_id", device.DeviceID, "error", err)
+		}
+	}
 	return device
 }
 

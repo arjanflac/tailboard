@@ -2,6 +2,7 @@ package hub
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -63,11 +64,50 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("add device_id column: %w", err)
 		}
 	}
+	if _, err := tx.Exec(devicesTableDDL); err != nil {
+		return fmt.Errorf("create devices table: %w", err)
+	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit migration: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) LoadDevices() ([]protocol.Device, error) {
+	rows, err := s.db.Query("SELECT device_id, name, platform, capabilities, public_key, last_seen FROM devices ORDER BY name")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var devices []protocol.Device
+	for rows.Next() {
+		var device protocol.Device
+		var capabilities, lastSeen string
+		if err := rows.Scan(&device.DeviceID, &device.Name, &device.Platform, &capabilities, &device.PublicKey, &lastSeen); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal([]byte(capabilities), &device.Capabilities)
+		device.LastSeen, _ = time.Parse(time.RFC3339Nano, lastSeen)
+		devices = append(devices, device)
+	}
+	return devices, rows.Err()
+}
+
+func (s *Store) SaveDevice(device protocol.Device) error {
+	capabilities, err := json.Marshal(device.Capabilities)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`
+		INSERT INTO devices (device_id, name, platform, capabilities, public_key, last_seen)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(device_id) DO UPDATE SET
+			name=excluded.name, platform=excluded.platform,
+			capabilities=excluded.capabilities, public_key=excluded.public_key,
+			last_seen=excluded.last_seen
+	`, device.DeviceID, device.Name, device.Platform, string(capabilities), device.PublicKey, device.LastSeen.Format(time.RFC3339Nano))
+	return err
 }
 
 // Close closes the database.
@@ -198,6 +238,17 @@ const clipsTableDDL = `
 		device_id  TEXT    NOT NULL DEFAULT '',
 		created_at TEXT    NOT NULL,
 		expires_at TEXT    NOT NULL
+	);
+`
+
+const devicesTableDDL = `
+	CREATE TABLE IF NOT EXISTS devices (
+		device_id    TEXT PRIMARY KEY,
+		name         TEXT NOT NULL,
+		platform     TEXT NOT NULL,
+		capabilities TEXT NOT NULL DEFAULT '[]',
+		public_key   TEXT NOT NULL DEFAULT '',
+		last_seen    TEXT NOT NULL
 	);
 `
 

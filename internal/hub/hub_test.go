@@ -64,6 +64,14 @@ func (s *blockingStore) DeleteAll() error {
 	return nil
 }
 
+func (s *blockingStore) LoadDevices() ([]protocol.Device, error) {
+	return nil, nil
+}
+
+func (s *blockingStore) SaveDevice(protocol.Device) error {
+	return nil
+}
+
 func (s *blockingStore) allowOneSave() {
 	s.releaseSave <- struct{}{}
 }
