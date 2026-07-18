@@ -138,9 +138,13 @@ func (a *Agent) Run(ctx context.Context) error {
 		URL: a.client.StreamURLForDevice(a.deviceID),
 		OnConnected: func() {
 			if a.deviceID != "" {
+				capabilities := []string{"clipboard", "transfers"}
+				if reporter, ok := a.ctxProvider.(contextProviderReporter); ok {
+					capabilities = append(capabilities, "privacy-detector:"+reporter.Layer())
+				}
 				if _, err := a.client.RegisterDevice(ctx, protocol.RegisterDeviceRequest{
 					DeviceID: a.deviceID, Name: a.nodeName, Platform: runtime.GOOS,
-					Capabilities: []string{"clipboard", "transfers"},
+					Capabilities: capabilities,
 				}); err != nil {
 					slog.Warn("device registration failed", "component", "clipd", "error", err)
 				}

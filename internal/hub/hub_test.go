@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -93,6 +94,17 @@ func TestPutAndGet(t *testing.T) {
 	got := h.Get()
 	if got == nil || got.Seq != 1 {
 		t.Fatal("Get should return current item")
+	}
+}
+
+func TestMergeStringsKeepsCapabilitiesWithoutDuplicates(t *testing.T) {
+	got := mergeStrings(
+		[]string{"clipboard", "privacy-detector:x11-ewmh"},
+		[]string{"clipboard", "transfers"},
+	)
+	want := []string{"clipboard", "privacy-detector:x11-ewmh", "transfers"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
 	}
 }
 

@@ -617,6 +617,18 @@ func cmdStatus(ctx context.Context) error {
 	for _, key := range keys {
 		fmt.Printf("%-24s %v\n", key+":", status[key])
 	}
+	if devices, err := hub.Devices(ctx); err == nil {
+		for _, device := range devices {
+			if device.DeviceID != localDeviceID {
+				continue
+			}
+			for _, capability := range device.Capabilities {
+				if strings.HasPrefix(capability, "privacy-detector:") {
+					fmt.Printf("%-24s %s\n", "privacy_detector:", strings.TrimPrefix(capability, "privacy-detector:"))
+				}
+			}
+		}
+	}
 	return nil
 }
 

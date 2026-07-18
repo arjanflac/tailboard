@@ -4,6 +4,7 @@ go 1.26.1
 
 require (
 	github.com/coder/websocket v1.8.14
+	github.com/jezek/xgb v1.3.1
 	golang.org/x/image v0.27.0
 	golang.org/x/sys v0.40.0
 	gopkg.in/yaml.v3 v3.0.1

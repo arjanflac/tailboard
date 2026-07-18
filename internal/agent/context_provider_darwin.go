@@ -11,6 +11,8 @@ import (
 
 type shellContextProvider struct{}
 
+func (shellContextProvider) Layer() string { return "macos-system-events" }
+
 func newContextProvider() contextProvider {
 	return shellContextProvider{}
 }

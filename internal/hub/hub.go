@@ -131,7 +131,7 @@ func (h *Hub) RegisterDevice(req protocol.RegisterDeviceRequest) protocol.Device
 	device.DeviceID = req.DeviceID
 	device.Name = req.Name
 	device.Platform = req.Platform
-	device.Capabilities = append([]string(nil), req.Capabilities...)
+	device.Capabilities = mergeStrings(device.Capabilities, req.Capabilities)
 	device.PublicKey = req.PublicKey
 	device.LastSeen = time.Now()
 	h.devices[req.DeviceID] = device
@@ -141,6 +141,25 @@ func (h *Hub) RegisterDevice(req protocol.RegisterDeviceRequest) protocol.Device
 		}
 	}
 	return device
+}
+
+func mergeStrings(existing, incoming []string) []string {
+	seen := make(map[string]struct{}, len(existing)+len(incoming))
+	merged := make([]string, 0, len(existing)+len(incoming))
+	for _, values := range [][]string{existing, incoming} {
+		for _, value := range values {
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			merged = append(merged, value)
+		}
+	}
+	sort.Strings(merged)
+	return merged
 }
 
 func (h *Hub) SetDeviceOnline(deviceID string, online bool) {

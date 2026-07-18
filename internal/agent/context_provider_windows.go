@@ -11,6 +11,8 @@ import (
 
 type shellContextProvider struct{}
 
+func (shellContextProvider) Layer() string { return "windows-foreground-window" }
+
 func newContextProvider() contextProvider {
 	return shellContextProvider{}
 }
