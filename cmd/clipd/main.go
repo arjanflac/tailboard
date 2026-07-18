@@ -54,6 +54,9 @@ func run(ctx context.Context, args []string) error {
 	clearOnBlock := fs.Bool("clear-on-block", envBool("CLIPHUB_CLEAR_ON_BLOCK", false), "clear the local clipboard when a privacy rule blocks sync")
 	privacyPreset := fs.String("privacy-preset", envString("CLIPHUB_PRIVACY_PRESET", "off"), "privacy bundle: strict, balanced, or off")
 	stateDir := fs.String("state-dir", defaultStateDir(), "directory for persistent agent state")
+	transferPolicy := fs.String("transfers", envString("CLIPHUB_TRANSFERS", "ask"), "incoming transfer policy: ask, accept, or off")
+	transferAllow := fs.String("transfer-allow", envString("CLIPHUB_TRANSFER_ALLOW", ""), "comma-separated device IDs allowed for auto-accept")
+	downloadDir := fs.String("download-dir", envString("CLIPHUB_DOWNLOAD_DIR", ""), "incoming transfer destination (default: ~/Downloads)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -108,12 +111,15 @@ func run(ctx context.Context, args []string) error {
 	))
 
 	a, err := newAgent(agent.Config{
-		HubURL:       *hubURL,
-		Client:       client,
-		NodeName:     *nodeName,
-		DeviceID:     stableDeviceID,
-		PollInterval: time.Duration(*pollMs) * time.Millisecond,
-		Privacy:      privacyConfig,
+		HubURL:         *hubURL,
+		Client:         client,
+		NodeName:       *nodeName,
+		DeviceID:       stableDeviceID,
+		PollInterval:   time.Duration(*pollMs) * time.Millisecond,
+		Privacy:        privacyConfig,
+		TransferPolicy: *transferPolicy,
+		TransferAllow:  privacy.ParseCSV(*transferAllow),
+		DownloadDir:    *downloadDir,
 	})
 	if err != nil {
 		return err

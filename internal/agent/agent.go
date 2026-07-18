@@ -27,21 +27,27 @@ type Config struct {
 	Clipboard       clipboard.Clipboard // Clipboard backend (nil = system default).
 	Privacy         privacy.Config      // Optional privacy policy for outbound clips.
 	ContextProvider contextProvider     // Optional active app/process detector.
+	TransferPolicy  string              // ask, accept, or off.
+	TransferAllow   []string            // Device IDs permitted for auto-accept.
+	DownloadDir     string              // Destination for accepted transfers.
 }
 
 // Agent is the local clipboard sync agent.
 type Agent struct {
-	hubURL       string
-	nodeName     string
-	deviceID     string
-	pollInterval time.Duration
-	monitor      *ClipboardMonitor
-	client       *hubclient.Client
-	paused       atomic.Bool
-	bootstrapped atomic.Bool
-	privacy      privacy.Config
-	ctxProvider  contextProvider
-	warnedCtx    atomic.Bool
+	hubURL         string
+	nodeName       string
+	deviceID       string
+	pollInterval   time.Duration
+	monitor        *ClipboardMonitor
+	client         *hubclient.Client
+	paused         atomic.Bool
+	bootstrapped   atomic.Bool
+	privacy        privacy.Config
+	ctxProvider    contextProvider
+	warnedCtx      atomic.Bool
+	transferPolicy string
+	transferAllow  map[string]struct{}
+	downloadDir    string
 }
 
 // ClipboardInitError reports a failure to initialize the default clipboard backend.
@@ -78,6 +84,22 @@ func New(cfg Config) (*Agent, error) {
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 500 * time.Millisecond
 	}
+	if cfg.TransferPolicy == "" {
+		cfg.TransferPolicy = "ask"
+	}
+	if cfg.TransferPolicy != "ask" && cfg.TransferPolicy != "accept" && cfg.TransferPolicy != "off" {
+		return nil, fmt.Errorf("invalid transfer policy %q", cfg.TransferPolicy)
+	}
+	if cfg.DownloadDir == "" {
+		home, _ := os.UserHomeDir()
+		cfg.DownloadDir = filepath.Join(home, "Downloads")
+	}
+	allow := make(map[string]struct{}, len(cfg.TransferAllow))
+	for _, id := range cfg.TransferAllow {
+		if id != "" {
+			allow[id] = struct{}{}
+		}
+	}
 
 	client := cfg.Client
 	if client == nil && cfg.HubURL != "" {
@@ -92,14 +114,17 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	return &Agent{
-		hubURL:       cfg.HubURL,
-		nodeName:     cfg.NodeName,
-		deviceID:     cfg.DeviceID,
-		pollInterval: cfg.PollInterval,
-		monitor:      NewClipboardMonitor(clip),
-		client:       client,
-		privacy:      cfg.Privacy,
-		ctxProvider:  resolveContextProvider(cfg),
+		hubURL:         cfg.HubURL,
+		nodeName:       cfg.NodeName,
+		deviceID:       cfg.DeviceID,
+		pollInterval:   cfg.PollInterval,
+		monitor:        NewClipboardMonitor(clip),
+		client:         client,
+		privacy:        cfg.Privacy,
+		ctxProvider:    resolveContextProvider(cfg),
+		transferPolicy: cfg.TransferPolicy,
+		transferAllow:  allow,
+		downloadDir:    cfg.DownloadDir,
 	}, nil
 }
 
@@ -115,7 +140,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			if a.deviceID != "" {
 				if _, err := a.client.RegisterDevice(ctx, protocol.RegisterDeviceRequest{
 					DeviceID: a.deviceID, Name: a.nodeName, Platform: runtime.GOOS,
-					Capabilities: []string{"clipboard"},
+					Capabilities: []string{"clipboard", "transfers"},
 				}); err != nil {
 					slog.Warn("device registration failed", "component", "clipd", "error", err)
 				}
@@ -126,6 +151,11 @@ func (a *Agent) Run(ctx context.Context) error {
 		},
 		OnUpdate: func(item protocol.ClipItem) {
 			a.applyRemote(item)
+		},
+		OnTransfer: func(transfer protocol.Transfer) {
+			if transfer.State == "offered" && transfer.ToDevice == a.deviceID {
+				go a.handleTransferOffer(ctx, transfer)
+			}
 		},
 	}
 
