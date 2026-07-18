@@ -235,6 +235,10 @@ func (s *transferStore) transition(id, actor, action string) (protocol.Transfer,
 	default:
 		return protocol.Transfer{}, ErrTransferConflict
 	}
+	if action == "complete" || action == "decline" || action == "cancel" {
+		now := time.Now()
+		transfer.FinishedAt = &now
+	}
 	s.transfers[id] = transfer
 	if err := s.persistLocked(transfer); err != nil {
 		return protocol.Transfer{}, err
@@ -330,20 +334,42 @@ func (s *transferStore) cancel(id, actor string) (protocol.Transfer, error) {
 	return s.transition(id, actor, "cancel")
 }
 
-func (s *transferStore) reapExpired(now time.Time) int {
+func (s *transferStore) reapExpired(now time.Time) ([]protocol.Transfer, int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	reaped := 0
+	var expired []protocol.Transfer
+	removed := 0
 	for id, transfer := range s.transfers {
-		if now.After(transfer.ExpiresAt) && transfer.State != "complete" && transfer.State != "declined" && transfer.State != "canceled" {
+		if !now.After(transfer.ExpiresAt) {
+			continue
+		}
+		if transfer.State != "complete" && transfer.State != "declined" && transfer.State != "canceled" && transfer.State != "expired" {
 			transfer.State = "expired"
+			finishedAt := now
+			transfer.FinishedAt = &finishedAt
 			s.transfers[id] = transfer
 			_ = s.persistLocked(transfer)
 			_ = s.deletePayloadsLocked(id)
-			reaped++
+			expired = append(expired, transfer)
+			continue
+		}
+		if transfer.FinishedAt == nil {
+			finishedAt := now
+			transfer.FinishedAt = &finishedAt
+			s.transfers[id] = transfer
+			_ = s.persistLocked(transfer)
+			continue
+		}
+		if now.Sub(*transfer.FinishedAt) >= 24*time.Hour {
+			delete(s.transfers, id)
+			_ = s.deletePayloadsLocked(id)
+			if s.db != nil {
+				_, _ = s.db.Exec("DELETE FROM transfers WHERE transfer_id = ?", id)
+			}
+			removed++
 		}
 	}
-	return reaped
+	return expired, removed
 }
 
 func (s *transferStore) load() error {

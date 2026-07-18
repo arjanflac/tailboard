@@ -158,6 +158,42 @@ func TestDirectTransferIsOfferedWithoutUsingSpoolQuota(t *testing.T) {
 	}
 }
 
+func TestTransferExpiryNotifiesThenRemovesTerminalMetadata(t *testing.T) {
+	store, err := newTransferStore(t.TempDir(), 1<<20, 1<<20, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.close()
+	transfer, err := store.create("sender", protocol.CreateTransferRequest{
+		ToDevice: "receiver",
+		Files: []protocol.TransferFile{{
+			Name: "pending.txt", Size: 1, SHA256: strings.Repeat("a", 64),
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired, removed := store.reapExpired(transfer.ExpiresAt.Add(time.Minute))
+	if len(expired) != 1 || expired[0].State != "expired" || removed != 0 {
+		t.Fatalf("first reap expired=%+v removed=%d", expired, removed)
+	}
+	finishedAt := expired[0].FinishedAt
+	if finishedAt == nil {
+		t.Fatal("expired transfer did not record terminal time")
+	}
+	expired, removed = store.reapExpired(finishedAt.Add(25 * time.Hour))
+	if len(expired) != 0 || removed != 1 {
+		t.Fatalf("cleanup reap expired=%+v removed=%d", expired, removed)
+	}
+	if _, err := store.get(transfer.TransferID); !errors.Is(err, ErrTransferNotFound) {
+		t.Fatalf("terminal transfer metadata remains: %v", err)
+	}
+	var count int
+	if err := store.db.QueryRow("SELECT COUNT(*) FROM transfers WHERE transfer_id = ?", transfer.TransferID).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("terminal SQLite rows=%d err=%v", count, err)
+	}
+}
+
 func TestTransferUploadResumesFromPersistedOffset(t *testing.T) {
 	store, err := newTransferStore(t.TempDir(), 1<<20, 1<<20, time.Hour)
 	if err != nil {

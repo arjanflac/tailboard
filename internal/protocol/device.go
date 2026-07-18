@@ -40,6 +40,7 @@ type Transfer struct {
 	State       string         `json:"state"`
 	CreatedAt   time.Time      `json:"created_at"`
 	ExpiresAt   time.Time      `json:"expires_at"`
+	FinishedAt  *time.Time     `json:"finished_at,omitempty"`
 }
 
 type CreateTransferRequest struct {

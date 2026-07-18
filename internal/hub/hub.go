@@ -515,8 +515,12 @@ func (h *Hub) reapLoop() {
 func (h *Hub) reapExpired() {
 	now := time.Now()
 	if h.transfers != nil {
-		if reaped := h.transfers.reapExpired(now); reaped > 0 {
-			slog.Info("reaped expired transfers", "component", "hub_transfers", "expired_transfers", reaped)
+		expired, removed := h.transfers.reapExpired(now)
+		for _, transfer := range expired {
+			h.publishTransfer(transfer)
+		}
+		if len(expired) > 0 || removed > 0 {
+			slog.Info("reaped expired transfers", "component", "hub_transfers", "expired_transfers", len(expired), "removed_metadata", removed)
 		}
 	}
 	h.mu.Lock()
