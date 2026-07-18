@@ -131,6 +131,33 @@ func TestTransferIsOfferedOnlyAfterEveryFileIsVerified(t *testing.T) {
 	}
 }
 
+func TestTransferUploadResumesFromPersistedOffset(t *testing.T) {
+	store, err := newTransferStore(t.TempDir(), 1<<20, 1<<20, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.close()
+	payload := []byte("resume-me")
+	sum := sha256.Sum256(payload)
+	transfer, err := store.create("sender", protocol.CreateTransferRequest{
+		ToDevice: "receiver",
+		Files: []protocol.TransferFile{{
+			Name: "resume.txt", Size: int64(len(payload)), SHA256: hex.EncodeToString(sum[:]),
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	transfer, err = store.upload(transfer.TransferID, 0, 0, bytes.NewReader(payload[:4]))
+	if err != nil || transfer.Files[0].Uploaded != 4 || transfer.State != "uploading" {
+		t.Fatalf("partial upload = %+v, %v", transfer, err)
+	}
+	transfer, err = store.upload(transfer.TransferID, 0, 4, bytes.NewReader(payload[4:]))
+	if err != nil || transfer.Files[0].Uploaded != int64(len(payload)) || transfer.State != "offered" {
+		t.Fatalf("resumed upload = %+v, %v", transfer, err)
+	}
+}
+
 func TestTransferMetadataSurvivesRestart(t *testing.T) {
 	dir := t.TempDir()
 	store, err := newTransferStore(dir, 1<<20, 1<<20, time.Hour)

@@ -55,3 +55,17 @@ func TestArchiveDirectoryPreservesRelativePathsDeterministically(t *testing.T) {
 		t.Fatalf("entries = %#v, want %#v", names, want)
 	}
 }
+
+func TestHumanBytes(t *testing.T) {
+	tests := map[int64]string{
+		500:     "500 B",
+		1024:    "1.0 KiB",
+		5 << 20: "5.0 MiB",
+		3 << 30: "3.0 GiB",
+	}
+	for value, want := range tests {
+		if got := humanBytes(value); got != want {
+			t.Fatalf("humanBytes(%d) = %q, want %q", value, got, want)
+		}
+	}
+}

@@ -127,7 +127,8 @@ Commands:
   history [-n N]             Show clipboard history
   status                     Show hub status
   devices                    List registered devices and online state
-  send FILE --to DEVICE      Send a file to a registered device
+  send FILE --to DEVICE      Send a file or directory to a registered device
+  send FILE --resume ID      Resume an interrupted outgoing transfer
   transfers                  List incoming and outgoing transfers
   receive --id ID [--to DIR] Accept and download a transfer
   clear [--local]            Clear hub clipboard/history (and optionally this machine's clipboard)
@@ -144,17 +145,20 @@ Environment:
 }
 
 func cmdSend(ctx context.Context, args []string) error {
-	var path, target string
+	var path, target, resumeID string
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--to" && i+1 < len(args) {
 			target = args[i+1]
+			i++
+		} else if args[i] == "--resume" && i+1 < len(args) {
+			resumeID = args[i+1]
 			i++
 		} else if path == "" {
 			path = args[i]
 		}
 	}
-	if path == "" || target == "" {
-		return fmt.Errorf("usage: tailclip send FILE --to DEVICE")
+	if path == "" || (target == "" && resumeID == "") {
+		return fmt.Errorf("usage: tailclip send FILE (--to DEVICE | --resume ID)")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -176,33 +180,106 @@ func cmdSend(ctx context.Context, args []string) error {
 	} else if !info.Mode().IsRegular() {
 		return fmt.Errorf("%s is not a regular file or directory", path)
 	}
-	targetID, err := resolveDevice(ctx, target)
-	if err != nil {
-		return err
-	}
 	sum, err := hashFile(path)
 	if err != nil {
 		return err
 	}
-	create, err := hub.CreateTransfer(ctx, localDeviceID, protocol.CreateTransferRequest{
-		ToDevice: targetID,
-		Files: []protocol.TransferFile{{
-			Name: sendName, Size: info.Size(), MIME: mimeFromExt(filepath.Ext(sendName)), SHA256: sum,
-		}},
-	})
-	if err != nil {
-		return err
+	var transfer protocol.Transfer
+	if resumeID != "" {
+		outgoing, err := hub.Transfers(ctx, localDeviceID, "sender", "uploading")
+		if err != nil {
+			return err
+		}
+		found := false
+		for _, candidate := range outgoing {
+			if candidate.TransferID == resumeID {
+				transfer = candidate
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("uploading transfer %s not found", resumeID)
+		}
+		if len(transfer.Files) != 1 || transfer.Files[0].Size != info.Size() ||
+			!strings.EqualFold(transfer.Files[0].SHA256, sum) {
+			return fmt.Errorf("local payload does not match transfer %s", resumeID)
+		}
+	} else {
+		targetID, err := resolveDevice(ctx, target)
+		if err != nil {
+			return err
+		}
+		created, err := hub.CreateTransfer(ctx, localDeviceID, protocol.CreateTransferRequest{
+			ToDevice: targetID,
+			Files: []protocol.TransferFile{{
+				Name: sendName, Size: info.Size(), MIME: mimeFromExt(filepath.Ext(sendName)), SHA256: sum,
+			}},
+		})
+		if err != nil {
+			return err
+		}
+		transfer = created.Transfer
 	}
 	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	if _, err := hub.UploadTransferFile(ctx, localDeviceID, create.Transfer.TransferID, 0, 0, info.Size(), file); err != nil {
-		return err
+	const chunkSize = int64(8 << 20)
+	uploaded := transfer.Files[0].Uploaded
+	startedAt := time.Now()
+	startedOffset := uploaded
+	for uploaded < info.Size() || (info.Size() == 0 && uploaded == 0) {
+		length := min(chunkSize, info.Size()-uploaded)
+		reader := io.NewSectionReader(file, uploaded, length)
+		updated, err := hub.UploadTransferFile(
+			ctx, localDeviceID, transfer.TransferID, 0, uploaded, info.Size(), reader,
+		)
+		if err != nil {
+			return fmt.Errorf("upload paused at %d bytes; resume with --resume %s: %w", uploaded, transfer.TransferID, err)
+		}
+		next := updated.Files[0].Uploaded
+		if next <= uploaded && info.Size() > 0 {
+			return fmt.Errorf("upload made no progress at %d bytes", uploaded)
+		}
+		uploaded = next
+		printTransferProgress(uploaded, info.Size(), uploaded-startedOffset, time.Since(startedAt))
+		if info.Size() == 0 {
+			break
+		}
 	}
-	fmt.Printf("sent %s (%d bytes) to %s as %s\n", sendName, info.Size(), target, create.Transfer.TransferID)
+	fmt.Printf("\nsent %s (%d bytes) as %s\n", sendName, info.Size(), transfer.TransferID)
 	return nil
+}
+
+func printTransferProgress(uploaded, total, sessionBytes int64, elapsed time.Duration) {
+	if elapsed <= 0 {
+		elapsed = time.Millisecond
+	}
+	rate := float64(sessionBytes) / elapsed.Seconds()
+	percent := 100.0
+	if total > 0 {
+		percent = float64(uploaded) * 100 / float64(total)
+	}
+	eta := time.Duration(0)
+	if rate > 0 && uploaded < total {
+		eta = time.Duration(float64(total-uploaded)/rate) * time.Second
+	}
+	fmt.Fprintf(os.Stderr, "\r%6.2f%%  %s/s  ETA %s", percent, humanBytes(int64(rate)), eta.Round(time.Second))
+}
+
+func humanBytes(value int64) string {
+	const unit = int64(1024)
+	if value < unit {
+		return fmt.Sprintf("%d B", value)
+	}
+	divisor, exponent := unit, 0
+	for quotient := value / unit; quotient >= unit && exponent < 4; quotient /= unit {
+		divisor *= unit
+		exponent++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(value)/float64(divisor), "KMGTPE"[exponent])
 }
 
 func archiveDirectory(source string) (string, func(), error) {

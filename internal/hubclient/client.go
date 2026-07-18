@@ -433,7 +433,7 @@ func (c *Client) CreateTransfer(ctx context.Context, deviceID string, request pr
 func (c *Client) UploadTransferFile(ctx context.Context, deviceID, transferID string, index int, start, total int64, body io.Reader) (*protocol.Transfer, error) {
 	headers := deviceHeaders(deviceID, "application/octet-stream")
 	headers.Set("Content-Range", fmt.Sprintf("bytes %d-*/%d", start, total))
-	resp, err := c.do(ctx, http.MethodPut, c.endpoint("api", "transfers", transferID, "files", strconv.Itoa(index)), body, headers)
+	resp, err := c.doLong(ctx, http.MethodPut, c.endpoint("api", "transfers", transferID, "files", strconv.Itoa(index)), body, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -446,6 +446,22 @@ func (c *Client) UploadTransferFile(ctx context.Context, deviceID, transferID st
 		return nil, fmt.Errorf("decode transfer: %w", err)
 	}
 	return &transfer, nil
+}
+
+func (c *Client) doLong(ctx context.Context, method string, endpoint string, body io.Reader, headers http.Header) (*http.Response, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err != nil {
+		return nil, err
+	}
+	for key, values := range headers {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+	return c.httpClient.Do(req)
 }
 
 func (c *Client) Transfers(ctx context.Context, deviceID, role, state string) ([]protocol.Transfer, error) {
