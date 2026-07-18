@@ -65,8 +65,13 @@ func run(ctx context.Context, args []string) error {
 	embedSpoolQuota := fs.Int64("embed-spool-quota", envInt64("CLIPHUB_EMBED_SPOOL_QUOTA", 10<<30), "embedded hub transfer spool quota")
 	embedMaxTransfer := fs.Int64("embed-max-transfer-size", envInt64("CLIPHUB_EMBED_MAX_TRANSFER_SIZE", 100<<30), "embedded hub maximum transfer size")
 	embedTransferTTL := fs.Duration("embed-transfer-ttl", envDuration("CLIPHUB_EMBED_TRANSFER_TTL", 48*time.Hour), "embedded hub pending transfer TTL")
+	controlAddr := fs.String("control-addr", envString("CLIPHUB_CONTROL_ADDR", "127.0.0.1:9438"), "loopback address for the desktop control surface (off to disable)")
+	openControl := fs.Bool("tray", envBool("CLIPHUB_TRAY", false), "open the desktop device and transfer companion")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if strings.EqualFold(*controlAddr, "off") {
+		*controlAddr = ""
 	}
 
 	if *hubURL == "" {
@@ -155,6 +160,8 @@ func run(ctx context.Context, args []string) error {
 		TransferPolicy: *transferPolicy,
 		TransferAllow:  privacy.ParseCSV(*transferAllow),
 		DownloadDir:    *downloadDir,
+		ControlAddr:    *controlAddr,
+		OpenControl:    *openControl,
 	})
 	if err != nil {
 		return err

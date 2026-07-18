@@ -41,22 +41,34 @@ func (a *Agent) handleTransferOffer(ctx context.Context, transfer protocol.Trans
 		slog.Error("failed to accept transfer", "component", "clipd_transfers", "transfer_id", transfer.TransferID, "error", err)
 		return
 	}
+	if err := a.receiveTransfer(ctx, *accepted); err != nil {
+		slog.Error("transfer download failed", "component", "clipd_transfers", "transfer_id", accepted.TransferID, "error", err)
+	}
+}
+
+func (a *Agent) receiveTransfer(ctx context.Context, transfer protocol.Transfer) error {
+	accepted := transfer
+	if accepted.State == "offered" {
+		updated, actionErr := a.client.TransferAction(ctx, a.deviceID, accepted.TransferID, "accept")
+		if actionErr != nil {
+			return actionErr
+		}
+		accepted = *updated
+	}
 	if err := os.MkdirAll(a.downloadDir, 0o755); err != nil {
-		slog.Error("failed to create download directory", "component", "clipd_transfers", "error", err)
-		return
+		return err
 	}
 	for index, manifest := range accepted.Files {
 		if err := a.downloadTransferFile(ctx, accepted.TransferID, index, manifest); err != nil {
-			slog.Error("transfer download failed", "component", "clipd_transfers", "transfer_id", accepted.TransferID, "file", manifest.Name, "error", err)
-			return
+			return fmt.Errorf("download %s: %w", manifest.Name, err)
 		}
 	}
 	if _, err := a.client.TransferAction(ctx, a.deviceID, accepted.TransferID, "complete"); err != nil {
-		slog.Error("failed to complete transfer", "component", "clipd_transfers", "transfer_id", accepted.TransferID, "error", err)
-		return
+		return err
 	}
-	notify("ClipHub transfer complete", transferSummary(*accepted)+" saved to "+a.downloadDir)
+	notify("ClipHub transfer complete", transferSummary(accepted)+" saved to "+a.downloadDir)
 	slog.Info("transfer complete", "component", "clipd_transfers", "transfer_id", accepted.TransferID, "download_dir", a.downloadDir)
+	return nil
 }
 
 func (a *Agent) downloadTransferFile(ctx context.Context, transferID string, index int, manifest protocol.TransferFile) error {

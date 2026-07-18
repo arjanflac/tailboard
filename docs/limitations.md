@@ -23,6 +23,7 @@ ClipHub is intentionally small and opinionated. The current behavior favors pred
 ## Platform and packaging limitations
 
 - Linux requires either `wl-copy`/`wl-paste` or `xclip`.
+- The current cross-platform desktop companion is browser-backed and launched with `clipd --tray`; it does not yet install a native menu-bar icon.
 - iOS is built and tested in CI, but TestFlight/App Store delivery still depends on signing and external Apple release configuration.
 - The iOS experience is not equivalent to `clipd` on desktop. The app/keyboard/share extension can read from or send to the hub, but there is no always-on iOS background clipboard watcher.
 - Release archives cover the desktop matrix, including Linux ARM64. Publishing Homebrew/Scoop repositories still requires their external repository credentials.

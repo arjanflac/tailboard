@@ -11,10 +11,11 @@ This roadmap focuses on the gaps that matter most for adoption. It is intentiona
 - Stable device registry, protocol capabilities, privacy presets, detector reporting, and packaged background services.
 - Maintained iOS app/keyboard/share/widgets/Intents surface with CI, foreground reconnect, Keychain configuration, transfer inbox, and background share uploads.
 - Hub-spooled targeted transfers with consent policies, allowlists, integrity checks, quota/TTL, resumable CLI uploads, and deterministic directory manifests.
+- Loopback-only desktop device surface with drop-to-send, progress/state, incoming consent, show-in-folder, and clipboard pause/resume.
 
 ## Next product layer
 
-- Ship the thin desktop tray companion over a local agent API: device drop targets, transfer progress/prompts, and clipboard pause/resume.
+- Add optional native menu-bar/taskbar wrappers around the shipped browser-backed desktop companion.
 - Finish external distribution wiring: TestFlight signing plus authenticated pushes to the Homebrew tap and Scoop bucket.
 - Add direct desktop-to-desktop fetch as a capability-gated optimization with transparent spool fallback.
 

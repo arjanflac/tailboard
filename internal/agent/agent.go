@@ -30,6 +30,8 @@ type Config struct {
 	TransferPolicy  string              // ask, accept, or off.
 	TransferAllow   []string            // Device IDs permitted for auto-accept.
 	DownloadDir     string              // Destination for accepted transfers.
+	ControlAddr     string              // Loopback address for the desktop control surface; empty disables it.
+	OpenControl     bool                // Open the desktop control surface in the default browser.
 }
 
 // Agent is the local clipboard sync agent.
@@ -48,6 +50,8 @@ type Agent struct {
 	transferPolicy string
 	transferAllow  map[string]struct{}
 	downloadDir    string
+	controlAddr    string
+	openControl    bool
 }
 
 // ClipboardInitError reports a failure to initialize the default clipboard backend.
@@ -125,6 +129,8 @@ func New(cfg Config) (*Agent, error) {
 		transferPolicy: cfg.TransferPolicy,
 		transferAllow:  allow,
 		downloadDir:    cfg.DownloadDir,
+		controlAddr:    cfg.ControlAddr,
+		openControl:    cfg.OpenControl,
 	}, nil
 }
 
@@ -132,6 +138,17 @@ func New(cfg Config) (*Agent, error) {
 func (a *Agent) Run(ctx context.Context) error {
 	if a.client == nil {
 		return fmt.Errorf("hub client is not configured")
+	}
+	if a.controlAddr != "" {
+		controlServer, err := a.startControlServer(ctx)
+		if err != nil {
+			return err
+		}
+		defer controlServer.Shutdown(context.Background())
+		slog.Info("desktop control surface active", "component", "clipd", "url", controlServer.URL)
+		if a.openControl {
+			go openBrowser(controlServer.URL)
+		}
 	}
 
 	ws := &WSClient{

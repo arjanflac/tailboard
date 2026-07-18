@@ -24,7 +24,7 @@ sender -- resumable upload --> disk spool --> receiver
 | Component | Responsibility |
 | --- | --- |
 | `cliphub` | Central broker. Stores clipboard history, device/transfer metadata, and transfer spool files; exposes REST + targeted WebSocket events. |
-| `clipd` | Desktop agent. Watches clipboard changes, enforces local privacy policy, applies remote updates, and receives targeted transfers under a consent policy. |
+| `clipd` | Desktop agent. Watches clipboard changes, enforces local privacy policy, applies remote updates, receives targeted transfers, and serves a loopback-only desktop control surface. |
 | `tailclip` | Scriptable client for clipboard operations, device discovery, and resumable send/receive workflows. |
 | iOS app and extensions | Device-first companion with clipboard/history surfaces, transfer inbox, keyboard, share extension, widgets, App Intents, and background uploads. |
 
@@ -47,6 +47,17 @@ sender -- resumable upload --> disk spool --> receiver
 5. The target receives a WebSocket offer and accepts, declines, or follows its local allowlist policy.
 6. Downloads support byte ranges. The receiver verifies SHA-256, writes through safe temporary paths, then acknowledges completion.
 7. Completion, cancellation, or expiry removes spool data. Metadata is not a permanent transfer archive.
+
+## Desktop companion
+
+`clipd` serves a loopback-only control surface at `127.0.0.1:9438` by default. `clipd --tray` opens it in the default browser. It is a thin client over the running agent and hub APIs:
+
+- device cards are file drop targets,
+- active transfers show uploaded progress and state,
+- incoming offers expose Accept/Decline and completed downloads expose Show in folder,
+- clipboard pause/resume changes the live agent state.
+
+The listener rejects non-loopback configuration and cross-origin browser requests. Set `--control-addr off` for a strictly headless agent.
 
 ## Persistence and retention
 

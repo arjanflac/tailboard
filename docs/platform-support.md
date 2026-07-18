@@ -27,7 +27,7 @@ An iOS companion app, keyboard extension, share extension, and widgets are maint
 | Surface | Current state | Notes |
 | --- | --- | --- |
 | `cliphub` | supported on macOS, Linux, and Windows | Release archives cover Darwin AMD64/ARM64, Linux AMD64/ARM64, and Windows AMD64 and include service definitions. |
-| `clipd` | supported on macOS, Linux, and Windows | Rich text, HTML, and PNG are supported across the desktop matrix. |
+| `clipd` | supported on macOS, Linux, and Windows | Rich clipboard parity plus a loopback device/transfer companion opened with `--tray`. |
 | `tailclip` | supported on macOS, Linux, and Windows | Includes clipboard commands plus device discovery and resumable, targeted file transfers. |
 | iOS app + keyboard + share extension + widgets | supported companion; TestFlight is the intended distribution path | Requires iOS 17+, Tailscale connectivity, and Full Access for live keyboard networking. Simulator builds and tests run in CI. |
 
