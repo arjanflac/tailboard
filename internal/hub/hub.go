@@ -15,15 +15,20 @@ import (
 
 // Config holds hub configuration.
 type Config struct {
-	MaxHistory int
-	TTL        time.Duration
-	DBPath     string // Empty = no persistence.
+	MaxHistory      int
+	TTL             time.Duration
+	DBPath          string // Empty = no persistence.
+	SpoolDir        string
+	SpoolQuota      int64
+	MaxTransferSize int64
+	TransferTTL     time.Duration
 }
 
 // Subscriber receives clipboard updates via a channel.
 type Subscriber struct {
-	C      chan protocol.ClipItem
-	cancel context.CancelFunc
+	C         chan protocol.ClipItem
+	Transfers chan protocol.Transfer
+	cancel    context.CancelFunc
 }
 
 // Hub is the central clipboard broker.
@@ -48,6 +53,7 @@ type Hub struct {
 
 	devicesMu sync.RWMutex
 	devices   map[string]protocol.Device
+	transfers *transferStore
 }
 
 type clipStore interface {
@@ -75,6 +81,11 @@ func New(cfg Config) (*Hub, error) {
 		devices:    make(map[string]protocol.Device),
 		startedAt:  time.Now(),
 	}
+	transfers, err := newTransferStore(cfg.SpoolDir, cfg.SpoolQuota, cfg.MaxTransferSize, cfg.TransferTTL)
+	if err != nil {
+		return nil, fmt.Errorf("open transfer spool: %w", err)
+	}
+	h.transfers = transfers
 
 	if cfg.DBPath != "" {
 		st, err := OpenStore(cfg.DBPath)
@@ -145,6 +156,11 @@ func (h *Hub) Devices() []protocol.Device {
 
 // Close shuts down the hub's persistent store.
 func (h *Hub) Close() error {
+	if h.transfers != nil {
+		if err := h.transfers.close(); err != nil {
+			return err
+		}
+	}
 	if h.store != nil {
 		return h.store.Close()
 	}
@@ -309,8 +325,9 @@ func (h *Hub) GetBySeq(seq uint64) (*protocol.ClipItem, error) {
 func (h *Hub) Subscribe(ctx context.Context) *Subscriber {
 	ctx, cancel := context.WithCancel(ctx)
 	sub := &Subscriber{
-		C:      make(chan protocol.ClipItem, 16),
-		cancel: cancel,
+		C:         make(chan protocol.ClipItem, 16),
+		Transfers: make(chan protocol.Transfer, 16),
+		cancel:    cancel,
 	}
 
 	h.subsMu.Lock()
@@ -323,6 +340,15 @@ func (h *Hub) Subscribe(ctx context.Context) *Subscriber {
 	}()
 
 	return sub
+}
+
+func (h *Hub) publishTransfer(transfer protocol.Transfer) {
+	for _, sub := range h.snapshotSubscribers() {
+		select {
+		case sub.Transfers <- transfer:
+		default:
+		}
+	}
 }
 
 func (h *Hub) unsubscribe(sub *Subscriber) {
@@ -453,6 +479,11 @@ func (h *Hub) reapLoop() {
 
 func (h *Hub) reapExpired() {
 	now := time.Now()
+	if h.transfers != nil {
+		if reaped := h.transfers.reapExpired(now); reaped > 0 {
+			slog.Info("reaped expired transfers", "component", "hub_transfers", "expired_transfers", reaped)
+		}
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

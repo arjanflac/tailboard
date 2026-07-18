@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,14 +18,17 @@ import (
 	"time"
 
 	"github.com/thalysguimaraes/cliphub/internal/clipboard"
+	"github.com/thalysguimaraes/cliphub/internal/deviceid"
 	"github.com/thalysguimaraes/cliphub/internal/discover"
 	"github.com/thalysguimaraes/cliphub/internal/hubclient"
+	"github.com/thalysguimaraes/cliphub/internal/protocol"
 )
 
 // version is injected via ldflags in reproducible release builds.
 var version = "dev"
 
 var hub *hubclient.Client
+var localDeviceID string
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -64,6 +70,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+	localDeviceID, err = deviceid.LoadOrCreate(filepath.Join(defaultStateDir(), "device-id"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	hostName, _ := os.Hostname()
+	_, _ = hub.RegisterDevice(ctx, protocol.RegisterDeviceRequest{
+		DeviceID: localDeviceID, Name: hostName, Platform: runtime.GOOS,
+		Capabilities: []string{"clipboard", "transfers"},
+	})
 
 	switch args[0] {
 	case "get":
@@ -76,6 +92,12 @@ func main() {
 		err = cmdStatus(ctx)
 	case "devices":
 		err = cmdDevices(ctx)
+	case "send":
+		err = cmdSend(ctx, args[1:])
+	case "transfers":
+		err = cmdTransfers(ctx, args[1:])
+	case "receive":
+		err = cmdReceive(ctx, args[1:])
 	case "clear":
 		err = cmdClear(ctx, args[1:])
 	case "pause":
@@ -104,6 +126,9 @@ Commands:
   history [-n N]             Show clipboard history
   status                     Show hub status
   devices                    List registered devices and online state
+  send FILE --to DEVICE      Send a file to a registered device
+  transfers                  List incoming and outgoing transfers
+  receive --id ID [--to DIR] Accept and download a transfer
   clear [--local]            Clear hub clipboard/history (and optionally this machine's clipboard)
   pause                      Pause clipboard sync
   resume                     Resume clipboard sync
@@ -115,6 +140,195 @@ Environment:
   CLIPHUB_HUB        Explicit hub URL override
   CLIPHUB_HOSTNAME   Tailnet hostname used for auto-discovery (default: cliphub)
 `)
+}
+
+func cmdSend(ctx context.Context, args []string) error {
+	var path, target string
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--to" && i+1 < len(args) {
+			target = args[i+1]
+			i++
+		} else if path == "" {
+			path = args[i]
+		}
+	}
+	if path == "" || target == "" {
+		return fmt.Errorf("usage: tailclip send FILE --to DEVICE")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", path)
+	}
+	targetID, err := resolveDevice(ctx, target)
+	if err != nil {
+		return err
+	}
+	sum, err := hashFile(path)
+	if err != nil {
+		return err
+	}
+	create, err := hub.CreateTransfer(ctx, localDeviceID, protocol.CreateTransferRequest{
+		ToDevice: targetID,
+		Files: []protocol.TransferFile{{
+			Name: filepath.Base(path), Size: info.Size(), MIME: mimeFromExt(filepath.Ext(path)), SHA256: sum,
+		}},
+	})
+	if err != nil {
+		return err
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if _, err := hub.UploadTransferFile(ctx, localDeviceID, create.Transfer.TransferID, 0, 0, info.Size(), file); err != nil {
+		return err
+	}
+	fmt.Printf("sent %s (%d bytes) to %s as %s\n", filepath.Base(path), info.Size(), target, create.Transfer.TransferID)
+	return nil
+}
+
+func cmdTransfers(ctx context.Context, args []string) error {
+	transfers, err := hub.Transfers(ctx, localDeviceID, "", "")
+	if err != nil {
+		return err
+	}
+	if len(transfers) == 0 {
+		fmt.Println("(no transfers)")
+		return nil
+	}
+	for _, transfer := range transfers {
+		direction, peer := "from", transfer.FromDevice
+		if transfer.FromDevice == localDeviceID {
+			direction, peer = "to", transfer.ToDevice
+		}
+		fmt.Printf("%s  %-12s %s %s  %d file(s)\n", transfer.TransferID, transfer.State, direction, peer, len(transfer.Files))
+	}
+	return nil
+}
+
+func cmdReceive(ctx context.Context, args []string) error {
+	var id, destination string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--id":
+			if i+1 < len(args) {
+				id = args[i+1]
+				i++
+			}
+		case "--to":
+			if i+1 < len(args) {
+				destination = args[i+1]
+				i++
+			}
+		}
+	}
+	if destination == "" {
+		home, _ := os.UserHomeDir()
+		destination = filepath.Join(home, "Downloads")
+	}
+	if id == "" {
+		pending, err := hub.Transfers(ctx, localDeviceID, "receiver", "offered")
+		if err != nil {
+			return err
+		}
+		if len(pending) != 1 {
+			return fmt.Errorf("specify --id (found %d pending transfers)", len(pending))
+		}
+		id = pending[0].TransferID
+	}
+	transfers, err := hub.Transfers(ctx, localDeviceID, "receiver", "")
+	if err != nil {
+		return err
+	}
+	var selected *protocol.Transfer
+	for i := range transfers {
+		if transfers[i].TransferID == id {
+			selected = &transfers[i]
+			break
+		}
+	}
+	if selected == nil {
+		return fmt.Errorf("transfer %s not found", id)
+	}
+	if selected.State == "offered" {
+		selected, err = hub.TransferAction(ctx, localDeviceID, id, "accept")
+		if err != nil {
+			return err
+		}
+	}
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		return err
+	}
+	for i, manifest := range selected.Files {
+		finalPath := filepath.Join(destination, filepath.Base(manifest.Name))
+		if _, err := os.Stat(finalPath); err == nil {
+			return fmt.Errorf("refusing to overwrite %s", finalPath)
+		}
+		temp, err := os.CreateTemp(destination, ".cliphub-*.part")
+		if err != nil {
+			return err
+		}
+		tempPath := temp.Name()
+		if err := hub.DownloadTransferFile(ctx, localDeviceID, id, i, temp); err != nil {
+			temp.Close()
+			os.Remove(tempPath)
+			return err
+		}
+		if err := temp.Close(); err != nil {
+			return err
+		}
+		if got, err := hashFile(tempPath); err != nil || !strings.EqualFold(got, manifest.SHA256) {
+			os.Remove(tempPath)
+			return fmt.Errorf("sha256 verification failed for %s", manifest.Name)
+		}
+		if err := os.Rename(tempPath, finalPath); err != nil {
+			return err
+		}
+		fmt.Printf("received %s\n", finalPath)
+	}
+	_, err = hub.TransferAction(ctx, localDeviceID, id, "complete")
+	return err
+}
+
+func resolveDevice(ctx context.Context, target string) (string, error) {
+	devices, err := hub.Devices(ctx)
+	if err != nil {
+		return "", err
+	}
+	var matches []protocol.Device
+	for _, device := range devices {
+		if device.DeviceID == target || strings.EqualFold(device.Name, target) {
+			matches = append(matches, device)
+		}
+	}
+	if len(matches) != 1 {
+		return "", fmt.Errorf("device %q matched %d devices", target, len(matches))
+	}
+	return matches[0].DeviceID, nil
+}
+
+func hashFile(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func defaultStateDir() string {
+	if dir, err := os.UserConfigDir(); err == nil {
+		return filepath.Join(dir, "cliphub")
+	}
+	return filepath.Join(os.TempDir(), "cliphub")
 }
 
 func cmdDevices(ctx context.Context) error {

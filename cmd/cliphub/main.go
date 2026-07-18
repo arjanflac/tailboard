@@ -29,21 +29,30 @@ func main() {
 	stateDir := flag.String("state-dir", defaultStateDir(), "tsnet state directory")
 	maxHistory := flag.Int("max-history", envInt("CLIPHUB_MAX_HISTORY", 50), "max history items")
 	ttl := flag.Duration("ttl", envDuration("CLIPHUB_TTL", 24*time.Hour), "item TTL")
+	spoolQuota := flag.Int64("spool-quota", envInt64("CLIPHUB_SPOOL_QUOTA", 10<<30), "maximum transfer spool bytes")
+	maxTransferSize := flag.Int64("max-transfer-size", envInt64("CLIPHUB_MAX_TRANSFER_SIZE", 100<<30), "maximum bytes per transfer")
+	transferTTL := flag.Duration("transfer-ttl", envDuration("CLIPHUB_TRANSFER_TTL", 48*time.Hour), "pending transfer TTL")
 	flag.Parse()
 
 	dbPath := ""
+	spoolDir := ""
 	if !*dev {
 		if err := os.MkdirAll(*stateDir, 0o700); err != nil {
 			slog.Error("create state dir failed", "component", "cliphub", "error", err, "state_dir", *stateDir)
 			os.Exit(1)
 		}
 		dbPath = filepath.Join(*stateDir, "clips.db")
+		spoolDir = filepath.Join(*stateDir, "spool")
 	}
 
 	h, err := hub.New(hub.Config{
-		MaxHistory: *maxHistory,
-		TTL:        *ttl,
-		DBPath:     dbPath,
+		MaxHistory:      *maxHistory,
+		TTL:             *ttl,
+		DBPath:          dbPath,
+		SpoolDir:        spoolDir,
+		SpoolQuota:      *spoolQuota,
+		MaxTransferSize: *maxTransferSize,
+		TransferTTL:     *transferTTL,
 	})
 	if err != nil {
 		slog.Error("hub init failed", "component", "cliphub", "error", err)
@@ -163,6 +172,15 @@ func defaultStateDir() string {
 func envInt(key string, fallback int) int {
 	if v, ok := os.LookupEnv(key); ok {
 		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return fallback
+}
+
+func envInt64(key string, fallback int64) int64 {
+	if v, ok := os.LookupEnv(key); ok {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
 		}
 	}

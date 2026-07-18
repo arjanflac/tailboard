@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	urlpkg "net/url"
 	"time"
 
 	"github.com/coder/websocket"
@@ -48,7 +49,14 @@ func (c *WSClient) Run(ctx context.Context) {
 func (c *WSClient) connect(ctx context.Context) error {
 	url := c.URL
 	if c.lastSeq > 0 {
-		url += fmt.Sprintf("?since_seq=%d", c.lastSeq)
+		parsed, err := urlpkg.Parse(url)
+		if err != nil {
+			return err
+		}
+		query := parsed.Query()
+		query.Set("since_seq", fmt.Sprintf("%d", c.lastSeq))
+		parsed.RawQuery = query.Encode()
+		url = parsed.String()
 	}
 
 	conn, _, err := websocket.Dial(ctx, url, nil)

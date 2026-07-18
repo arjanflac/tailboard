@@ -43,8 +43,9 @@ func (c *ClipItem) RawBytes() []byte {
 
 // WSMessage wraps messages sent over the WebSocket connection.
 type WSMessage struct {
-	Type string    `json:"type"`
-	Item *ClipItem `json:"item,omitempty"`
+	Type     string    `json:"type"`
+	Item     *ClipItem `json:"item,omitempty"`
+	Transfer *Transfer `json:"transfer,omitempty"`
 }
 
 type Capabilities struct {

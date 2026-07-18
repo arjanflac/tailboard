@@ -40,9 +40,15 @@ func Register(mux *http.ServeMux, h *Hub, identFn IdentityFunc, observers ...*Ob
 	handle("GET /api/clip/history", "/api/clip/history", historyHandler(h))
 	handle("GET /api/clip/history/page", "/api/clip/history/page", historyPageHandler(h))
 	handle("GET /api/clip/stream", "/api/clip/stream", streamHandler(h, obs))
-	handle("GET /api/capabilities", "/api/capabilities", capabilitiesHandler())
+	handle("GET /api/capabilities", "/api/capabilities", capabilitiesHandler(h))
 	handle("POST /api/devices/register", "/api/devices/register", registerDeviceHandler(h))
 	handle("GET /api/devices", "/api/devices", devicesHandler(h))
+	handle("POST /api/transfers", "/api/transfers", createTransferHandler(h))
+	handle("GET /api/transfers", "/api/transfers", listTransfersHandler(h))
+	handle("PUT /api/transfers/{id}/files/{index}", "/api/transfers/files/upload", uploadTransferFileHandler(h))
+	handle("GET /api/transfers/{id}/files/{index}", "/api/transfers/files/download", downloadTransferFileHandler(h))
+	handle("POST /api/transfers/{id}/{action}", "/api/transfers/action", transferActionHandler(h))
+	handle("DELETE /api/transfers/{id}", "/api/transfers", cancelTransferHandler(h))
 	handle("GET /api/status", "/api/status", statusHandler(h, obs))
 	handle("GET /healthz", "/healthz", healthHandler(h, obs))
 	handle("GET /readyz", "/readyz", readinessHandler(obs))
@@ -161,15 +167,15 @@ func postBlobHandler(h *Hub, identFn IdentityFunc, obs *Observer) http.HandlerFu
 	}
 }
 
-func capabilitiesHandler() http.HandlerFunc {
+func capabilitiesHandler(h *Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, protocol.Capabilities{
 			HubVersion:      "dev",
 			ProtocolVersion: protocol.ProtocolVersion,
-			Features:        map[string]bool{"transfers": false, "devices": true, "e2ee": false},
+			Features:        map[string]bool{"transfers": true, "devices": true, "e2ee": false},
 			Limits: protocol.CapabilityLimits{
 				MaxClipSize:     protocol.MaxContentSize,
-				MaxTransferSize: protocol.DefaultMaxTransferSize,
+				MaxTransferSize: h.transfers.maxSize,
 			},
 		})
 	}
@@ -198,6 +204,142 @@ func registerDeviceHandler(h *Hub) http.HandlerFunc {
 func devicesHandler(h *Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, h.Devices())
+	}
+}
+
+func createTransferHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req protocol.CreateTransferRequest
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON", nil)
+			return
+		}
+		transfer, err := h.transfers.create(deviceIdentity(r), req)
+		if err != nil {
+			status := http.StatusBadRequest
+			if errors.Is(err, ErrSpoolQuota) {
+				status = http.StatusInsufficientStorage
+			}
+			writeAPIError(w, status, "transfer_create_failed", err.Error(), nil)
+			return
+		}
+		h.publishTransfer(transfer)
+		urls := make([]string, len(transfer.Files))
+		for i := range urls {
+			urls[i] = fmt.Sprintf("/api/transfers/%s/files/%d", transfer.TransferID, i)
+		}
+		writeJSON(w, http.StatusCreated, protocol.CreateTransferResponse{Transfer: transfer, UploadURLs: urls})
+	}
+}
+
+func listTransfersHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, h.transfers.list(deviceIdentity(r), r.URL.Query().Get("role"), r.URL.Query().Get("state")))
+	}
+}
+
+func uploadTransferFileHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		index, err := strconv.Atoi(r.PathValue("index"))
+		if err != nil || index < 0 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_file_index", "file index must be a non-negative integer", nil)
+			return
+		}
+		start := int64(0)
+		if contentRange := r.Header.Get("Content-Range"); contentRange != "" {
+			if _, err := fmt.Sscanf(contentRange, "bytes %d-", &start); err != nil {
+				writeAPIError(w, http.StatusBadRequest, "invalid_content_range", "Content-Range must start with bytes START-", nil)
+				return
+			}
+		}
+		transfer, err := h.transfers.get(r.PathValue("id"))
+		if err != nil {
+			writeTransferError(w, err)
+			return
+		}
+		if transfer.FromDevice != deviceIdentity(r) {
+			writeAPIError(w, http.StatusForbidden, "transfer_forbidden", "only the sender may upload", nil)
+			return
+		}
+		transfer, err = h.transfers.upload(transfer.TransferID, index, start, r.Body)
+		if err != nil {
+			writeTransferError(w, err)
+			return
+		}
+		h.publishTransfer(transfer)
+		writeJSON(w, http.StatusOK, transfer)
+	}
+}
+
+func downloadTransferFileHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		index, err := strconv.Atoi(r.PathValue("index"))
+		if err != nil || index < 0 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_file_index", "file index must be a non-negative integer", nil)
+			return
+		}
+		transfer, err := h.transfers.get(r.PathValue("id"))
+		if err != nil {
+			writeTransferError(w, err)
+			return
+		}
+		if transfer.ToDevice != deviceIdentity(r) {
+			writeAPIError(w, http.StatusForbidden, "transfer_forbidden", "only the receiver may download", nil)
+			return
+		}
+		file, manifest, err := h.transfers.openFile(transfer.TransferID, index)
+		if err != nil {
+			writeTransferError(w, err)
+			return
+		}
+		defer file.Close()
+		w.Header().Set("Content-Type", manifest.MIME)
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": manifest.Name}))
+		http.ServeContent(w, r, manifest.Name, transfer.CreatedAt, file)
+	}
+}
+
+func transferActionHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		action := r.PathValue("action")
+		if action != "accept" && action != "decline" && action != "complete" {
+			writeAPIError(w, http.StatusNotFound, "unknown_transfer_action", "unknown transfer action", nil)
+			return
+		}
+		transfer, err := h.transfers.transition(r.PathValue("id"), deviceIdentity(r), action)
+		if err != nil {
+			writeTransferError(w, err)
+			return
+		}
+		h.publishTransfer(transfer)
+		writeJSON(w, http.StatusOK, transfer)
+	}
+}
+
+func cancelTransferHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		transfer, err := h.transfers.cancel(r.PathValue("id"), deviceIdentity(r))
+		if err != nil {
+			writeTransferError(w, err)
+			return
+		}
+		h.publishTransfer(transfer)
+		writeJSON(w, http.StatusOK, transfer)
+	}
+}
+
+func deviceIdentity(r *http.Request) string {
+	return firstNonEmpty(r.Header.Get("X-Clip-Device-ID"), r.URL.Query().Get("device_id"))
+}
+
+func writeTransferError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrTransferNotFound):
+		writeAPIError(w, http.StatusNotFound, "transfer_not_found", err.Error(), nil)
+	case errors.Is(err, ErrTransferConflict):
+		writeAPIError(w, http.StatusConflict, "transfer_conflict", err.Error(), nil)
+	default:
+		writeAPIError(w, http.StatusBadRequest, "transfer_failed", err.Error(), nil)
 	}
 }
 
@@ -400,6 +542,14 @@ func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 						"request_id", requestIDFromContext(r.Context()),
 						"error", err,
 					)
+					return
+				}
+			case transfer := <-sub.Transfers:
+				msg := protocol.WSMessage{Type: "transfer_state", Transfer: &transfer}
+				if transfer.State == "offered" {
+					msg.Type = "transfer_offer"
+				}
+				if err := wsjson.Write(ctx, conn, msg); err != nil {
 					return
 				}
 			}

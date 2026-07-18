@@ -410,6 +410,119 @@ func (c *Client) Devices(ctx context.Context) ([]protocol.Device, error) {
 	return devices, nil
 }
 
+func (c *Client) CreateTransfer(ctx context.Context, deviceID string, request protocol.CreateTransferRequest) (*protocol.CreateTransferResponse, error) {
+	body, err := json.Marshal(request)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, http.MethodPost, c.endpoint("api", "transfers"), bytes.NewReader(body), deviceHeaders(deviceID, "application/json"))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, readHTTPError(resp)
+	}
+	var created protocol.CreateTransferResponse
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		return nil, fmt.Errorf("decode transfer: %w", err)
+	}
+	return &created, nil
+}
+
+func (c *Client) UploadTransferFile(ctx context.Context, deviceID, transferID string, index int, start, total int64, body io.Reader) (*protocol.Transfer, error) {
+	headers := deviceHeaders(deviceID, "application/octet-stream")
+	headers.Set("Content-Range", fmt.Sprintf("bytes %d-*/%d", start, total))
+	resp, err := c.do(ctx, http.MethodPut, c.endpoint("api", "transfers", transferID, "files", strconv.Itoa(index)), body, headers)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, readHTTPError(resp)
+	}
+	var transfer protocol.Transfer
+	if err := json.NewDecoder(resp.Body).Decode(&transfer); err != nil {
+		return nil, fmt.Errorf("decode transfer: %w", err)
+	}
+	return &transfer, nil
+}
+
+func (c *Client) Transfers(ctx context.Context, deviceID, role, state string) ([]protocol.Transfer, error) {
+	values := url.Values{}
+	values.Set("device_id", deviceID)
+	if role != "" {
+		values.Set("role", role)
+	}
+	if state != "" {
+		values.Set("state", state)
+	}
+	resp, err := c.do(ctx, http.MethodGet, c.endpoint("api", "transfers"), nil, nil, values)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, readHTTPError(resp)
+	}
+	var transfers []protocol.Transfer
+	if err := json.NewDecoder(resp.Body).Decode(&transfers); err != nil {
+		return nil, fmt.Errorf("decode transfers: %w", err)
+	}
+	return transfers, nil
+}
+
+func (c *Client) TransferAction(ctx context.Context, deviceID, transferID, action string) (*protocol.Transfer, error) {
+	method := http.MethodPost
+	endpoint := c.endpoint("api", "transfers", transferID, action)
+	if action == "cancel" {
+		method = http.MethodDelete
+		endpoint = c.endpoint("api", "transfers", transferID)
+	}
+	resp, err := c.do(ctx, method, endpoint, nil, deviceHeaders(deviceID, ""))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, readHTTPError(resp)
+	}
+	var transfer protocol.Transfer
+	if err := json.NewDecoder(resp.Body).Decode(&transfer); err != nil {
+		return nil, fmt.Errorf("decode transfer: %w", err)
+	}
+	return &transfer, nil
+}
+
+func (c *Client) DownloadTransferFile(ctx context.Context, deviceID, transferID string, index int, destination io.Writer) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("api", "transfers", transferID, "files", strconv.Itoa(index)), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Clip-Device-ID", deviceID)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return readHTTPError(resp)
+	}
+	_, err = io.Copy(destination, resp.Body)
+	return err
+}
+
+func deviceHeaders(deviceID, contentType string) http.Header {
+	headers := make(http.Header)
+	if deviceID != "" {
+		headers.Set("X-Clip-Device-ID", deviceID)
+	}
+	if contentType != "" {
+		headers.Set("Content-Type", contentType)
+	}
+	return headers
+}
+
 func (c *Client) do(ctx context.Context, method string, endpoint string, body io.Reader, headers http.Header, values ...url.Values) (*http.Response, error) {
 	if ctx == nil {
 		ctx = context.Background()
