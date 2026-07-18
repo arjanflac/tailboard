@@ -2,7 +2,9 @@ package discover
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -168,6 +170,7 @@ func TestResolverSelfNameMissingHostname(t *testing.T) {
 
 func TestResolverSelfIPPrefersIPv4(t *testing.T) {
 	resolver := NewResolver(Config{
+		interfaceIPs: func() ([]net.IP, error) { return nil, nil },
 		readStatus: func(context.Context) (tailnetStatus, error) {
 			return tailnetStatus{Self: tailnetNode{TailscaleIPs: []string{"fd7a:115c:a1e0::1", "100.64.0.7"}}}, nil
 		},
@@ -178,6 +181,33 @@ func TestResolverSelfIPPrefersIPv4(t *testing.T) {
 	}
 	if got != "100.64.0.7" {
 		t.Fatalf("expected IPv4 address, got %q", got)
+	}
+}
+
+func TestResolverSelfIPUsesLocalTailnetInterfaceWithoutStatusCommand(t *testing.T) {
+	statusReads := 0
+	resolver := NewResolver(Config{
+		interfaceIPs: func() ([]net.IP, error) {
+			return []net.IP{
+				net.ParseIP("192.168.1.4"),
+				net.ParseIP("fd7a:115c:a1e0::7"),
+				net.ParseIP("100.116.168.32"),
+			}, nil
+		},
+		readStatus: func(context.Context) (tailnetStatus, error) {
+			statusReads++
+			return tailnetStatus{}, errors.New("status should not be read")
+		},
+	})
+	got, err := resolver.SelfIP(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "100.116.168.32" {
+		t.Fatalf("expected local Tailscale IPv4 address, got %q", got)
+	}
+	if statusReads != 0 {
+		t.Fatalf("expected no status command, got %d reads", statusReads)
 	}
 }
 

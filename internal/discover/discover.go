@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,22 +34,24 @@ type Config struct {
 	CacheTTL     time.Duration
 	ProbeTimeout time.Duration
 
-	readStatus func(context.Context) (tailnetStatus, error)
-	probeURL   func(context.Context, string) (string, error)
-	probeRole  func(context.Context, string, int) (string, error)
-	now        func() time.Time
+	readStatus   func(context.Context) (tailnetStatus, error)
+	interfaceIPs func() ([]net.IP, error)
+	probeURL     func(context.Context, string) (string, error)
+	probeRole    func(context.Context, string, int) (string, error)
+	now          func() time.Time
 }
 
 // Resolver caches tailscale discovery results for a short time so repeated
 // calls within a process do not shell out over and over.
 type Resolver struct {
-	hubHostname string
-	rolePort    int
-	cacheTTL    time.Duration
-	readStatus  func(context.Context) (tailnetStatus, error)
-	probeURL    func(context.Context, string) (string, error)
-	probeRole   func(context.Context, string, int) (string, error)
-	now         func() time.Time
+	hubHostname  string
+	rolePort     int
+	cacheTTL     time.Duration
+	readStatus   func(context.Context) (tailnetStatus, error)
+	interfaceIPs func() ([]net.IP, error)
+	probeURL     func(context.Context, string) (string, error)
+	probeRole    func(context.Context, string, int) (string, error)
+	now          func() time.Time
 
 	mu    sync.Mutex
 	cache resolverCache
@@ -111,13 +114,17 @@ func NewResolver(cfg Config) *Resolver {
 	if cfg.readStatus == nil {
 		cfg.readStatus = readTailnetStatus
 	}
+	if cfg.interfaceIPs == nil {
+		cfg.interfaceIPs = localInterfaceIPs
+	}
 
 	resolver := &Resolver{
-		hubHostname: cfg.HubHostname,
-		rolePort:    cfg.RolePort,
-		cacheTTL:    cfg.CacheTTL,
-		readStatus:  cfg.readStatus,
-		now:         cfg.now,
+		hubHostname:  cfg.HubHostname,
+		rolePort:     cfg.RolePort,
+		cacheTTL:     cfg.CacheTTL,
+		readStatus:   cfg.readStatus,
+		interfaceIPs: cfg.interfaceIPs,
+		now:          cfg.now,
 	}
 	if cfg.probeRole != nil {
 		resolver.probeRole = cfg.probeRole
@@ -192,6 +199,11 @@ func (r *Resolver) SelfName(ctx context.Context) (string, error) {
 
 // SelfIP returns this node's first Tailscale address, preferring IPv4.
 func (r *Resolver) SelfIP(ctx context.Context) (string, error) {
+	if addresses, err := r.interfaceIPs(); err == nil {
+		if address := pickTailnetIP(addresses); address != "" {
+			return address, nil
+		}
+	}
 	status, _, err := r.status(ctx)
 	if err != nil {
 		return "", err
@@ -205,6 +217,45 @@ func (r *Resolver) SelfIP(ctx context.Context) (string, error) {
 		return status.Self.TailscaleIPs[0], nil
 	}
 	return "", fmt.Errorf("no Tailscale IP in tailscale status")
+}
+
+func localInterfaceIPs() ([]net.IP, error) {
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, err
+	}
+	ips := make([]net.IP, 0, len(addresses))
+	for _, address := range addresses {
+		switch value := address.(type) {
+		case *net.IPNet:
+			ips = append(ips, value.IP)
+		case *net.IPAddr:
+			ips = append(ips, value.IP)
+		}
+	}
+	return ips, nil
+}
+
+func pickTailnetIP(addresses []net.IP) string {
+	var ipv6 string
+	for _, address := range addresses {
+		if address == nil {
+			continue
+		}
+		if ipv4 := address.To4(); ipv4 != nil {
+			if ipv4[0] == 100 && ipv4[1]&0xc0 == 0x40 {
+				return ipv4.String()
+			}
+			continue
+		}
+		if len(address) == net.IPv6len &&
+			address[0] == 0xfd && address[1] == 0x7a &&
+			address[2] == 0x11 && address[3] == 0x5c &&
+			address[4] == 0xa1 && address[5] == 0xe0 {
+			ipv6 = address.String()
+		}
+	}
+	return ipv6
 }
 
 // HubURL preserves the legacy convenience helper.
