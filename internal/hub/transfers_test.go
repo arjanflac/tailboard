@@ -90,7 +90,10 @@ func TestTransferLifecycleWithRangeDownload(t *testing.T) {
 
 	complete, _ := http.NewRequest(http.MethodPost, server.URL+"/api/transfers/"+created.Transfer.TransferID+"/complete", nil)
 	complete.Header.Set("X-Clip-Device-ID", "receiver")
-	completeResp, _ := http.DefaultClient.Do(complete)
+	completeResp, err := http.DefaultClient.Do(complete)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer completeResp.Body.Close()
 	var finished protocol.Transfer
 	_ = json.NewDecoder(completeResp.Body).Decode(&finished)
