@@ -53,6 +53,8 @@ func installLaunchd(name, executable string, args []string) (InstallResult, erro
 		"Label": label(name), "Arguments": argumentXML.String(),
 		"Stdout": filepath.Join(home, "Library", "Logs", name+".log"),
 		"Stderr": filepath.Join(home, "Library", "Logs", name+".error.log"),
+		"Path":   launchdPath(executable, home),
+		"Home":   home,
 	})
 	if err != nil {
 		return InstallResult{}, err
@@ -146,6 +148,29 @@ func xmlEscape(value string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&apos;").Replace(value)
 }
 
+func launchdPath(executable, home string) string {
+	paths := []string{
+		filepath.Dir(executable),
+		filepath.Join(home, ".local", "bin"),
+		"/opt/homebrew/bin",
+		"/opt/homebrew/sbin",
+		"/usr/local/bin",
+		"/usr/bin",
+		"/bin",
+		"/usr/sbin",
+		"/sbin",
+	}
+	seen := make(map[string]bool, len(paths))
+	unique := paths[:0]
+	for _, path := range paths {
+		if path != "" && !seen[path] {
+			seen[path] = true
+			unique = append(unique, path)
+		}
+	}
+	return strings.Join(unique, ":")
+}
+
 const launchdTemplate = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -153,6 +178,11 @@ const launchdTemplate = `<?xml version="1.0" encoding="UTF-8"?>
     <key>Label</key><string>{{.Label}}</string>
     <key>ProgramArguments</key><array>{{.Arguments}}
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key><string>{{.Path}}</string>
+        <key>HOME</key><string>{{.Home}}</string>
+    </dict>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><true/>
     <key>StandardOutPath</key><string>{{.Stdout}}</string>
