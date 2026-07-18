@@ -3,9 +3,13 @@
 package clipboard
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
+	"os"
+	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -17,6 +21,10 @@ const (
 	cfUnicodeText = 13
 	cfDIB         = 8
 	gmemMoveable  = 0x0002
+
+	wmDestroy         = 0x0002
+	wmClose           = 0x0010
+	wmClipboardUpdate = 0x031D
 )
 
 var (
@@ -30,12 +38,57 @@ var (
 	procSetClipboardData           = user32.NewProc("SetClipboardData")
 	procRegisterClipboardFormatW   = user32.NewProc("RegisterClipboardFormatW")
 	procGetClipboardSequenceNumber = user32.NewProc("GetClipboardSequenceNumber")
+	procAddClipboardFormatListener = user32.NewProc("AddClipboardFormatListener")
+	procRemoveClipboardListener    = user32.NewProc("RemoveClipboardFormatListener")
+	procRegisterClassExW           = user32.NewProc("RegisterClassExW")
+	procUnregisterClassW           = user32.NewProc("UnregisterClassW")
+	procCreateWindowExW            = user32.NewProc("CreateWindowExW")
+	procDestroyWindow              = user32.NewProc("DestroyWindow")
+	procDefWindowProcW             = user32.NewProc("DefWindowProcW")
+	procGetMessageW                = user32.NewProc("GetMessageW")
+	procTranslateMessage           = user32.NewProc("TranslateMessage")
+	procDispatchMessageW           = user32.NewProc("DispatchMessageW")
+	procPostMessageW               = user32.NewProc("PostMessageW")
+	procPostQuitMessage            = user32.NewProc("PostQuitMessage")
 	procGlobalAlloc                = kernel32.NewProc("GlobalAlloc")
 	procGlobalFree                 = kernel32.NewProc("GlobalFree")
 	procGlobalLock                 = kernel32.NewProc("GlobalLock")
 	procGlobalUnlock               = kernel32.NewProc("GlobalUnlock")
 	procGlobalSize                 = kernel32.NewProc("GlobalSize")
+	procGetModuleHandleW           = kernel32.NewProc("GetModuleHandleW")
+
+	clipboardWatchers sync.Map
 )
+
+type windowsPoint struct {
+	X int32
+	Y int32
+}
+
+type windowsMessage struct {
+	Window  windows.Handle
+	Message uint32
+	WParam  uintptr
+	LParam  uintptr
+	Time    uint32
+	Point   windowsPoint
+	Private uint32
+}
+
+type windowsClassEx struct {
+	Size        uint32
+	Style       uint32
+	WindowProc  uintptr
+	ClassExtra  int32
+	WindowExtra int32
+	Instance    windows.Handle
+	Icon        windows.Handle
+	Cursor      windows.Handle
+	Background  windows.Handle
+	MenuName    *uint16
+	ClassName   *uint16
+	IconSmall   windows.Handle
+}
 
 type windowsClipboard struct {
 	htmlFormat   uint32
@@ -54,6 +107,117 @@ func (c *windowsClipboard) Changed() (bool, error) {
 	}
 	c.lastSequence = current
 	return true, nil
+}
+
+func (c *windowsClipboard) Watch(ctx context.Context) (<-chan struct{}, error) {
+	events := make(chan struct{}, 1)
+	ready := make(chan error, 1)
+	window := make(chan windows.Handle, 1)
+
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
+		className, err := windows.UTF16PtrFromString(fmt.Sprintf("ClipHubClipboardWatcher-%d", os.Getpid()))
+		if err != nil {
+			ready <- err
+			close(events)
+			return
+		}
+		instance, _, callErr := procGetModuleHandleW.Call(0)
+		if instance == 0 {
+			ready <- winCallError("GetModuleHandleW", callErr)
+			close(events)
+			return
+		}
+		class := windowsClassEx{
+			Size:       uint32(unsafe.Sizeof(windowsClassEx{})),
+			WindowProc: windows.NewCallback(clipboardWindowProc),
+			Instance:   windows.Handle(instance),
+			ClassName:  className,
+		}
+		atom, _, callErr := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&class)))
+		if atom == 0 {
+			ready <- winCallError("RegisterClassExW", callErr)
+			close(events)
+			return
+		}
+		defer procUnregisterClassW.Call(uintptr(unsafe.Pointer(className)), instance)
+
+		// HWND_MESSAGE (-3) creates an invisible message-only window.
+		hwnd, _, callErr := procCreateWindowExW.Call(
+			0,
+			uintptr(unsafe.Pointer(className)),
+			uintptr(unsafe.Pointer(className)),
+			0,
+			0, 0, 0, 0,
+			^uintptr(2),
+			0,
+			instance,
+			0,
+		)
+		if hwnd == 0 {
+			ready <- winCallError("CreateWindowExW", callErr)
+			close(events)
+			return
+		}
+		clipboardWatchers.Store(hwnd, events)
+		defer clipboardWatchers.Delete(hwnd)
+
+		result, _, callErr := procAddClipboardFormatListener.Call(hwnd)
+		if result == 0 {
+			procDestroyWindow.Call(hwnd)
+			ready <- winCallError("AddClipboardFormatListener", callErr)
+			close(events)
+			return
+		}
+		defer procRemoveClipboardListener.Call(hwnd)
+
+		window <- windows.Handle(hwnd)
+		ready <- nil
+		var message windowsMessage
+		for {
+			result, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&message)), 0, 0, 0)
+			if int32(result) <= 0 {
+				break
+			}
+			procTranslateMessage.Call(uintptr(unsafe.Pointer(&message)))
+			procDispatchMessageW.Call(uintptr(unsafe.Pointer(&message)))
+		}
+		close(events)
+	}()
+
+	if err := <-ready; err != nil {
+		return nil, err
+	}
+	hwnd := <-window
+	go func() {
+		<-ctx.Done()
+		procPostMessageW.Call(uintptr(hwnd), wmClose, 0, 0)
+	}()
+	return events, nil
+}
+
+func clipboardWindowProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
+	switch message {
+	case wmClipboardUpdate:
+		if raw, ok := clipboardWatchers.Load(hwnd); ok {
+			select {
+			case raw.(chan struct{}) <- struct{}{}:
+			default:
+			}
+		}
+		return 0
+	case wmClose:
+		procDestroyWindow.Call(hwnd)
+		return 0
+	case wmDestroy:
+		procPostQuitMessage.Call(0)
+		return 0
+	default:
+		result, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wParam, lParam)
+		return result
+	}
 }
 
 func New() (Clipboard, error) {

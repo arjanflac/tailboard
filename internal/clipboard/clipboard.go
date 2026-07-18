@@ -1,6 +1,9 @@
 package clipboard
 
-import "strings"
+import (
+	"context"
+	"strings"
+)
 
 // Content represents clipboard data with its MIME type.
 type Content struct {
@@ -40,6 +43,11 @@ type Clipboard interface {
 // the platform's cheap change sequence has not moved.
 type ChangeDetector interface {
 	Changed() (bool, error)
+}
+
+// Watcher provides event-driven clipboard change notifications.
+type Watcher interface {
+	Watch(context.Context) (<-chan struct{}, error)
 }
 
 // typePriority defines the preference order for reading clipboard content.

@@ -167,6 +167,18 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	ticker := time.NewTicker(a.pollInterval)
 	defer ticker.Stop()
+	var pollEvents <-chan time.Time = ticker.C
+	var watchEvents <-chan struct{}
+	if watcher, ok := a.monitor.clip.(clipboard.Watcher); ok {
+		events, err := watcher.Watch(ctx)
+		if err != nil {
+			slog.Warn("event-driven clipboard watch unavailable; using polling", "component", "clipd", "error", err)
+		} else {
+			watchEvents = events
+			pollEvents = nil
+			slog.Info("event-driven clipboard watch active", "component", "clipd")
+		}
+	}
 
 	slog.Info("clipd started", "component", "clipd", "hub_url", a.hubURL, "node_name", a.nodeName, "poll_interval", a.pollInterval)
 
@@ -174,24 +186,36 @@ func (a *Agent) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
-			if a.isPaused() {
+		case <-pollEvents:
+			a.pollClipboard(ctx)
+		case _, ok := <-watchEvents:
+			if !ok {
+				watchEvents = nil
+				pollEvents = ticker.C
+				slog.Warn("clipboard watch stopped; reverting to polling", "component", "clipd")
 				continue
 			}
-			if !a.bootstrapped.Load() {
-				continue
-			}
-			result, ct := a.monitor.Poll()
-			if result == PollNewContent {
-				if blocked := a.handlePrivacy(ct); blocked {
-					continue
-				}
-				if err := a.sendToHub(ctx, ct); err != nil {
-					slog.Error("failed to send clip to hub, will retry", "component", "clipd", "error", err)
-				} else {
-					a.monitor.MarkSent()
-				}
-			}
+			a.pollClipboard(ctx)
+		}
+	}
+}
+
+func (a *Agent) pollClipboard(ctx context.Context) {
+	if a.isPaused() {
+		return
+	}
+	if !a.bootstrapped.Load() {
+		return
+	}
+	result, ct := a.monitor.Poll()
+	if result == PollNewContent {
+		if blocked := a.handlePrivacy(ct); blocked {
+			return
+		}
+		if err := a.sendToHub(ctx, ct); err != nil {
+			slog.Error("failed to send clip to hub, will retry", "component", "clipd", "error", err)
+		} else {
+			a.monitor.MarkSent()
 		}
 	}
 }

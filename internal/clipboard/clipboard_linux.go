@@ -3,7 +3,9 @@
 package clipboard
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -56,6 +58,35 @@ func (c *linuxClipboard) Clear() error {
 		cmd.Stdin = strings.NewReader("")
 		return cmd.Run()
 	}
+}
+
+func (c *linuxClipboard) Watch(ctx context.Context) (<-chan struct{}, error) {
+	if c.backend != "wayland" {
+		return nil, fmt.Errorf("event-driven watch unavailable for %s", c.backend)
+	}
+	// wl-paste uses the compositor's data-control protocol and launches the
+	// callback only when ownership changes. The callback never reads content.
+	command := exec.CommandContext(ctx, "wl-paste", "--watch", "sh", "-c", "printf '\\n'")
+	output, err := command.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := command.Start(); err != nil {
+		return nil, err
+	}
+	events := make(chan struct{}, 1)
+	go func() {
+		defer close(events)
+		scanner := bufio.NewScanner(output)
+		for scanner.Scan() {
+			select {
+			case events <- struct{}{}:
+			default:
+			}
+		}
+		_ = command.Wait()
+	}()
+	return events, nil
 }
 
 func (c *linuxClipboard) listTypes() ([]string, error) {
