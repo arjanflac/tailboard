@@ -1,0 +1,12 @@
+[Unit]
+Description=ClipHub clipboard synchronization agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/clipd
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

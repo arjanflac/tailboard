@@ -16,6 +16,7 @@ import (
 
 	"github.com/thalysguimaraes/cliphub/internal/discover"
 	"github.com/thalysguimaraes/cliphub/internal/hub"
+	"github.com/thalysguimaraes/cliphub/internal/service"
 	"tailscale.com/tsnet"
 )
 
@@ -23,6 +24,15 @@ import (
 var version = "dev"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "install-service" {
+		result, err := service.Install("cliphub", os.Args[2:])
+		if err != nil {
+			slog.Error("service install failed", "component", "cliphub", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("service installed", "component", "cliphub", "platform", result.Platform, "path", result.Path, "loaded", result.Loaded)
+		return
+	}
 	dev := flag.Bool("dev", false, "development mode: listen on localhost without tsnet")
 	addr := flag.String("addr", "localhost:8080", "listen address in dev mode")
 	hostname := flag.String("hostname", envString("CLIPHUB_HOSTNAME", discover.DefaultHubHostname), "tailnet hostname in tsnet mode")

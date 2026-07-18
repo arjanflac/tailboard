@@ -115,3 +115,35 @@ func TestRenderReleaseNotesIncludesAssetsSummary(t *testing.T) {
 		}
 	}
 }
+
+func TestCopyServiceDefinitionsByPlatform(t *testing.T) {
+	repo := t.TempDir()
+	for platform, file := range map[string]string{
+		"launchd": "agent.plist",
+		"systemd": "agent.service",
+	} {
+		dir := filepath.Join(repo, "packaging", platform)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, file), []byte(platform), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tests := []struct {
+		goos string
+		file string
+	}{
+		{"darwin", "agent.plist"},
+		{"linux", "agent.service"},
+	}
+	for _, test := range tests {
+		staging := filepath.Join(t.TempDir(), test.goos)
+		if err := copyServiceDefinitions(repo, staging, Target{GOOS: test.goos}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(staging, "service", test.file)); err != nil {
+			t.Fatalf("%s service file missing: %v", test.goos, err)
+		}
+	}
+}

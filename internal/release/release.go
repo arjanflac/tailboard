@@ -341,6 +341,9 @@ func buildTarget(ctx context.Context, repoRoot, stagingRoot, distDir, version st
 			return Artifact{}, err
 		}
 	}
+	if err := copyServiceDefinitions(repoRoot, stagingDir, target); err != nil {
+		return Artifact{}, err
+	}
 
 	archivePath := filepath.Join(distDir, target.ArchiveName(version))
 	if target.GOOS == "windows" {
@@ -365,6 +368,35 @@ func buildTarget(ctx context.Context, repoRoot, stagingRoot, distDir, version st
 		Target: target,
 		Format: target.Format(),
 	}, nil
+}
+
+func copyServiceDefinitions(repoRoot, stagingDir string, target Target) error {
+	var sourceDir string
+	switch target.GOOS {
+	case "darwin":
+		sourceDir = filepath.Join(repoRoot, "packaging", "launchd")
+	case "linux":
+		sourceDir = filepath.Join(repoRoot, "packaging", "systemd")
+	default:
+		return nil
+	}
+	entries, err := os.ReadDir(sourceDir)
+	if err != nil {
+		return err
+	}
+	destination := filepath.Join(stagingDir, "service")
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if err := copyFile(filepath.Join(sourceDir, entry.Name()), filepath.Join(destination, entry.Name()), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func buildBinary(ctx context.Context, repoRoot string, target Target, version, outputPath string) error {

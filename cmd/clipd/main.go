@@ -19,6 +19,7 @@ import (
 	"github.com/thalysguimaraes/cliphub/internal/discover"
 	"github.com/thalysguimaraes/cliphub/internal/hubclient"
 	"github.com/thalysguimaraes/cliphub/internal/privacy"
+	"github.com/thalysguimaraes/cliphub/internal/service"
 )
 
 // version is injected via ldflags in reproducible release builds.
@@ -33,6 +34,14 @@ var newAgent = func(cfg agent.Config) (agentRunner, error) {
 }
 
 func run(ctx context.Context, args []string) error {
+	if len(args) > 0 && args[0] == "install-service" {
+		result, err := service.Install("clipd", args[1:])
+		if err != nil {
+			return err
+		}
+		slog.Info("service installed", "component", "clipd", "platform", result.Platform, "path", result.Path, "loaded", result.Loaded)
+		return nil
+	}
 	fs := flag.NewFlagSet("clipd", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
