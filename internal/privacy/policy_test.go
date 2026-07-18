@@ -12,6 +12,27 @@ func TestParseSensitiveClassesRejectsUnknown(t *testing.T) {
 	}
 }
 
+func TestPrivacyPresets(t *testing.T) {
+	strict, err := Preset("strict")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strict.ClearOnBlock || !strict.HasSensitiveClass(SensitiveSecret) ||
+		!strict.HasSensitiveClass(SensitiveOTP) || !strict.HasSensitiveClass(SensitivePasswordManager) {
+		t.Fatalf("strict preset incomplete: %+v", strict)
+	}
+	balanced, err := Preset("balanced")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if balanced.ClearOnBlock || balanced.HasSensitiveClass(SensitiveOTP) {
+		t.Fatalf("balanced preset too aggressive: %+v", balanced)
+	}
+	if _, err := Preset("maximum"); err == nil {
+		t.Fatal("expected invalid preset error")
+	}
+}
+
 func TestDecisionIgnoresConfiguredApp(t *testing.T) {
 	cfg := NewConfig([]string{"1password"}, nil, nil, false)
 

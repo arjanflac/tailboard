@@ -122,6 +122,39 @@ func NewConfig(ignoreApps, ignoreProcesses []string, classes map[SensitiveClass]
 	return cfg
 }
 
+func Preset(name string) (Config, error) {
+	switch normalize(name) {
+	case "", "off":
+		return Config{}, nil
+	case "balanced":
+		return NewConfig(nil, nil, map[SensitiveClass]struct{}{
+			SensitiveSecret: {}, SensitivePasswordManager: {},
+		}, false), nil
+	case "strict":
+		return NewConfig(nil, nil, map[SensitiveClass]struct{}{
+			SensitiveSecret: {}, SensitivePasswordManager: {}, SensitiveOTP: {},
+		}, true), nil
+	default:
+		return Config{}, fmt.Errorf("unknown privacy preset %q (want strict, balanced, or off)", name)
+	}
+}
+
+func (c Config) Merge(override Config) Config {
+	classes := make(map[SensitiveClass]struct{}, len(c.SensitiveClasses)+len(override.SensitiveClasses))
+	for class := range c.SensitiveClasses {
+		classes[class] = struct{}{}
+	}
+	for class := range override.SensitiveClasses {
+		classes[class] = struct{}{}
+	}
+	return NewConfig(
+		append(append([]string(nil), c.IgnoreApps...), override.IgnoreApps...),
+		append(append([]string(nil), c.IgnoreProcesses...), override.IgnoreProcesses...),
+		classes,
+		c.ClearOnBlock || override.ClearOnBlock,
+	)
+}
+
 func (c Config) Empty() bool {
 	return len(c.IgnoreApps) == 0 && len(c.IgnoreProcesses) == 0 && len(c.SensitiveClasses) == 0
 }

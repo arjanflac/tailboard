@@ -43,6 +43,7 @@ func run(ctx context.Context, args []string) error {
 	ignoreProcesses := fs.String("ignore-processes", envString("CLIPHUB_IGNORE_PROCESSES", ""), "comma-separated process names to keep local")
 	filterSensitive := fs.String("filter-sensitive", envString("CLIPHUB_FILTER_SENSITIVE", ""), "comma-separated sensitive classes to block (secret,password-manager,otp)")
 	clearOnBlock := fs.Bool("clear-on-block", envBool("CLIPHUB_CLEAR_ON_BLOCK", false), "clear the local clipboard when a privacy rule blocks sync")
+	privacyPreset := fs.String("privacy-preset", envString("CLIPHUB_PRIVACY_PRESET", "off"), "privacy bundle: strict, balanced, or off")
 	stateDir := fs.String("state-dir", defaultStateDir(), "directory for persistent agent state")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -86,6 +87,16 @@ func run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	presetConfig, err := privacy.Preset(*privacyPreset)
+	if err != nil {
+		return err
+	}
+	privacyConfig := presetConfig.Merge(privacy.NewConfig(
+		privacy.ParseCSV(*ignoreApps),
+		privacy.ParseCSV(*ignoreProcesses),
+		sensitiveClasses,
+		*clearOnBlock,
+	))
 
 	a, err := newAgent(agent.Config{
 		HubURL:       *hubURL,
@@ -93,12 +104,7 @@ func run(ctx context.Context, args []string) error {
 		NodeName:     *nodeName,
 		DeviceID:     stableDeviceID,
 		PollInterval: time.Duration(*pollMs) * time.Millisecond,
-		Privacy: privacy.NewConfig(
-			privacy.ParseCSV(*ignoreApps),
-			privacy.ParseCSV(*ignoreProcesses),
-			sensitiveClasses,
-			*clearOnBlock,
-		),
+		Privacy:      privacyConfig,
 	})
 	if err != nil {
 		return err
