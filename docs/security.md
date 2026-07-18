@@ -49,6 +49,7 @@ Foreground detection is best-effort and platform-specific:
 - Sender-declared SHA-256 is verified after upload and again after download.
 - Receivers sanitize filenames, reject traversal/separators, and do not overwrite existing files unless explicitly forced.
 - Spool quota and maximum transfer size are enforced by the hub and advertised by `/api/capabilities`.
+- Direct fetch binds only the sender's Tailscale address, uses a random 256-bit bearer token scoped to one transfer, supports range reads, and remains subject to receiver SHA-256 verification. The hub carries the URL/token metadata but never fetches the bytes.
 - The device registry reserves a public-key field for a future targeted-transfer E2EE design. Encryption is not implemented today.
 
 ## What ClipHub protects well

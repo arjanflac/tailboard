@@ -172,7 +172,7 @@ func capabilitiesHandler(h *Hub) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, protocol.Capabilities{
 			HubVersion:      "dev",
 			ProtocolVersion: protocol.ProtocolVersion,
-			Features:        map[string]bool{"transfers": true, "devices": true, "hub_role": true, "e2ee": false},
+			Features:        map[string]bool{"transfers": true, "direct_fetch": true, "devices": true, "hub_role": true, "e2ee": false},
 			Limits: protocol.CapabilityLimits{
 				MaxClipSize:     protocol.MaxContentSize,
 				MaxTransferSize: h.transfers.maxSize,

@@ -155,7 +155,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		URL: a.client.StreamURLForDevice(a.deviceID),
 		OnConnected: func() {
 			if a.deviceID != "" {
-				capabilities := []string{"clipboard", "transfers"}
+				capabilities := []string{"clipboard", "transfers", "direct-fetch"}
 				if reporter, ok := a.ctxProvider.(contextProviderReporter); ok {
 					capabilities = append(capabilities, "privacy-detector:"+reporter.Layer())
 				}

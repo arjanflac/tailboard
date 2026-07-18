@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -128,6 +129,32 @@ func TestTransferIsOfferedOnlyAfterEveryFileIsVerified(t *testing.T) {
 	transfer, err = store.upload(transfer.TransferID, 1, 0, bytes.NewReader(second))
 	if err != nil || transfer.State != "offered" {
 		t.Fatalf("second upload state=%s err=%v", transfer.State, err)
+	}
+}
+
+func TestDirectTransferIsOfferedWithoutUsingSpoolQuota(t *testing.T) {
+	store, err := newTransferStore(t.TempDir(), 1, 1<<20, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.close()
+	transfer, err := store.create("sender", protocol.CreateTransferRequest{
+		ToDevice:    "receiver",
+		Mode:        "direct",
+		DirectURL:   "http://100.64.0.1:12345",
+		DirectToken: strings.Repeat("a", 64),
+		Files: []protocol.TransferFile{{
+			Name: "large.bin", Size: 1024, SHA256: strings.Repeat("b", 64),
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if transfer.State != "offered" || transfer.Mode != "direct" || transfer.Files[0].Uploaded != transfer.Files[0].Size {
+		t.Fatalf("unexpected direct transfer: %+v", transfer)
+	}
+	if _, _, err := store.openFile(transfer.TransferID, 0); !errors.Is(err, ErrTransferConflict) {
+		t.Fatalf("direct transfer unexpectedly opened from spool: %v", err)
 	}
 }
 

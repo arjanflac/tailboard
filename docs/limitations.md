@@ -14,7 +14,7 @@ ClipHub is intentionally small and opinionated. The current behavior favors pred
 ## Content-type limitations
 
 - The protocol caps individual clipboard payloads at 10 MiB.
-- Files use a separate, targeted transfer primitive. Hub-spooled transfers are resumable and asynchronous; direct peer fetch is not implemented yet.
+- Files use a separate, targeted transfer primitive. Hub-spooled transfers are resumable and asynchronous. Direct fetch is available from the CLI with `tailclip send --direct`, but the sender must remain online until receipt.
 - Rich content support is platform-dependent:
   - macOS, Linux, and Windows exchange `text/plain`, `text/html`, and `image/png`.
   - OS-native format conversion can still alter HTML or image representation.
@@ -41,7 +41,7 @@ ClipHub is intentionally small and opinionated. The current behavior favors pred
 
 - Auto-discovery depends on Tailscale metadata. If discovery fails, clients fall back to localhost-oriented behavior unless you set an explicit hub URL.
 - History retention is short by design. ClipHub is a sync tool, not a long-term clipboard archive.
-- Transfer spooling is bounded by quota and TTL. A transfer larger than available hub capacity fails; direct-fetch fallback is future work.
+- Transfer spooling is bounded by quota and TTL. For an online desktop receiver, `--direct` bypasses spool capacity; otherwise it falls back to the spool and can still fail when capacity is exhausted.
 - `tailclip clear` and `tailclip clear --local` help with cleanup, but they do not retroactively wipe clipboard contents that were already written to other devices or offline caches.
 
 The planned work to address the biggest gaps is tracked in [Roadmap](roadmap.md).

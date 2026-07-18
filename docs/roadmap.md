@@ -12,12 +12,13 @@ This roadmap focuses on the gaps that matter most for adoption. It is intentiona
 - Maintained iOS app/keyboard/share/widgets/Intents surface with CI, foreground reconnect, Keychain configuration, transfer inbox, and background share uploads.
 - Hub-spooled targeted transfers with consent policies, allowlists, integrity checks, quota/TTL, resumable CLI uploads, and deterministic directory manifests.
 - Loopback-only desktop device surface with drop-to-send, progress/state, incoming consent, show-in-folder, and clipboard pause/resume.
+- Capability-gated direct desktop fetch with scoped bearer serving, range support, integrity verification, receipt waiting, and transparent spool fallback.
 
 ## Next product layer
 
 - Add optional native menu-bar/taskbar wrappers around the shipped browser-backed desktop companion.
 - Finish external distribution wiring: TestFlight signing plus authenticated pushes to the Homebrew tap and Scoop bucket.
-- Add direct desktop-to-desktop fetch as a capability-gated optimization with transparent spool fallback.
+- Evaluate making direct fetch automatic for large online-desktop sends after field data from the explicit `--direct` path.
 
 ## Deliberately deferred
 

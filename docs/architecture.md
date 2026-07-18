@@ -48,6 +48,8 @@ sender -- resumable upload --> disk spool --> receiver
 6. Downloads support byte ranges. The receiver verifies SHA-256, writes through safe temporary paths, then acknowledges completion.
 7. Completion, cancellation, or expiry removes spool data. Metadata is not a permanent transfer archive.
 
+For two online desktop endpoints, `tailclip send --direct` starts a bearer-scoped, range-capable file server on the sender's Tailscale IP and places only the offer metadata on the hub. A receiver advertising `direct-fetch` downloads from that endpoint and still verifies SHA-256 before completion. If the target is offline, lacks the capability, the sender cannot bind its tailnet address, or the hub rejects direct metadata, the command transparently uses the durable spool path.
+
 ## Desktop companion
 
 `clipd` serves a loopback-only control surface at `127.0.0.1:9438` by default. `clipd --tray` opens it in the default browser. It is a thin client over the running agent and hub APIs:

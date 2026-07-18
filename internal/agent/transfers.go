@@ -59,7 +59,7 @@ func (a *Agent) receiveTransfer(ctx context.Context, transfer protocol.Transfer)
 		return err
 	}
 	for index, manifest := range accepted.Files {
-		if err := a.downloadTransferFile(ctx, accepted.TransferID, index, manifest); err != nil {
+		if err := a.downloadTransferFile(ctx, accepted, index, manifest); err != nil {
 			return fmt.Errorf("download %s: %w", manifest.Name, err)
 		}
 	}
@@ -71,7 +71,7 @@ func (a *Agent) receiveTransfer(ctx context.Context, transfer protocol.Transfer)
 	return nil
 }
 
-func (a *Agent) downloadTransferFile(ctx context.Context, transferID string, index int, manifest protocol.TransferFile) error {
+func (a *Agent) downloadTransferFile(ctx context.Context, transfer protocol.Transfer, index int, manifest protocol.TransferFile) error {
 	name := filepath.Base(strings.ReplaceAll(manifest.Name, "\\", "/"))
 	if name == "" || name == "." || name == ".." {
 		return fmt.Errorf("unsafe filename %q", manifest.Name)
@@ -86,9 +86,15 @@ func (a *Agent) downloadTransferFile(ctx context.Context, transferID string, ind
 	}
 	tempPath := temp.Name()
 	defer os.Remove(tempPath)
-	if err := a.client.DownloadTransferFile(ctx, a.deviceID, transferID, index, temp); err != nil {
+	var downloadErr error
+	if transfer.Mode == "direct" {
+		downloadErr = a.client.DownloadDirectTransferFile(ctx, transfer, index, temp)
+	} else {
+		downloadErr = a.client.DownloadTransferFile(ctx, a.deviceID, transfer.TransferID, index, temp)
+	}
+	if downloadErr != nil {
 		temp.Close()
-		return err
+		return downloadErr
 	}
 	if err := temp.Close(); err != nil {
 		return err

@@ -1,17 +1,45 @@
 package hubclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/thalysguimaraes/cliphub/internal/protocol"
 )
+
+func TestDownloadDirectTransferFileUsesScopedBearer(t *testing.T) {
+	var gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		if r.URL.Path != "/files/2" {
+			t.Fatalf("unexpected direct path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte("direct payload"))
+	}))
+	defer server.Close()
+	client, err := New(Config{BaseURL: "http://hub.invalid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var destination bytes.Buffer
+	err = client.DownloadDirectTransferFile(context.Background(), protocol.Transfer{
+		Mode: "direct", DirectURL: server.URL, DirectToken: "scoped-token",
+	}, 2, &destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if destination.String() != "direct payload" || gotAuth != "Bearer scoped-token" {
+		t.Fatalf("payload=%q auth=%q", destination.String(), gotAuth)
+	}
+}
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 

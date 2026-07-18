@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -79,7 +80,7 @@ func main() {
 	hostName, _ := os.Hostname()
 	_, _ = hub.RegisterDevice(ctx, protocol.RegisterDeviceRequest{
 		DeviceID: localDeviceID, Name: hostName, Platform: runtime.GOOS,
-		Capabilities: []string{"clipboard", "transfers"},
+		Capabilities: []string{"clipboard", "transfers", "direct-fetch-source"},
 	})
 
 	switch args[0] {
@@ -128,6 +129,7 @@ Commands:
   status                     Show hub status
   devices                    List registered devices and online state
   send FILE --to DEVICE      Send a file or directory to a registered device
+       [--direct] [--wait]   Prefer direct fetch; optionally wait for receipt
   send FILE --resume ID      Resume an interrupted outgoing transfer
   transfers                  List incoming and outgoing transfers
   receive --id ID [--to DIR] Accept and download a transfer
@@ -146,6 +148,7 @@ Environment:
 
 func cmdSend(ctx context.Context, args []string) error {
 	var path, target, resumeID string
+	var preferDirect, wait bool
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--to" && i+1 < len(args) {
 			target = args[i+1]
@@ -153,6 +156,10 @@ func cmdSend(ctx context.Context, args []string) error {
 		} else if args[i] == "--resume" && i+1 < len(args) {
 			resumeID = args[i+1]
 			i++
+		} else if args[i] == "--direct" {
+			preferDirect = true
+		} else if args[i] == "--wait" {
+			wait = true
 		} else if path == "" {
 			path = args[i]
 		}
@@ -206,20 +213,67 @@ func cmdSend(ctx context.Context, args []string) error {
 			return fmt.Errorf("local payload does not match transfer %s", resumeID)
 		}
 	} else {
-		targetID, err := resolveDevice(ctx, target)
+		targetDevice, err := resolveDeviceRecord(ctx, target)
 		if err != nil {
 			return err
 		}
-		created, err := hub.CreateTransfer(ctx, localDeviceID, protocol.CreateTransferRequest{
-			ToDevice: targetID,
+		request := protocol.CreateTransferRequest{
+			ToDevice: targetDevice.DeviceID,
 			Files: []protocol.TransferFile{{
 				Name: sendName, Size: info.Size(), MIME: mimeFromExt(filepath.Ext(sendName)), SHA256: sum,
 			}},
-		})
+		}
+		var directServer *directTransferServer
+		if preferDirect && deviceSupportsDirect(targetDevice) {
+			resolver := discover.NewResolver(discover.DefaultConfig())
+			tailnetIP, resolveErr := resolver.SelfIP(ctx)
+			if resolveErr == nil {
+				directServer, err = startDirectTransferServer(ctx, net.JoinHostPort(tailnetIP, "0"), []string{path})
+				if err == nil {
+					request.Mode = "direct"
+					request.DirectURL = directServer.URL
+					request.DirectToken = directServer.Token
+				}
+			}
+			if resolveErr != nil || err != nil {
+				fmt.Fprintln(os.Stderr, "direct fetch unavailable; falling back to hub spool")
+				directServer = nil
+			}
+		} else if preferDirect {
+			fmt.Fprintln(os.Stderr, "target is offline or lacks direct-fetch support; falling back to hub spool")
+		}
+		if directServer != nil {
+			defer directServer.Shutdown(context.Background())
+		}
+		created, err := hub.CreateTransfer(ctx, localDeviceID, request)
 		if err != nil {
-			return err
+			if request.Mode != "direct" {
+				return err
+			}
+			fmt.Fprintln(os.Stderr, "direct offer was rejected; falling back to hub spool")
+			request.Mode, request.DirectURL, request.DirectToken = "", "", ""
+			created, err = hub.CreateTransfer(ctx, localDeviceID, request)
+			if err != nil {
+				return err
+			}
 		}
 		transfer = created.Transfer
+		if request.Mode == "direct" {
+			if transfer.Mode != "direct" {
+				_, _ = hub.TransferAction(context.Background(), localDeviceID, transfer.TransferID, "cancel")
+				fmt.Fprintln(os.Stderr, "hub does not support direct fetch; falling back to hub spool")
+				created, err = hub.CreateTransfer(ctx, localDeviceID, protocol.CreateTransferRequest{
+					ToDevice: request.ToDevice, Files: request.Files,
+				})
+				if err != nil {
+					return err
+				}
+				transfer = created.Transfer
+			} else {
+				fmt.Printf("offered %s (%d bytes) directly as %s\n", sendName, info.Size(), transfer.TransferID)
+				return waitForTransfer(ctx, transfer.TransferID)
+			}
+		}
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -250,7 +304,41 @@ func cmdSend(ctx context.Context, args []string) error {
 		}
 	}
 	fmt.Printf("\nsent %s (%d bytes) as %s\n", sendName, info.Size(), transfer.TransferID)
+	if wait {
+		return waitForTransfer(ctx, transfer.TransferID)
+	}
 	return nil
+}
+
+func waitForTransfer(ctx context.Context, transferID string) error {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		transfers, err := hub.Transfers(ctx, localDeviceID, "sender", "")
+		if err != nil {
+			return err
+		}
+		for _, transfer := range transfers {
+			if transfer.TransferID != transferID {
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "\rtransfer %s: %-12s", transferID, transfer.State)
+			switch transfer.State {
+			case "complete":
+				fmt.Fprintln(os.Stderr)
+				return nil
+			case "declined", "canceled", "expired":
+				fmt.Fprintln(os.Stderr)
+				return fmt.Errorf("transfer %s", transfer.State)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			_, _ = hub.TransferAction(context.Background(), localDeviceID, transferID, "cancel")
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func printTransferProgress(uploaded, total, sessionBytes int64, elapsed time.Duration) {
@@ -431,10 +519,16 @@ func cmdReceive(ctx context.Context, args []string) error {
 			return err
 		}
 		tempPath := temp.Name()
-		if err := hub.DownloadTransferFile(ctx, localDeviceID, id, i, temp); err != nil {
+		var downloadErr error
+		if selected.Mode == "direct" {
+			downloadErr = hub.DownloadDirectTransferFile(ctx, *selected, i, temp)
+		} else {
+			downloadErr = hub.DownloadTransferFile(ctx, localDeviceID, id, i, temp)
+		}
+		if downloadErr != nil {
 			temp.Close()
 			os.Remove(tempPath)
-			return err
+			return downloadErr
 		}
 		if err := temp.Close(); err != nil {
 			return err
@@ -453,9 +547,17 @@ func cmdReceive(ctx context.Context, args []string) error {
 }
 
 func resolveDevice(ctx context.Context, target string) (string, error) {
-	devices, err := hub.Devices(ctx)
+	device, err := resolveDeviceRecord(ctx, target)
 	if err != nil {
 		return "", err
+	}
+	return device.DeviceID, nil
+}
+
+func resolveDeviceRecord(ctx context.Context, target string) (protocol.Device, error) {
+	devices, err := hub.Devices(ctx)
+	if err != nil {
+		return protocol.Device{}, err
 	}
 	var matches []protocol.Device
 	for _, device := range devices {
@@ -464,9 +566,9 @@ func resolveDevice(ctx context.Context, target string) (string, error) {
 		}
 	}
 	if len(matches) != 1 {
-		return "", fmt.Errorf("device %q matched %d devices", target, len(matches))
+		return protocol.Device{}, fmt.Errorf("device %q matched %d devices", target, len(matches))
 	}
-	return matches[0].DeviceID, nil
+	return matches[0], nil
 }
 
 func hashFile(path string) (string, error) {

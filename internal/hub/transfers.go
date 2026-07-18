@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -98,6 +99,22 @@ func (s *transferStore) create(from string, req protocol.CreateTransferRequest) 
 	if from == "" || req.ToDevice == "" || len(req.Files) == 0 {
 		return protocol.Transfer{}, fmt.Errorf("sender, receiver, and files are required")
 	}
+	mode := req.Mode
+	if mode == "" {
+		mode = "spool"
+	}
+	if mode != "spool" && mode != "direct" {
+		return protocol.Transfer{}, fmt.Errorf("invalid transfer mode")
+	}
+	if mode == "direct" {
+		directURL, err := url.ParseRequestURI(req.DirectURL)
+		if err != nil || directURL.Host == "" || (directURL.Scheme != "http" && directURL.Scheme != "https") {
+			return protocol.Transfer{}, fmt.Errorf("invalid direct transfer URL")
+		}
+		if len(req.DirectToken) < 32 {
+			return protocol.Transfer{}, fmt.Errorf("direct transfer token is too short")
+		}
+	}
 	var total int64
 	for i := range req.Files {
 		req.Files[i].Name = safeFilename(req.Files[i].Name)
@@ -106,25 +123,40 @@ func (s *transferStore) create(from string, req protocol.CreateTransferRequest) 
 			return protocol.Transfer{}, fmt.Errorf("invalid file manifest")
 		}
 		total += req.Files[i].Size
+		if mode == "direct" {
+			req.Files[i].Uploaded = req.Files[i].Size
+		}
 	}
 	if total > s.maxSize {
 		return protocol.Transfer{}, fmt.Errorf("transfer exceeds maximum size")
 	}
-	used, err := s.usedLocked()
-	if err != nil {
-		return protocol.Transfer{}, err
-	}
-	if used+total > s.quota {
-		return protocol.Transfer{}, ErrSpoolQuota
+	if mode == "spool" {
+		used, err := s.usedLocked()
+		if err != nil {
+			return protocol.Transfer{}, err
+		}
+		if used+total > s.quota {
+			return protocol.Transfer{}, ErrSpoolQuota
+		}
 	}
 	id, err := randomID()
 	if err != nil {
 		return protocol.Transfer{}, err
 	}
 	now := time.Now()
-	transfer := protocol.Transfer{TransferID: id, FromDevice: from, ToDevice: req.ToDevice, Files: req.Files, Note: req.Note, State: "uploading", CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
-	if err := os.MkdirAll(s.transferDir(id), 0o700); err != nil {
-		return protocol.Transfer{}, err
+	state := "uploading"
+	if mode == "direct" {
+		state = "offered"
+	}
+	transfer := protocol.Transfer{
+		TransferID: id, FromDevice: from, ToDevice: req.ToDevice,
+		Files: req.Files, Note: req.Note, Mode: mode, DirectURL: req.DirectURL,
+		DirectToken: req.DirectToken, State: state, CreatedAt: now, ExpiresAt: now.Add(s.ttl),
+	}
+	if mode == "spool" {
+		if err := os.MkdirAll(s.transferDir(id), 0o700); err != nil {
+			return protocol.Transfer{}, err
+		}
 	}
 	s.transfers[id] = transfer
 	if err := s.persistLocked(transfer); err != nil {
@@ -275,6 +307,9 @@ func (s *transferStore) openFile(id string, index int) (*os.File, protocol.Trans
 	transfer, ok := s.transfers[id]
 	if !ok || index < 0 || index >= len(transfer.Files) {
 		return nil, protocol.TransferFile{}, ErrTransferNotFound
+	}
+	if transfer.Mode == "direct" {
+		return nil, protocol.TransferFile{}, ErrTransferConflict
 	}
 	file := transfer.Files[index]
 	if file.Uploaded != file.Size {

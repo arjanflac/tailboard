@@ -29,20 +29,26 @@ type TransferFile struct {
 }
 
 type Transfer struct {
-	TransferID string         `json:"transfer_id"`
-	FromDevice string         `json:"from_device"`
-	ToDevice   string         `json:"to_device"`
-	Files      []TransferFile `json:"files"`
-	Note       string         `json:"note,omitempty"`
-	State      string         `json:"state"`
-	CreatedAt  time.Time      `json:"created_at"`
-	ExpiresAt  time.Time      `json:"expires_at"`
+	TransferID  string         `json:"transfer_id"`
+	FromDevice  string         `json:"from_device"`
+	ToDevice    string         `json:"to_device"`
+	Files       []TransferFile `json:"files"`
+	Note        string         `json:"note,omitempty"`
+	Mode        string         `json:"mode,omitempty"`
+	DirectURL   string         `json:"direct_url,omitempty"`
+	DirectToken string         `json:"direct_token,omitempty"`
+	State       string         `json:"state"`
+	CreatedAt   time.Time      `json:"created_at"`
+	ExpiresAt   time.Time      `json:"expires_at"`
 }
 
 type CreateTransferRequest struct {
-	ToDevice string         `json:"to_device"`
-	Files    []TransferFile `json:"files"`
-	Note     string         `json:"note,omitempty"`
+	ToDevice    string         `json:"to_device"`
+	Files       []TransferFile `json:"files"`
+	Note        string         `json:"note,omitempty"`
+	Mode        string         `json:"mode,omitempty"`
+	DirectURL   string         `json:"direct_url,omitempty"`
+	DirectToken string         `json:"direct_token,omitempty"`
 }
 
 type CreateTransferResponse struct {

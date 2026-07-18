@@ -528,6 +528,33 @@ func (c *Client) DownloadTransferFile(ctx context.Context, deviceID, transferID 
 	return err
 }
 
+// DownloadDirectTransferFile fetches a capability-gated transfer directly
+// from its sender rather than through the hub spool.
+func (c *Client) DownloadDirectTransferFile(ctx context.Context, transfer protocol.Transfer, index int, destination io.Writer) error {
+	if transfer.Mode != "direct" || transfer.DirectURL == "" || transfer.DirectToken == "" {
+		return fmt.Errorf("transfer does not contain direct-fetch metadata")
+	}
+	endpoint, err := url.JoinPath(transfer.DirectURL, "files", strconv.Itoa(index))
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+transfer.DirectToken)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return readHTTPError(resp)
+	}
+	_, err = io.Copy(destination, resp.Body)
+	return err
+}
+
 func deviceHeaders(deviceID, contentType string) http.Header {
 	headers := make(http.Header)
 	if deviceID != "" {
