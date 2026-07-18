@@ -22,6 +22,6 @@ This roadmap focuses on the gaps that matter most for adoption. It is intentiona
 
 ## Deliberately deferred
 
-- Targeted-transfer E2EE using registered device public keys remains an exploration; the schema reserves key material but the hub currently sees spool contents.
+- Targeted-transfer E2EE has an accepted transfers-first design and downgrade rule, but implementation awaits cross-platform key custody, shared test vectors, and cryptographic review; the hub currently sees spool contents.
 - Clipboard sync stays hub-mediated, last-write-wins, and broadcast.
 - There is no Android client, stranger pairing, LAN mDNS discovery, or permanent transfer archive.

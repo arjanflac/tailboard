@@ -1,6 +1,6 @@
 # Architecture
 
-See also: [Security & Privacy](security.md), [Known Limitations](limitations.md), [Platform Support](platform-support.md), [Roadmap](roadmap.md), [README](../README.md)
+See also: [Security & Privacy](security.md), [Transfer E2EE Decision](e2ee-transfers.md), [Known Limitations](limitations.md), [Platform Support](platform-support.md), [Roadmap](roadmap.md), [README](../README.md)
 
 ClipHub is built around a single tailnet broker role with two distinct primitives: broadcast, ephemeral clipboard state and explicit, durable-until-claimed transfers targeted to a registered device. The role may run as standalone `cliphub` or inside a normal desktop agent via `clipd --embed-hub`; a dedicated hub machine is optional.
 
