@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"time"
 
@@ -109,8 +110,16 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 
 	ws := &WSClient{
-		URL: a.client.StreamURL(),
+		URL: a.client.StreamURLForDevice(a.deviceID),
 		OnConnected: func() {
+			if a.deviceID != "" {
+				if _, err := a.client.RegisterDevice(ctx, protocol.RegisterDeviceRequest{
+					DeviceID: a.deviceID, Name: a.nodeName, Platform: runtime.GOOS,
+					Capabilities: []string{"clipboard"},
+				}); err != nil {
+					slog.Warn("device registration failed", "component", "clipd", "error", err)
+				}
+			}
 			if !a.bootstrapped.Load() {
 				a.bootstrap(ctx)
 			}

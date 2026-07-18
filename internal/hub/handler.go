@@ -41,6 +41,8 @@ func Register(mux *http.ServeMux, h *Hub, identFn IdentityFunc, observers ...*Ob
 	handle("GET /api/clip/history/page", "/api/clip/history/page", historyPageHandler(h))
 	handle("GET /api/clip/stream", "/api/clip/stream", streamHandler(h, obs))
 	handle("GET /api/capabilities", "/api/capabilities", capabilitiesHandler())
+	handle("POST /api/devices/register", "/api/devices/register", registerDeviceHandler(h))
+	handle("GET /api/devices", "/api/devices", devicesHandler(h))
 	handle("GET /api/status", "/api/status", statusHandler(h, obs))
 	handle("GET /healthz", "/healthz", healthHandler(h, obs))
 	handle("GET /readyz", "/readyz", readinessHandler(obs))
@@ -173,6 +175,32 @@ func capabilitiesHandler() http.HandlerFunc {
 	}
 }
 
+func registerDeviceHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := readLimitedBody(r)
+		if err != nil {
+			writeBodyReadError(w, err)
+			return
+		}
+		var req protocol.RegisterDeviceRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON", nil)
+			return
+		}
+		if req.DeviceID == "" || req.Name == "" || req.Platform == "" {
+			writeAPIError(w, http.StatusBadRequest, "invalid_device", "device_id, name, and platform are required", nil)
+			return
+		}
+		writeJSON(w, http.StatusOK, h.RegisterDevice(req))
+	}
+}
+
+func devicesHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, h.Devices())
+	}
+}
+
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -284,6 +312,9 @@ func historyPageHandler(h *Hub) http.HandlerFunc {
 
 func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		deviceID := r.URL.Query().Get("device_id")
+		h.SetDeviceOnline(deviceID, true)
+		defer h.SetDeviceOnline(deviceID, false)
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			slog.Error(

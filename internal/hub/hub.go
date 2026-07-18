@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,6 +45,9 @@ type Hub struct {
 
 	subsMu sync.RWMutex
 	subs   map[*Subscriber]struct{}
+
+	devicesMu sync.RWMutex
+	devices   map[string]protocol.Device
 }
 
 type clipStore interface {
@@ -68,6 +72,7 @@ func New(cfg Config) (*Hub, error) {
 		maxHistory: cfg.MaxHistory,
 		ttl:        cfg.TTL,
 		subs:       make(map[*Subscriber]struct{}),
+		devices:    make(map[string]protocol.Device),
 		startedAt:  time.Now(),
 	}
 
@@ -95,6 +100,47 @@ func New(cfg Config) (*Hub, error) {
 
 	go h.reapLoop()
 	return h, nil
+}
+
+func (h *Hub) RegisterDevice(req protocol.RegisterDeviceRequest) protocol.Device {
+	h.devicesMu.Lock()
+	defer h.devicesMu.Unlock()
+	device := h.devices[req.DeviceID]
+	device.DeviceID = req.DeviceID
+	device.Name = req.Name
+	device.Platform = req.Platform
+	device.Capabilities = append([]string(nil), req.Capabilities...)
+	device.PublicKey = req.PublicKey
+	device.LastSeen = time.Now()
+	h.devices[req.DeviceID] = device
+	return device
+}
+
+func (h *Hub) SetDeviceOnline(deviceID string, online bool) {
+	if deviceID == "" {
+		return
+	}
+	h.devicesMu.Lock()
+	defer h.devicesMu.Unlock()
+	device, ok := h.devices[deviceID]
+	if !ok {
+		device = protocol.Device{DeviceID: deviceID, Name: deviceID}
+	}
+	device.Online = online
+	device.LastSeen = time.Now()
+	h.devices[deviceID] = device
+}
+
+func (h *Hub) Devices() []protocol.Device {
+	h.devicesMu.RLock()
+	defer h.devicesMu.RUnlock()
+	devices := make([]protocol.Device, 0, len(h.devices))
+	for _, device := range h.devices {
+		device.Capabilities = append([]string(nil), device.Capabilities...)
+		devices = append(devices, device)
+	}
+	sort.Slice(devices, func(i, j int) bool { return devices[i].Name < devices[j].Name })
+	return devices
 }
 
 // Close shuts down the hub's persistent store.

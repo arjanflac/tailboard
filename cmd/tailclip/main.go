@@ -74,6 +74,8 @@ func main() {
 		err = cmdHistory(ctx, args[1:])
 	case "status":
 		err = cmdStatus(ctx)
+	case "devices":
+		err = cmdDevices(ctx)
 	case "clear":
 		err = cmdClear(ctx, args[1:])
 	case "pause":
@@ -101,6 +103,7 @@ Commands:
   put --mime type [text]     Send with explicit MIME type
   history [-n N]             Show clipboard history
   status                     Show hub status
+  devices                    List registered devices and online state
   clear [--local]            Clear hub clipboard/history (and optionally this machine's clipboard)
   pause                      Pause clipboard sync
   resume                     Resume clipboard sync
@@ -112,6 +115,25 @@ Environment:
   CLIPHUB_HUB        Explicit hub URL override
   CLIPHUB_HOSTNAME   Tailnet hostname used for auto-discovery (default: cliphub)
 `)
+}
+
+func cmdDevices(ctx context.Context) error {
+	devices, err := hub.Devices(ctx)
+	if err != nil {
+		return err
+	}
+	if len(devices) == 0 {
+		fmt.Println("(no registered devices)")
+		return nil
+	}
+	for _, device := range devices {
+		state := "offline"
+		if device.Online {
+			state = "online"
+		}
+		fmt.Printf("%-24s %-10s %-8s %s\n", device.Name, device.Platform, state, device.DeviceID)
+	}
+	return nil
 }
 
 func cmdGet(ctx context.Context, args []string) error {

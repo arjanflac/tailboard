@@ -122,6 +122,14 @@ func (c *Client) StreamURL() string {
 	return u.String()
 }
 
+func (c *Client) StreamURLForDevice(deviceID string) string {
+	u, _ := url.Parse(c.StreamURL())
+	query := u.Query()
+	query.Set("device_id", deviceID)
+	u.RawQuery = query.Encode()
+	return u.String()
+}
+
 // Current fetches the current clipboard item.
 func (c *Client) Current(ctx context.Context) (*protocol.ClipItem, error) {
 	resp, err := c.do(ctx, http.MethodGet, c.endpoint("api", "clip"), nil, nil)
@@ -363,6 +371,43 @@ func (c *Client) Capabilities(ctx context.Context) (*protocol.Capabilities, erro
 		return nil, fmt.Errorf("decode capabilities: %w", err)
 	}
 	return &capabilities, nil
+}
+
+func (c *Client) RegisterDevice(ctx context.Context, registration protocol.RegisterDeviceRequest) (*protocol.Device, error) {
+	body, err := json.Marshal(registration)
+	if err != nil {
+		return nil, err
+	}
+	headers := http.Header{"Content-Type": []string{"application/json"}}
+	resp, err := c.do(ctx, http.MethodPost, c.endpoint("api", "devices", "register"), bytes.NewReader(body), headers)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, readHTTPError(resp)
+	}
+	var device protocol.Device
+	if err := json.NewDecoder(resp.Body).Decode(&device); err != nil {
+		return nil, fmt.Errorf("decode device: %w", err)
+	}
+	return &device, nil
+}
+
+func (c *Client) Devices(ctx context.Context) ([]protocol.Device, error) {
+	resp, err := c.do(ctx, http.MethodGet, c.endpoint("api", "devices"), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, readHTTPError(resp)
+	}
+	var devices []protocol.Device
+	if err := json.NewDecoder(resp.Body).Decode(&devices); err != nil {
+		return nil, fmt.Errorf("decode devices: %w", err)
+	}
+	return devices, nil
 }
 
 func (c *Client) do(ctx context.Context, method string, endpoint string, body io.Reader, headers http.Header, values ...url.Values) (*http.Response, error) {
