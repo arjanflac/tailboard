@@ -48,3 +48,13 @@ public struct Transfer: Codable, Identifiable, Hashable, Sendable {
         case expiresAt = "expires_at"
     }
 }
+
+public struct CreateTransferResponse: Codable, Sendable {
+    public let transfer: Transfer
+    public let uploadURLs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case transfer
+        case uploadURLs = "upload_urls"
+    }
+}

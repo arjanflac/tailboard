@@ -27,6 +27,16 @@ struct ShareView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
+                    Picker("Send to", selection: $viewModel.selectedDeviceID) {
+                        Label("Tail Clipboard", systemImage: "doc.on.clipboard")
+                            .tag("")
+                        ForEach(viewModel.devices) { device in
+                            Label(device.name, systemImage: device.online ? "circle.fill" : "circle")
+                                .tag(device.deviceID)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
                     if let error = viewModel.errorMessage {
                         Text(error)
                             .font(.caption)
@@ -37,7 +47,10 @@ struct ShareView: View {
                         if viewModel.isSending {
                             ProgressView()
                         } else {
-                            Label("Send to Tail Clipboard", systemImage: "paperplane.fill")
+                            Label(
+                                viewModel.selectedDeviceID.isEmpty ? "Send to Tail Clipboard" : "Send to Device",
+                                systemImage: "paperplane.fill"
+                            )
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -58,5 +71,6 @@ struct ShareView: View {
                 }
             }
         }
+        .task { await viewModel.loadDevices() }
     }
 }

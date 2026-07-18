@@ -10,6 +10,9 @@ final class ShareViewModel {
     var mimeType = "text/plain"
     var contentToSend: String?
     var dataToSend: Data?
+    var suggestedName = "Shared Item"
+    var devices: [Device] = []
+    var selectedDeviceID = ""
     var isSending = false
     var didSend = false
     var errorMessage: String?
@@ -24,6 +27,7 @@ final class ShareViewModel {
                         contentToSend = text
                         mimeType = "text/plain"
                         previewText = String(text.prefix(200))
+                        suggestedName = provider.suggestedName ?? "Shared Text.txt"
                         return
                     }
                 }
@@ -33,6 +37,7 @@ final class ShareViewModel {
                         contentToSend = url.absoluteString
                         mimeType = "text/plain"
                         previewText = url.absoluteString
+                        suggestedName = provider.suggestedName ?? "Shared Link.txt"
                         return
                     }
                 }
@@ -42,6 +47,7 @@ final class ShareViewModel {
                         dataToSend = data
                         mimeType = "image/png"
                         previewText = "[Image, \(data.count) bytes]"
+                        suggestedName = provider.suggestedName ?? "Shared Image.png"
                         return
                     }
                 }
@@ -54,11 +60,24 @@ final class ShareViewModel {
                     dataToSend = data
                     mimeType = type.preferredMIMEType ?? "application/octet-stream"
                     previewText = "[\(type.localizedDescription ?? "File"), \(data.count) bytes]"
+                    suggestedName = provider.suggestedName ?? "Shared File"
                     return
                 }
             }
         }
         previewText = "No shareable content found"
+    }
+
+    func loadDevices() async {
+        guard let hubURL = store.hubURL else { return }
+        let client = ClipHubClient(baseURL: hubURL, sourceName: store.sourceName)
+        do {
+            devices = try await client.getDevices().filter {
+                $0.deviceID != store.deviceID && $0.capabilities.contains("transfers")
+            }
+        } catch {
+            // Clipboard send remains available when the roster is offline.
+        }
     }
 
     func send() async {
@@ -73,6 +92,11 @@ final class ShareViewModel {
         let client = ClipHubClient(baseURL: hubURL, sourceName: store.sourceName)
 
         do {
+            if !selectedDeviceID.isEmpty {
+                try await sendTransfer(client: client, hubURL: hubURL)
+                didSend = true
+                return
+            }
             if let content = contentToSend {
                 _ = try await client.postClip(content: content, mimeType: mimeType)
             } else if let data = dataToSend {
@@ -85,6 +109,50 @@ final class ShareViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func sendTransfer(client: ClipHubClient, hubURL: URL) async throws {
+        let data: Data
+        if let binary = dataToSend {
+            data = binary
+        } else if let content = contentToSend {
+            data = Data(content.utf8)
+        } else {
+            throw ClipHubError.emptyClipboard
+        }
+
+        let created = try await client.createTransfer(
+            deviceID: store.deviceID,
+            toDevice: selectedDeviceID,
+            fileName: URL(fileURLWithPath: suggestedName).lastPathComponent,
+            size: Int64(data.count),
+            mimeType: mimeType,
+            sha256: ClipHash.sha256Hex(data)
+        )
+        guard let uploadPath = created.uploadURLs.first,
+              let uploadURL = URL(string: uploadPath, relativeTo: hubURL)?.absoluteURL,
+              let container = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: AppGroupStore.suiteName
+              ) else {
+            throw ClipHubError.noHubURL
+        }
+        let directory = container.appendingPathComponent("BackgroundUploads", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let staged = directory.appendingPathComponent("\(created.transfer.transferID)-0.upload")
+        try data.write(to: staged, options: .atomic)
+
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "PUT"
+        request.setValue(store.deviceID, forHTTPHeaderField: "X-Clip-Device-ID")
+        request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+        request.setValue(
+            "bytes 0-*/\(data.count)",
+            forHTTPHeaderField: "Content-Range"
+        )
+        BackgroundUploadCoordinator.shared.schedule(request: request, fileURL: staged)
     }
 }
 

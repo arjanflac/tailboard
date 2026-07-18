@@ -117,6 +117,34 @@ public actor ClipHubClient {
         return try decoder.decode([Transfer].self, from: data)
     }
 
+    public func createTransfer(
+        deviceID: String,
+        toDevice: String,
+        fileName: String,
+        size: Int64,
+        mimeType: String,
+        sha256: String
+    ) async throws -> CreateTransferResponse {
+        let body: [String: Any] = [
+            "to_device": toDevice,
+            "files": [[
+                "name": fileName,
+                "size": size,
+                "mime": mimeType,
+                "sha256": sha256
+            ]]
+        ]
+        let url = try resolveURL("/api/transfers")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(deviceID, forHTTPHeaderField: "X-Clip-Device-ID")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await perform(request)
+        try validate(response, body: data)
+        return try decoder.decode(CreateTransferResponse.self, from: data)
+    }
+
     public func transferAction(deviceID: String, transferID: String, action: String) async throws -> Transfer {
         let url = try resolveURL("/api/transfers/\(transferID)/\(action)")
         var request = URLRequest(url: url)

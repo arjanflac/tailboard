@@ -98,6 +98,39 @@ func TestTransferLifecycleWithRangeDownload(t *testing.T) {
 	}
 }
 
+func TestTransferIsOfferedOnlyAfterEveryFileIsVerified(t *testing.T) {
+	store, err := newTransferStore(t.TempDir(), 1<<20, 1<<20, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.close()
+	first := []byte("one")
+	second := []byte("two")
+	firstHash := sha256.Sum256(first)
+	secondHash := sha256.Sum256(second)
+	transfer, err := store.create("sender", protocol.CreateTransferRequest{
+		ToDevice: "receiver",
+		Files: []protocol.TransferFile{
+			{Name: "one.txt", Size: 3, SHA256: hex.EncodeToString(firstHash[:])},
+			{Name: "two.txt", Size: 3, SHA256: hex.EncodeToString(secondHash[:])},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if transfer.State != "uploading" {
+		t.Fatalf("create state = %s", transfer.State)
+	}
+	transfer, err = store.upload(transfer.TransferID, 0, 0, bytes.NewReader(first))
+	if err != nil || transfer.State != "uploading" {
+		t.Fatalf("first upload state=%s err=%v", transfer.State, err)
+	}
+	transfer, err = store.upload(transfer.TransferID, 1, 0, bytes.NewReader(second))
+	if err != nil || transfer.State != "offered" {
+		t.Fatalf("second upload state=%s err=%v", transfer.State, err)
+	}
+}
+
 func TestTransferMetadataSurvivesRestart(t *testing.T) {
 	dir := t.TempDir()
 	store, err := newTransferStore(dir, 1<<20, 1<<20, time.Hour)

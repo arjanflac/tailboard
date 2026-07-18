@@ -122,7 +122,7 @@ func (s *transferStore) create(from string, req protocol.CreateTransferRequest) 
 		return protocol.Transfer{}, err
 	}
 	now := time.Now()
-	transfer := protocol.Transfer{TransferID: id, FromDevice: from, ToDevice: req.ToDevice, Files: req.Files, Note: req.Note, State: "offered", CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
+	transfer := protocol.Transfer{TransferID: id, FromDevice: from, ToDevice: req.ToDevice, Files: req.Files, Note: req.Note, State: "uploading", CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
 	if err := os.MkdirAll(s.transferDir(id), 0o700); err != nil {
 		return protocol.Transfer{}, err
 	}
@@ -220,7 +220,7 @@ func (s *transferStore) upload(id string, index int, start int64, src io.Reader)
 	if !ok {
 		return protocol.Transfer{}, ErrTransferNotFound
 	}
-	if index < 0 || index >= len(transfer.Files) || (transfer.State != "offered" && transfer.State != "accepted" && transfer.State != "transferring") {
+	if index < 0 || index >= len(transfer.Files) || transfer.State != "uploading" {
 		return protocol.Transfer{}, ErrTransferConflict
 	}
 	file := &transfer.Files[index]
@@ -245,8 +245,15 @@ func (s *transferStore) upload(id string, index int, start int64, src io.Reader)
 		return protocol.Transfer{}, fmt.Errorf("upload exceeds declared size")
 	}
 	file.Uploaded = start + written
-	if transfer.State == "accepted" {
-		transfer.State = "transferring"
+	allUploaded := true
+	for _, candidate := range transfer.Files {
+		if candidate.Uploaded != candidate.Size {
+			allUploaded = false
+			break
+		}
+	}
+	if allUploaded {
+		transfer.State = "offered"
 	}
 	if file.Uploaded == file.Size {
 		if err := verifyFile(path, file.SHA256); err != nil {
@@ -272,6 +279,13 @@ func (s *transferStore) openFile(id string, index int) (*os.File, protocol.Trans
 	file := transfer.Files[index]
 	if file.Uploaded != file.Size {
 		return nil, protocol.TransferFile{}, ErrTransferConflict
+	}
+	if transfer.State == "accepted" {
+		transfer.State = "transferring"
+		s.transfers[id] = transfer
+		if err := s.persistLocked(transfer); err != nil {
+			return nil, protocol.TransferFile{}, err
+		}
 	}
 	handle, err := os.Open(s.filePath(id, index))
 	return handle, file, err

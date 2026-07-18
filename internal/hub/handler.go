@@ -293,6 +293,9 @@ func downloadTransferFileHandler(h *Hub) http.HandlerFunc {
 			return
 		}
 		defer file.Close()
+		if current, err := h.transfers.get(transfer.TransferID); err == nil {
+			h.publishTransfer(current)
+		}
 		w.Header().Set("Content-Type", manifest.MIME)
 		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": manifest.Name}))
 		http.ServeContent(w, r, manifest.Name, transfer.CreatedAt, file)
@@ -545,6 +548,9 @@ func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 					return
 				}
 			case transfer := <-sub.Transfers:
+				if deviceID == "" || (transfer.FromDevice != deviceID && transfer.ToDevice != deviceID) {
+					continue
+				}
 				msg := protocol.WSMessage{Type: "transfer_state", Transfer: &transfer}
 				if transfer.State == "offered" {
 					msg.Type = "transfer_offer"
