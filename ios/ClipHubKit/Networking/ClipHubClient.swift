@@ -145,6 +145,43 @@ public actor ClipHubClient {
         return try decoder.decode(CreateTransferResponse.self, from: data)
     }
 
+    public func scheduleTransferUpload(
+        deviceID: String,
+        toDevice: String,
+        data: Data,
+        fileName: String,
+        mimeType: String
+    ) async throws -> Transfer {
+        let safeName = URL(fileURLWithPath: fileName).lastPathComponent
+        let created = try await createTransfer(
+            deviceID: deviceID,
+            toDevice: toDevice,
+            fileName: safeName,
+            size: Int64(data.count),
+            mimeType: mimeType,
+            sha256: ClipHash.sha256Hex(data)
+        )
+        guard let uploadPath = created.uploadURLs.first,
+              let uploadURL = try? resolveURL(uploadPath),
+              let container = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: AppGroupStore.suiteName
+              ) else {
+            throw ClipHubError.noHubURL
+        }
+        let directory = container.appendingPathComponent("BackgroundUploads", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let staged = directory.appendingPathComponent("\(created.transfer.transferID)-0.upload")
+        try data.write(to: staged, options: .atomic)
+
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "PUT"
+        request.setValue(deviceID, forHTTPHeaderField: "X-Clip-Device-ID")
+        request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+        request.setValue("bytes 0-*/\(data.count)", forHTTPHeaderField: "Content-Range")
+        BackgroundUploadCoordinator.shared.schedule(request: request, fileURL: staged)
+        return created.transfer
+    }
+
     public func transferAction(deviceID: String, transferID: String, action: String) async throws -> Transfer {
         let url = try resolveURL("/api/transfers/\(transferID)/\(action)")
         var request = URLRequest(url: url)

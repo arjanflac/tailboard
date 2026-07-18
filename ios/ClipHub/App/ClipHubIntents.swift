@@ -51,6 +51,31 @@ struct SendToHubIntent: AppIntent {
     }
 }
 
+struct SendFileToDeviceIntent: AppIntent {
+    static var title: LocalizedStringResource = "Send File to Device"
+    static var description = IntentDescription("Sends a file to a registered ClipHub device.")
+
+    @Parameter(title: "File")
+    var file: IntentFile
+
+    @Parameter(title: "Device ID")
+    var deviceID: String
+
+    func perform() async throws -> some IntentResult {
+        let store = AppGroupStore()
+        guard let hubURL = store.hubURL else { throw ClipHubError.noHubURL }
+        let client = ClipHubClient(baseURL: hubURL, sourceName: store.sourceName)
+        _ = try await client.scheduleTransferUpload(
+            deviceID: store.deviceID,
+            toDevice: deviceID,
+            data: file.data,
+            fileName: file.filename,
+            mimeType: "application/octet-stream"
+        )
+        return .result()
+    }
+}
+
 struct ClipHubShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -64,6 +89,12 @@ struct ClipHubShortcuts: AppShortcutsProvider {
             phrases: ["Get current clip from \(.applicationName)"],
             shortTitle: "Get Current Clip",
             systemImageName: "doc.on.clipboard"
+        )
+        AppShortcut(
+            intent: SendFileToDeviceIntent(),
+            phrases: ["Send a file with \(.applicationName)"],
+            shortTitle: "Send File",
+            systemImageName: "paperplane"
         )
     }
 }

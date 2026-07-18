@@ -93,7 +93,7 @@ final class ShareViewModel {
 
         do {
             if !selectedDeviceID.isEmpty {
-                try await sendTransfer(client: client, hubURL: hubURL)
+                try await sendTransfer(client: client)
                 didSend = true
                 return
             }
@@ -111,7 +111,7 @@ final class ShareViewModel {
         }
     }
 
-    private func sendTransfer(client: ClipHubClient, hubURL: URL) async throws {
+    private func sendTransfer(client: ClipHubClient) async throws {
         let data: Data
         if let binary = dataToSend {
             data = binary
@@ -121,38 +121,13 @@ final class ShareViewModel {
             throw ClipHubError.emptyClipboard
         }
 
-        let created = try await client.createTransfer(
+        _ = try await client.scheduleTransferUpload(
             deviceID: store.deviceID,
             toDevice: selectedDeviceID,
+            data: data,
             fileName: URL(fileURLWithPath: suggestedName).lastPathComponent,
-            size: Int64(data.count),
-            mimeType: mimeType,
-            sha256: ClipHash.sha256Hex(data)
+            mimeType: mimeType
         )
-        guard let uploadPath = created.uploadURLs.first,
-              let uploadURL = URL(string: uploadPath, relativeTo: hubURL)?.absoluteURL,
-              let container = FileManager.default.containerURL(
-                forSecurityApplicationGroupIdentifier: AppGroupStore.suiteName
-              ) else {
-            throw ClipHubError.noHubURL
-        }
-        let directory = container.appendingPathComponent("BackgroundUploads", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-        let staged = directory.appendingPathComponent("\(created.transfer.transferID)-0.upload")
-        try data.write(to: staged, options: .atomic)
-
-        var request = URLRequest(url: uploadURL)
-        request.httpMethod = "PUT"
-        request.setValue(store.deviceID, forHTTPHeaderField: "X-Clip-Device-ID")
-        request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
-        request.setValue(
-            "bytes 0-*/\(data.count)",
-            forHTTPHeaderField: "Content-Range"
-        )
-        BackgroundUploadCoordinator.shared.schedule(request: request, fileURL: staged)
     }
 }
 

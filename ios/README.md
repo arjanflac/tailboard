@@ -53,7 +53,14 @@ The keyboard needs Full Access for live networking. Without it, cached clips rem
 
 ## CI and distribution
 
-The iOS CI job generates the Xcode project, builds the app and all extensions for the simulator, and runs unit tests. TestFlight is the intended supported distribution path; local signing remains available for contributors and personal deployments.
+The iOS CI job generates the Xcode project, builds the app and all extensions for the simulator, and runs unit tests. `.github/workflows/testflight.yml` archives and uploads on an `ios-v*` tag or manual dispatch when these repository secrets are configured:
+
+- `APP_STORE_CONNECT_API_KEY_ID`
+- `APP_STORE_CONNECT_API_ISSUER_ID`
+- `APP_STORE_CONNECT_API_KEY_BASE64`
+- `APPLE_TEAM_ID`
+
+The API key needs App Manager access so Xcode can manage automatic signing for the app and embedded extensions. Local signing remains available for contributors and personal deployments.
 
 ## Requirements
 
