@@ -2,7 +2,16 @@ import Foundation
 import Observation
 import ClipHubKit
 import UIKit
+import UniformTypeIdentifiers
 import ActivityKit
+import WidgetKit
+
+/// Top-level tabs. Clipboard first: that is the app's purpose.
+enum AppTab: Hashable {
+    case clipboard
+    case devices
+    case settings
+}
 
 @Observable
 final class AppViewModel {
@@ -10,6 +19,7 @@ final class AppViewModel {
     private let cache = ClipCache()
     private var client: ClipHubClient
     private var wsManager = WebSocketManager()
+    private let notifier = UINotificationFeedbackGenerator()
 
     var currentClip: ClipItem?
     var history: [ClipItem] = []
@@ -20,6 +30,19 @@ final class AppViewModel {
     var showOnboarding: Bool
     var isLoading = false
     var errorMessage: String?
+
+    // MARK: - Navigation / presentation state
+
+    var selectedTab: AppTab = .clipboard
+    /// True while the reconfiguration sheet (onboarding with Cancel) is up.
+    var isReconfiguring = false
+    /// Transient confirmation shown when a copy came from the widget deep link.
+    var copiedBannerVisible = false
+    private var copiedBannerTask: Task<Void, Never>?
+
+    // MARK: - Live Activity
+
+    private(set) var liveActivityRunning = false
 
     init() {
         self.showOnboarding = !store.onboardingCompleted
@@ -41,10 +64,38 @@ final class AppViewModel {
             await client.updateBaseURL(url)
             wsManager.baseURL = url
             showOnboarding = false
+            isReconfiguring = false
             await refresh()
             setupWebSocket()
         }
         return reachable
+    }
+
+    /// Opens onboarding as a dismissable sheet on top of a configured app.
+    func beginReconfigure() {
+        isReconfiguring = true
+    }
+
+    // MARK: - Deep links
+
+    func handleDeepLink(_ url: URL) {
+        guard url.host == "copy-current" else { return }
+        selectedTab = .clipboard
+        // Only confirm when a pasteboard write actually happened; otherwise
+        // copyToPasteboard has already surfaced a clear error.
+        if copyCurrentToPasteboard() {
+            showCopiedBanner()
+        }
+    }
+
+    private func showCopiedBanner() {
+        copiedBannerTask?.cancel()
+        copiedBannerVisible = true
+        copiedBannerTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            self.copiedBannerVisible = false
+        }
     }
 
     // MARK: - Data
@@ -71,12 +122,26 @@ final class AppViewModel {
             transfers = currentTransfers
             errorMessage = nil
 
-            store.cachedCurrentClip = clip
+            cacheCurrentClip(clip)
             store.cachedRecentClips = hist
             cache.save(hist)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserFacingError.message(error)
         }
+    }
+
+    /// Keeps the app-group cache (read by widget/keyboard) fresh and asks
+    /// WidgetCenter to reload widget timelines so the home screen never
+    /// shows a stale clip. Reloads are coalesced: a WebSocket burst triggers
+    /// at most one timeline reload per minute.
+    private var lastWidgetReload: Date = .distantPast
+
+    private func cacheCurrentClip(_ clip: ClipItem?) {
+        store.cachedCurrentClip = clip
+        let now = Date()
+        guard now.timeIntervalSince(lastWidgetReload) >= 60 else { return }
+        lastWidgetReload = now
+        WidgetCenter.shared.reloadTimelines(ofKind: "CurrentClipWidget")
     }
 
     func accept(_ transfer: Transfer) async {
@@ -120,9 +185,11 @@ final class AppViewModel {
                 transferID: accepted.transferID,
                 action: "complete"
             )
+            await MainActor.run { notifier.notificationOccurred(.success) }
             await refresh()
         } catch {
-            errorMessage = error.localizedDescription
+            await MainActor.run { notifier.notificationOccurred(.error) }
+            errorMessage = UserFacingError.message(error)
         }
     }
 
@@ -135,7 +202,7 @@ final class AppViewModel {
             )
             await refresh()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserFacingError.message(error)
         }
     }
 
@@ -145,12 +212,35 @@ final class AppViewModel {
             currentClip = item
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserFacingError.message(error)
+        }
+    }
+
+    /// Pushes the iPhone pasteboard (image preferred, then text) to the hub.
+    /// Returns true on success so callers can confirm causally.
+    @discardableResult
+    func pushPasteboardToHub() async -> Bool {
+        do {
+            if let image = UIPasteboard.general.image, let data = image.pngData() {
+                currentClip = try await client.postClip(data: data, mimeType: "image/png")
+            } else if let text = UIPasteboard.general.string, !text.isEmpty {
+                currentClip = try await client.postClip(content: text)
+            } else {
+                errorMessage = "iPhone clipboard is empty."
+                return false
+            }
+            errorMessage = nil
+            cacheCurrentClip(currentClip)
+            return true
+        } catch {
+            errorMessage = UserFacingError.message(error)
+            return false
         }
     }
 
     func setSceneActive(_ active: Bool) {
         if active {
+            liveActivityRunning = !Activity<ClipHubActivityAttributes>.activities.isEmpty
             setupWebSocket()
             Task { await refresh() }
         } else {
@@ -158,14 +248,32 @@ final class AppViewModel {
         }
     }
 
-    func copyCurrentToPasteboard() {
-        guard let clip = currentClip else { return }
-        if clip.isText, let content = clip.content {
+    // MARK: - Pasteboard
+
+    /// Writes the clip to the general pasteboard. Returns true only when a
+    /// pasteboard write actually happened; unsupported binary clips surface a
+    /// clear error and return false so callers never confirm a no-op.
+    @discardableResult
+    func copyToPasteboard(_ item: ClipItem) -> Bool {
+        if item.isText, let content = item.content {
             UIPasteboard.general.string = content
-        } else if clip.mimeType == "image/png", let data = clip.data {
-            UIPasteboard.general.image = UIImage(data: data)
+            return true
         }
+        if item.mimeType == "image/png", let data = item.data {
+            UIPasteboard.general.setData(data, forPasteboardType: UTType.png.identifier)
+            return true
+        }
+        errorMessage = "Only text and PNG image clips can be copied on iPhone."
+        return false
     }
+
+    @discardableResult
+    func copyCurrentToPasteboard() -> Bool {
+        guard let clip = currentClip else { return false }
+        return copyToPasteboard(clip)
+    }
+
+    // MARK: - Live Activity
 
     func startLiveActivity() async {
         guard ActivityAuthorizationInfo().areActivitiesEnabled,
@@ -181,9 +289,17 @@ final class AppViewModel {
                 content: ActivityContent(state: state, staleDate: clip.expiresAt),
                 pushType: nil
             )
+            liveActivityRunning = true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserFacingError.message(error)
         }
+    }
+
+    func stopLiveActivity() async {
+        for activity in Activity<ClipHubActivityAttributes>.activities {
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
+        liveActivityRunning = false
     }
 
     private func updateLiveActivities(with clip: ClipItem) {
@@ -206,6 +322,11 @@ final class AppViewModel {
     private func setupWebSocket() {
         wsManager.baseURL = store.hubURL
         wsManager.deviceID = store.deviceID
+        wsManager.onConnectionStateChange = { [weak self] state in
+            Task { @MainActor in
+                self?.connectionState = state
+            }
+        }
         wsManager.onUpdate = { [weak self] item in
             guard let self else { return }
             Task { @MainActor in
@@ -213,7 +334,7 @@ final class AppViewModel {
                 if !self.history.contains(where: { $0.seq == item.seq }) {
                     self.history.insert(item, at: 0)
                 }
-                self.store.cachedCurrentClip = item
+                self.cacheCurrentClip(item)
                 self.store.cachedRecentClips = self.history
                 self.updateLiveActivities(with: item)
             }

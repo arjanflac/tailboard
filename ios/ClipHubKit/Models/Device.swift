@@ -11,6 +11,33 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
 
     public var id: String { deviceID }
 
+    /// SF Symbol for the device platform. Mirrors the main app's DevicesView
+    /// mapping so every surface shows the same icon for the same platform.
+    public var platformSymbol: String {
+        switch platform {
+        case "ios": return "iphone"
+        case "darwin": return "laptopcomputer"
+        case "windows": return "desktopcomputer"
+        case "linux": return "terminal"
+        default: return "display"
+        }
+    }
+
+    /// Plain-language reachability label for pickers and lists.
+    public var statusLabel: String { online ? "Online" : "Offline" }
+
+    /// Plain-language platform name ("Mac", "iOS", …) so user-facing lists
+    /// never show raw platform identifiers like "darwin".
+    public var platformLabel: String {
+        switch platform {
+        case "ios": return "iOS"
+        case "darwin": return "Mac"
+        case "windows": return "Windows"
+        case "linux": return "Linux"
+        default: return platform.capitalized
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
         case name, platform, capabilities, online
         case deviceID = "device_id"

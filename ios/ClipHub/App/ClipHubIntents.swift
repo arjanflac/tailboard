@@ -4,7 +4,7 @@ import ClipHubKit
 
 struct GetCurrentClipIntent: AppIntent {
     static var title: LocalizedStringResource = "Get Current Clip"
-    static var description = IntentDescription("Gets the current text clip from your ClipHub.")
+    static var description = IntentDescription("Gets the current text clip from your synced clipboard.")
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let store = AppGroupStore()
@@ -16,8 +16,8 @@ struct GetCurrentClipIntent: AppIntent {
 }
 
 struct PushClipboardIntent: AppIntent {
-    static var title: LocalizedStringResource = "Push Clipboard"
-    static var description = IntentDescription("Sends the iPhone clipboard to your ClipHub.")
+    static var title: LocalizedStringResource = "Send Clipboard"
+    static var description = IntentDescription("Sends this device's clipboard to your other devices.")
 
     @MainActor
     func perform() async throws -> some IntentResult {
@@ -36,8 +36,8 @@ struct PushClipboardIntent: AppIntent {
 }
 
 struct SendToHubIntent: AppIntent {
-    static var title: LocalizedStringResource = "Send Text to ClipHub"
-    static var description = IntentDescription("Sends text directly to your ClipHub.")
+    static var title: LocalizedStringResource = "Send Text to Devices"
+    static var description = IntentDescription("Sends text to the clipboard on all your devices.")
 
     @Parameter(title: "Text")
     var text: String
@@ -53,7 +53,7 @@ struct SendToHubIntent: AppIntent {
 
 struct SendFileToDeviceIntent: AppIntent {
     static var title: LocalizedStringResource = "Send File to Device"
-    static var description = IntentDescription("Sends a file to a registered ClipHub device.")
+    static var description = IntentDescription("Sends a file to one of your devices.")
 
     @Parameter(title: "File")
     var file: IntentFile
@@ -80,9 +80,9 @@ struct ClipHubShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: PushClipboardIntent(),
-            phrases: ["Push clipboard with \(.applicationName)"],
-            shortTitle: "Push Clipboard",
-            systemImageName: "arrow.up.doc"
+            phrases: ["Send clipboard with \(.applicationName)"],
+            shortTitle: "Send Clipboard",
+            systemImageName: "paperplane"
         )
         AppShortcut(
             intent: GetCurrentClipIntent(),

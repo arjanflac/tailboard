@@ -35,9 +35,7 @@ struct ClipHubApp: App {
                     viewModel.setSceneActive(scenePhase == .active)
                 }
                 .onOpenURL { url in
-                    if url.host == "copy-current" {
-                        viewModel.copyCurrentToPasteboard()
-                    }
+                    viewModel.handleDeepLink(url)
                 }
         }
     }

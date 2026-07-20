@@ -2,6 +2,16 @@ import Foundation
 import UIKit
 import ClipHubKit
 
+/// Transient feedback shown in the keyboard's status row. Distinct from the
+/// persistent setup hint shown when the hub URL is missing.
+enum PasteStatus: Equatable {
+    case idle
+    case working(String)
+    case success(String)
+    case failure(String)
+}
+
+@MainActor
 @Observable
 final class KeyboardViewModel {
     private let store = AppGroupStore()
@@ -9,48 +19,72 @@ final class KeyboardViewModel {
 
     var currentClip: ClipItem?
     var recentClips: [ClipItem] = []
-    var isLoading = false
-    var errorMessage: String?
+    var status: PasteStatus = .idle
+    /// Persistent hint shown when the keyboard isn't configured yet.
+    var setupHint: String?
+
+    /// Only text clips appear as insertable chips; images get their own
+    /// dedicated action so the same-looking chip never does two things.
+    var textClips: [ClipItem] { recentClips.filter(\.isText) }
+    var imageClip: ClipItem? { recentClips.first(where: { $0.mimeType.hasPrefix("image/") }) }
+
+    private var loadingGraceTask: Task<Void, Never>?
+    private var statusClearTask: Task<Void, Never>?
 
     init(proxy: UITextDocumentProxy) {
         self.proxy = proxy
         // Load cached data immediately (no network).
         self.currentClip = store.cachedCurrentClip
         self.recentClips = store.cachedRecentClips
+        self.setupHint = store.hubURL == nil ? "Open ClipHub to finish setup" : nil
     }
+
+    // MARK: - Refresh
 
     func refresh() {
         guard let hubURL = store.hubURL else {
-            errorMessage = "Open ClipHub to set up"
+            setupHint = "Open ClipHub to finish setup"
             return
         }
+        setupHint = nil
 
-        isLoading = true
-        Task {
+        // Only surface a spinner if the fetch outlives a short grace period;
+        // cached content is already visible, so fast fetches stay silent.
+        loadingGraceTask?.cancel()
+        loadingGraceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            self?.status = .working("Updating…")
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
             let client = ClipHubClient(baseURL: hubURL, sourceName: store.sourceName)
             do {
                 if let clip = try await client.getCurrentClip() {
-                    await MainActor.run {
-                        self.currentClip = clip
-                        self.store.cachedCurrentClip = clip
-                    }
+                    self.currentClip = clip
+                    self.store.cachedCurrentClip = clip
                 }
                 let history = try await client.getHistory(limit: 10)
-                await MainActor.run {
-                    self.recentClips = history
-                    self.store.cachedRecentClips = history
-                    self.isLoading = false
-                    self.errorMessage = nil
-                }
+                self.recentClips = history
+                self.store.cachedRecentClips = history
+                self.endLoading()
+                self.status = .idle
             } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                    // Keep cached data visible, just note the error.
-                    self.errorMessage = "Offline"
-                }
+                self.endLoading()
+                // Keep cached data visible, just note the error.
+                self.flash(.failure("Offline — showing cached clips"))
             }
         }
     }
+
+    private func endLoading() {
+        loadingGraceTask?.cancel()
+        loadingGraceTask = nil
+        if case .working = status { status = .idle }
+    }
+
+    // MARK: - Actions
 
     func insertCurrent() {
         guard let clip = currentClip else { return }
@@ -61,13 +95,26 @@ final class KeyboardViewModel {
         use(clip)
     }
 
-    func pushClipboard() {
-        guard let hubURL = store.hubURL else {
-            errorMessage = "Open ClipHub to set up"
+    /// Copies an image clip to the general pasteboard. The keyboard cannot
+    /// insert images directly, so this is an explicit, separate action.
+    func copyImageClip(_ clip: ClipItem) {
+        guard let data = clip.data, let image = UIImage(data: data) else {
+            flash(.failure("Couldn't read image"))
             return
         }
-        isLoading = true
-        Task {
+        UIPasteboard.general.image = image
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        flash(.success("Image copied — paste it into the app"))
+    }
+
+    func pushClipboard() {
+        guard let hubURL = store.hubURL else {
+            setupHint = "Open ClipHub to finish setup"
+            return
+        }
+        status = .working("Sending…")
+        Task { [weak self] in
+            guard let self else { return }
             let client = ClipHubClient(baseURL: hubURL, sourceName: store.sourceName)
             do {
                 if let image = UIPasteboard.general.image,
@@ -78,28 +125,38 @@ final class KeyboardViewModel {
                 } else {
                     throw ClipHubError.emptyClipboard
                 }
-                await MainActor.run {
-                    self.isLoading = false
-                    self.errorMessage = "Pushed"
-                }
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                self.flash(.success("Sent to your other devices"))
             } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                    self.errorMessage = "Push failed"
-                }
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                self.flash(.failure("Send failed — check connection"))
             }
         }
     }
 
+    // MARK: - Private
+
     private func use(_ clip: ClipItem) {
         if clip.isText, let content = clip.content {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             proxy?.insertText(content)
             return
         }
-        if clip.mimeType == "image/png", let data = clip.data,
-           let image = UIImage(data: data) {
-            UIPasteboard.general.image = image
-            errorMessage = "Image copied"
+        if clip.mimeType.hasPrefix("image/") {
+            copyImageClip(clip)
+        }
+    }
+
+    /// Shows a transient status and auto-clears successes after a short dwell.
+    private func flash(_ newStatus: PasteStatus) {
+        statusClearTask?.cancel()
+        status = newStatus
+        if case .success = newStatus {
+            statusClearTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(2500))
+                guard !Task.isCancelled else { return }
+                if case .success = self?.status { self?.status = .idle }
+            }
         }
     }
 }

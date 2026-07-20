@@ -12,8 +12,13 @@ public final class WebSocketManager: @unchecked Sendable {
     public var baseURL: URL?
     public var onUpdate: ((ClipItem) -> Void)?
     public var onTransfer: ((Transfer) -> Void)?
+    /// Called on every connection state transition. Listeners that touch UI
+    /// state must hop to the main actor (transitions fire from the connect loop).
+    public var onConnectionStateChange: ((ConnectionState) -> Void)?
     public var deviceID: String?
-    public var connectionState: ConnectionState = .disconnected(reason: "Not started")
+    public var connectionState: ConnectionState = .disconnected(reason: "Not started") {
+        didSet { onConnectionStateChange?(connectionState) }
+    }
 
     public init(session: URLSession = .shared) {
         self.session = session
@@ -42,7 +47,7 @@ public final class WebSocketManager: @unchecked Sendable {
                 backoff = 1_000_000_000
             } catch {
                 if !isRunning { return }
-                connectionState = .disconnected(reason: error.localizedDescription)
+                connectionState = ConnectionState.from(error: error, hubURL: baseURL)
                 try? await Task.sleep(nanoseconds: backoff)
                 backoff = min(backoff * 2, 60_000_000_000)
             }

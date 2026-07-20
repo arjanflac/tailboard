@@ -2,25 +2,41 @@ import SwiftUI
 import ClipHubKit
 
 struct OnboardingView: View {
+    /// First run passes false (no way past setup); the reconfiguration
+    /// sheet passes true so the user can always cancel back into the app.
+    let allowsCancel: Bool
+
     @Environment(AppViewModel.self) private var viewModel
-    @State private var hubURLText = "http://cliphub"
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var hubURLText = ""
     @State private var sourceName = ""
     @State private var isProbing = false
     @State private var probeError: String?
+    @State private var showInvalidURL = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
+                if allowsCancel {
+                    HStack {
+                        Spacer()
+                        Button("Cancel") { dismiss() }
+                    }
+                    .padding(.horizontal)
+                }
+
                 Spacer()
 
                 Image(systemName: "doc.on.clipboard.fill")
                     .font(.system(size: 64))
                     .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
 
                 Text("ClipHub")
                     .font(.largeTitle.bold())
 
-                Text("Sync your clipboard across devices over Tailscale.")
+                Text("Your clipboard and files, on every device. Private, over Tailscale.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -29,21 +45,39 @@ struct OnboardingView: View {
                 Spacer()
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Hub URL")
+                    Text("Sync Server Address")
                         .font(.headline)
-                    TextField("http://cliphub or http://100.x.x.x", text: $hubURLText)
+                    TextField("http://100.x.x.x", text: $hubURLText)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
+                        .submitLabel(.go)
+                        .onSubmit(connect)
+                        .onChange(of: hubURLText) { showInvalidURL = false }
+
+                    if showInvalidURL {
+                        Label(
+                            "Enter a valid address, for example http://100.64.1.2",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                    } else {
+                        Text("The address of the device keeping your other devices in sync.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
                     Text("Device Name")
                         .font(.headline)
                     TextField("iPhone", text: $sourceName)
                         .textFieldStyle(.roundedBorder)
+                        .submitLabel(.go)
+                        .onSubmit(connect)
 
                     if let error = probeError {
-                        Text(error)
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
@@ -68,6 +102,9 @@ struct OnboardingView: View {
             }
             .navigationBarHidden(true)
             .onAppear {
+                if hubURLText.isEmpty, let existing = AppGroupStore().hubURL {
+                    hubURLText = existing.absoluteString
+                }
                 if sourceName.isEmpty {
                     sourceName = AppGroupStore().sourceName
                 }
@@ -76,11 +113,13 @@ struct OnboardingView: View {
     }
 
     private func connect() {
-        guard let url = URL(string: hubURLText), !hubURLText.isEmpty else {
-            probeError = "Invalid URL"
+        guard !hubURLText.isEmpty,
+              let url = URL(string: hubURLText),
+              url.scheme != nil, url.host != nil else {
+            showInvalidURL = true
             return
         }
-
+        showInvalidURL = false
         isProbing = true
         probeError = nil
 
@@ -89,8 +128,10 @@ struct OnboardingView: View {
             let ok = await viewModel.configureHub(url: url, sourceName: name)
             isProbing = false
             if !ok {
-                probeError = "Could not reach hub. Is Tailscale VPN active?"
+                probeError = "Can't reach your sync server. Is Tailscale on?"
             }
+            // On success the view model flips showOnboarding / isReconfiguring,
+            // which dismisses the full-screen flow or the sheet automatically.
         }
     }
 }
