@@ -29,7 +29,11 @@ type controlServer struct {
 
 type controlState struct {
 	DeviceID  string              `json:"device_id"`
+	NodeName  string              `json:"node_name"`
+	HubURL    string              `json:"hub_url"`
 	Paused    bool                `json:"paused"`
+	Clip      *protocol.ClipItem  `json:"clip,omitempty"`
+	ClipSize  int64               `json:"clip_size,omitempty"`
 	Devices   []protocol.Device   `json:"devices"`
 	Transfers []protocol.Transfer `json:"transfers"`
 }
@@ -98,9 +102,28 @@ func (a *Agent) controlStateHandler(w http.ResponseWriter, r *http.Request) {
 		controlError(w, err, http.StatusBadGateway)
 		return
 	}
+	// Best-effort: the popover clip card degrades gracefully without it.
+	// Binary payloads are stripped — the popover shows a summary, not the
+	// bytes, and state is polled frequently.
+	clip, err := a.client.Current(r.Context())
+	var clipSize int64
+	if err != nil {
+		clip = nil
+	} else if clip != nil {
+		clipSize = int64(len(clip.RawBytes()))
+		if len(clip.Data) > 0 {
+			stripped := *clip
+			stripped.Data = nil
+			clip = &stripped
+		}
+	}
 	writeControlJSON(w, http.StatusOK, controlState{
 		DeviceID:  a.deviceID,
+		NodeName:  a.nodeName,
+		HubURL:    a.hubURL,
 		Paused:    a.isPaused(),
+		Clip:      clip,
+		ClipSize:  clipSize,
 		Devices:   devices,
 		Transfers: transfers,
 	})

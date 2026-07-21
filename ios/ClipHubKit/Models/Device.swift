@@ -26,6 +26,16 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     /// Plain-language reachability label for pickers and lists.
     public var statusLabel: String { online ? "Online" : "Offline" }
 
+    /// Stable hue (0..<1) derived from the device ID so every surface — iOS
+    /// grid, macOS popover, share sheet — paints the same friendly avatar
+    /// color for the same device. Uses djb2, not hashValue, because Swift's
+    /// hashValue is seeded per-launch.
+    public var avatarHue: Double {
+        var hash: UInt64 = 5381
+        for byte in deviceID.utf8 { hash = hash &* 33 &+ UInt64(byte) }
+        return Double(hash % 360) / 360.0
+    }
+
     /// Plain-language platform name ("Mac", "iOS", …) so user-facing lists
     /// never show raw platform identifiers like "darwin".
     public var platformLabel: String {

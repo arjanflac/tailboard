@@ -102,6 +102,35 @@ targets:
         keychain-access-groups:
           - $(AppIdentifierPrefix)group.com.thalys.cliphub
 
+  ClipHubKitMac:
+    type: framework
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ClipHubKit
+        excludes:
+          - "Models/ClipHubActivityAttributes.swift"
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.kit.mac
+      PRODUCT_NAME: ClipHubKit
+      PRODUCT_MODULE_NAME: ClipHubKit
+      INFOPLIST_FILE: ClipHubKit/Info.plist
+
+  ClipHubMenuBar:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ../macos/ClipHubMenuBar
+    dependencies:
+      - target: ClipHubKitMac
+        embed: true
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.menubar
+      PRODUCT_NAME: ClipHub
+      INFOPLIST_FILE: ../macos/ClipHubMenuBar/Info.plist
+      ENABLE_HARDENED_RUNTIME: false
+
   ClipHubTests:
     type: bundle.unit-test
     platform: iOS
@@ -121,3 +150,7 @@ schemes:
     test:
       targets:
         - ClipHubTests
+  ClipHubMenuBar:
+    build:
+      targets:
+        ClipHubMenuBar: all

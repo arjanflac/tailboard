@@ -23,12 +23,7 @@ struct CurrentClipView: View {
                     if let clip = viewModel.currentClip {
                         clipCard(clip)
                     } else {
-                        ContentUnavailableView(
-                            "No Clipboard Content",
-                            systemImage: "doc.on.clipboard",
-                            description: Text("Copy something on another device and it appears here.")
-                        )
-                        .padding(.top, 40)
+                        emptyState
                     }
 
                     if !viewModel.history.isEmpty {
@@ -48,34 +43,57 @@ struct CurrentClipView: View {
         }
     }
 
+    // MARK: - Empty state
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.12))
+                    .frame(width: 96, height: 96)
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Color.accentColor)
+            }
+            VStack(spacing: 6) {
+                Text("Nothing here yet")
+                    .font(.title3.weight(.semibold))
+                Text("Copy something on any of your devices — it lands here in a blink.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.horizontal, 32)
+        .padding(.top, 60)
+        .frame(maxWidth: .infinity)
+    }
+
     // MARK: - Clip card
 
     @ViewBuilder
     private func clipCard(_ clip: ClipItem) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label(clip.displaySummary, systemImage: clip.kindSymbol)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Image(systemName: clip.kindSymbol)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(Color.accentColor.opacity(0.12), in: Circle())
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(clip.displaySummary)
+                        .font(.footnote.weight(.semibold))
+                    Text("from \(clip.source) · \(clip.createdAt, style: .relative) ago")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 Spacer()
-
-                Text("from \(clip.source)")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
 
             clipContent(clip)
-
-            if clip.expiresAt > .now {
-                Text("Expires \(clip.expiresAt, style: .relative)")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Expired \(clip.expiresAt, style: .relative)")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
 
             // Primary action row: Copy / Send / Share (spec §5.1).
             HStack(spacing: 8) {
@@ -119,11 +137,11 @@ struct CurrentClipView: View {
         .padding()
         .background(
             Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
         .overlay {
             if contrast == .increased {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .stroke(Color(.separator), lineWidth: 1)
             }
         }

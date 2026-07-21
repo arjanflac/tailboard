@@ -97,14 +97,29 @@ struct DevicesView: View {
     // MARK: - Empty state
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("No Devices Yet", systemImage: "laptopcomputer.and.iphone")
-        } description: {
-            Text("Your devices appear automatically. Install ClipHub on your Mac to get started.")
-        } actions: {
-            Link("Set up ClipHub on your Mac", destination: URL(string: "https://github.com/thalysguimaraes/cliphub")!)
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.12))
+                    .frame(width: 96, height: 96)
+                Image(systemName: "laptopcomputer.and.iphone")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Color.accentColor)
+            }
+            VStack(spacing: 6) {
+                Text("Your devices show up here")
+                    .font(.title3.weight(.semibold))
+                Text("Install ClipHub on your Mac and it finds this iPhone automatically — no setup, no pairing codes.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            Link("Set up my Mac", destination: URL(string: "https://github.com/thalysguimaraes/cliphub")!)
+                .buttonStyle(.borderedProminent)
         }
-        .padding(.top, 40)
+        .padding(.horizontal, 32)
+        .padding(.top, 60)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Error overlay
@@ -128,40 +143,56 @@ struct DevicesView: View {
     }
 }
 
-/// One device in the grid: platform glyph, name, and reachability status —
-/// the sibling of the macOS popover tile (spec §4.2).
+/// One device in the grid: a friendly colored avatar (Blip-style), name,
+/// and reachability — the sibling of the macOS popover tile (spec §4.2).
+/// The avatar hue is derived from the device ID, so "Thalys's MacBook" is
+/// the same purple on every screen and every platform.
 private struct DeviceTile: View {
     let device: Device
 
+    private var avatarColor: Color {
+        Color(hue: device.avatarHue, saturation: 0.55, brightness: 0.85)
+    }
+
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             Image(systemName: device.platformSymbol)
-                .font(.system(size: 28))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 48, height: 48)
-                .background(Color.accentColor.opacity(0.12), in: Circle())
+                .font(.system(size: 26, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 64, height: 64)
+                .background(avatarColor.gradient, in: Circle())
+                .overlay(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(device.online ? Color.green : Color(.systemGray3))
+                        .frame(width: 16, height: 16)
+                        .overlay(
+                            Circle().stroke(Color(.secondarySystemGroupedBackground), lineWidth: 3)
+                        )
+                }
+                .saturation(device.online ? 1 : 0.35)
                 .accessibilityHidden(true)
 
-            Text(device.name)
-                .font(.subheadline.weight(.medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
+            VStack(spacing: 2) {
+                Text(device.name)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-            StatusDot(
-                color: device.online ? .green : Color(.systemGray),
-                text: device.online
-                    ? "Online"
-                    : "Last seen \(device.lastSeen.formatted(.relative(presentation: .named)))"
-            )
+                Text(device.online
+                     ? "Online"
+                     : device.lastSeen.formatted(.relative(presentation: .named)))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, 20)
         .padding(.horizontal, 8)
         .background(
             Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(device.name), \(device.platformLabel), \(device.online ? "online" : "offline")")
+        .accessibilityLabel("\(device.name), \(device.platformLabel), \(device.online ? "online" : "last seen \(device.lastSeen.formatted(.relative(presentation: .named)))")")
     }
 }

@@ -17,9 +17,9 @@ struct HistoryView: View {
         .overlay {
             if viewModel.history.isEmpty {
                 ContentUnavailableView(
-                    "No History",
+                    "Nothing here yet",
                     systemImage: "clock",
-                    description: Text("Items you copy on your devices appear here.")
+                    description: Text("Everything you copy on your devices shows up here.")
                 )
             }
         }
