@@ -7,16 +7,18 @@ struct ControlState: Decodable {
     let nodeName: String?
     let hubURL: String?
     let paused: Bool
+    /// "synced", "offline", or "no-tailscale" — clipd's view of the hub.
+    let connection: String?
     let clip: ClipItem?
     let clipSize: Int64?
-    let devices: [Device]
-    let transfers: [Transfer]
+    let devices: [Device]?
+    let transfers: [Transfer]?
 
     enum CodingKeys: String, CodingKey {
         case deviceID = "device_id"
         case nodeName = "node_name"
         case hubURL = "hub_url"
-        case paused, clip, devices, transfers
+        case paused, connection, clip, devices, transfers
         case clipSize = "clip_size"
     }
 }

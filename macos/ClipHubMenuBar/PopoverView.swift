@@ -11,6 +11,8 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 14) {
             if viewModel.status == .engineOff {
                 engineOffCard
+            } else if viewModel.status == .noTailscale {
+                noTailscaleCard
             } else {
                 if !viewModel.stagedFileURLs.isEmpty {
                     stagedBanner
@@ -47,6 +49,26 @@ struct PopoverView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             Button("Start") { viewModel.startEngine() }
+                .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+    }
+
+    // MARK: - Tailscale off
+
+    private var noTailscaleCard: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "network.slash")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+            Text("Tailscale is off")
+                .font(.headline)
+            Text("Your devices reach each other over Tailscale.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Open Tailscale") { viewModel.openTailscale() }
                 .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity)
@@ -334,7 +356,7 @@ private struct OfferRow: View {
     let offer: Transfer
 
     private var fromName: String {
-        viewModel.state?.devices.first { $0.deviceID == offer.fromDevice }?.name ?? "Unknown device"
+        (viewModel.state?.devices ?? []).first { $0.deviceID == offer.fromDevice }?.name ?? "Unknown device"
     }
 
     var body: some View {
@@ -376,7 +398,7 @@ private struct TransferProgressRow: View {
     private var complete: Bool { transfer.state == "complete" }
     private var peerName: String {
         let peer = transfer.fromDevice == viewModel.deviceID ? transfer.toDevice : transfer.fromDevice
-        return viewModel.state?.devices.first { $0.deviceID == peer }?.name ?? "Unknown device"
+        return (viewModel.state?.devices ?? []).first { $0.deviceID == peer }?.name ?? "Unknown device"
     }
 
     var body: some View {

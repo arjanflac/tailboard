@@ -7,12 +7,16 @@ import ClipHubKit
 /// What the menu bar icon communicates at a glance.
 enum EngineStatus: Equatable {
     case synced
+    case offline
+    case noTailscale
     case paused
     case engineOff
 
     var symbolName: String {
         switch self {
         case .synced: return "doc.on.clipboard"
+        case .offline: return "doc.on.clipboard"
+        case .noTailscale: return "network.slash"
         case .paused: return "pause.circle"
         case .engineOff: return "exclamationmark.triangle"
         }
@@ -36,7 +40,12 @@ final class MenuBarViewModel: NSObject {
 
     var status: EngineStatus {
         guard let state else { return .engineOff }
-        return state.paused ? .paused : .synced
+        if state.paused { return .paused }
+        switch state.connection {
+        case "no-tailscale": return .noTailscale
+        case "offline": return .offline
+        default: return .synced
+        }
     }
 
     var deviceID: String { state?.deviceID ?? "" }
@@ -63,6 +72,8 @@ final class MenuBarViewModel: NSObject {
         switch status {
         case .engineOff: return "ClipHub engine isn't running"
         case .paused: return "Paused"
+        case .offline: return "Offline — reconnecting…"
+        case .noTailscale: return "Tailscale is off"
         case .synced:
             let count = otherDevices.filter(\.online).count
             switch count {
@@ -70,6 +81,15 @@ final class MenuBarViewModel: NSObject {
             case 1: return "Synced · 1 device"
             default: return "Synced · \(count) devices"
             }
+        }
+    }
+
+    func openTailscale() {
+        let tailscaleApp = URL(fileURLWithPath: "/Applications/Tailscale.app")
+        if FileManager.default.fileExists(atPath: tailscaleApp.path) {
+            NSWorkspace.shared.openApplication(at: tailscaleApp, configuration: .init())
+        } else if let url = URL(string: "https://tailscale.com/download/macos") {
+            NSWorkspace.shared.open(url)
         }
     }
 
@@ -221,7 +241,7 @@ final class MenuBarViewModel: NSObject {
     private func notifyNewOffers(in state: ControlState) {
         for offer in incomingOffers where !notifiedOfferIDs.contains(offer.transferID) {
             notifiedOfferIDs.insert(offer.transferID)
-            let from = state.devices.first { $0.deviceID == offer.fromDevice }?.name ?? "Unknown device"
+            let from = (state.devices ?? []).first { $0.deviceID == offer.fromDevice }?.name ?? "Unknown device"
             let content = UNMutableNotificationContent()
             content.title = "\(from) wants to send you \(Self.filesPhrase(offer))"
             content.body = offer.files.map(\.name).joined(separator: ", ")
