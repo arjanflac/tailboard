@@ -2,7 +2,7 @@ import Foundation
 
 public final class BackgroundUploadCoordinator: NSObject, URLSessionDelegate, URLSessionTaskDelegate, @unchecked Sendable {
     public static let shared = BackgroundUploadCoordinator()
-    public static let sessionIdentifier = "com.thalys.tgclipboard.transfer-uploads"
+    public static let sessionIdentifier = "com.thalys.cliphub.transfer-uploads"
 
     private var completionHandler: (() -> Void)?
     private lazy var session: URLSession = makeSession()

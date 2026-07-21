@@ -131,7 +131,7 @@ func render(source string, data any) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
-func label(name string) string { return "com.thalys.tgclipboard." + name }
+func label(name string) string { return "com.thalys.cliphub." + name }
 
 func description(name string) string {
 	if name == "tg-clipboard" {

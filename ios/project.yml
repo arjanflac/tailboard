@@ -7,7 +7,7 @@ options:
 
 settings:
   SWIFT_VERSION: "5"
-  DEVELOPMENT_TEAM: ""  # Set your Apple Developer Team ID here
+  DEVELOPMENT_TEAM: "B27B4ED4CL"  # Set your Apple Developer Team ID here
 
 targets:
   TGClipboardKit:
@@ -16,7 +16,7 @@ targets:
     sources:
       - TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.kit
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.kit
       INFOPLIST_FILE: TGClipboardKit/Info.plist
 
   TGClipboard:
@@ -33,7 +33,7 @@ targets:
       - target: TGClipboardWidget
         embed: true
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub
       INFOPLIST_FILE: TGClipboard/Resources/Info.plist
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     entitlements:
@@ -53,7 +53,7 @@ targets:
     dependencies:
       - target: TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.keyboard
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.keyboard
       INFOPLIST_FILE: TGPasteKeyboard/Info.plist
     entitlements:
       path: TGPasteKeyboard/TGPasteKeyboard.entitlements
@@ -72,7 +72,7 @@ targets:
     dependencies:
       - target: TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.share
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.share
       INFOPLIST_FILE: TGClipboardShare/Info.plist
     entitlements:
       path: TGClipboardShare/TGClipboardShare.entitlements
@@ -91,7 +91,7 @@ targets:
     dependencies:
       - target: TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.widget
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.widget
       INFOPLIST_FILE: TGClipboardWidget/Info.plist
       APPLICATION_EXTENSION_API_ONLY: true
     entitlements:
@@ -111,7 +111,7 @@ targets:
         excludes:
           - "Models/TGClipboardActivityAttributes.swift"
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.kit.mac
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.kit.mac
       PRODUCT_NAME: TGClipboardKit
       PRODUCT_MODULE_NAME: TGClipboardKit
       INFOPLIST_FILE: TGClipboardKit/Info.plist
@@ -126,7 +126,7 @@ targets:
       - target: TGClipboardKitMac
         embed: true
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.menubar
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.menubar
       PRODUCT_NAME: TGClipboard
       INFOPLIST_FILE: ../macos/TGClipboardMenuBar/Info.plist
       ENABLE_HARDENED_RUNTIME: false
@@ -139,7 +139,7 @@ targets:
     dependencies:
       - target: TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.tests
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.tests
 
 schemes:
   TGClipboard:

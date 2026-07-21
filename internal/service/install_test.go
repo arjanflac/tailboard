@@ -38,7 +38,7 @@ func TestLaunchdPathIncludesExecutableAndCommonPackageManagerLocations(t *testin
 	}
 
 	content, err := render(launchdTemplate, map[string]string{
-		"Label": "com.thalys.tgclipboard.tg-clipd", "Arguments": "\n        <string>/Users/test/.local/bin/tg-clipd</string>",
+		"Label": "com.thalys.cliphub.tg-clipd", "Arguments": "\n        <string>/Users/test/.local/bin/tg-clipd</string>",
 		"Stdout": "/tmp/tg-clipd.log", "Stderr": "/tmp/tg-clipd.error.log", "Path": path, "Home": "/Users/test",
 	})
 	if err != nil {
