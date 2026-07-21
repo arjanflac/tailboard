@@ -43,6 +43,7 @@ func Register(mux *http.ServeMux, h *Hub, identFn IdentityFunc, observers ...*Ob
 	handle("GET /api/capabilities", "/api/capabilities", capabilitiesHandler(h))
 	handle("POST /api/devices/register", "/api/devices/register", registerDeviceHandler(h))
 	handle("GET /api/devices", "/api/devices", devicesHandler(h))
+	handle("DELETE /api/devices/{id}", "/api/devices", removeDeviceHandler(h))
 	handle("POST /api/transfers", "/api/transfers", createTransferHandler(h))
 	handle("GET /api/transfers", "/api/transfers", listTransfersHandler(h))
 	handle("PUT /api/transfers/{id}/files/{index}", "/api/transfers/files/upload", uploadTransferFileHandler(h))
@@ -204,6 +205,16 @@ func registerDeviceHandler(h *Hub) http.HandlerFunc {
 func devicesHandler(h *Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, h.Devices())
+	}
+}
+
+func removeDeviceHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !h.RemoveDevice(r.PathValue("id")) {
+			writeAPIError(w, http.StatusNotFound, "device_not_found", "no device with that id is registered", nil)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

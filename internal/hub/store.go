@@ -110,6 +110,12 @@ func (s *Store) SaveDevice(device protocol.Device) error {
 	return err
 }
 
+// DeleteDevice removes a device row; deleting an unknown ID is a no-op.
+func (s *Store) DeleteDevice(deviceID string) error {
+	_, err := s.db.Exec(`DELETE FROM devices WHERE device_id = ?`, deviceID)
+	return err
+}
+
 // Close closes the database.
 func (s *Store) Close() error {
 	return s.db.Close()

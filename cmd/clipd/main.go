@@ -9,8 +9,10 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -34,6 +36,42 @@ type agentRunner interface {
 
 var newAgent = func(cfg agent.Config) (agentRunner, error) {
 	return agent.New(cfg)
+}
+
+// defaultNodeName resolves what this machine is called on device tiles.
+// The OS "pretty name" ("MacBook Pro de Thalys") wins over the Tailscale
+// hostname and the DNS hostname: the roster shows devices as people-like
+// names, not machine identifiers.
+func defaultNodeName(ctx context.Context, resolver *discover.Resolver) string {
+	if name := prettyHostname(); name != "" {
+		return name
+	}
+	if name, err := resolver.SelfName(ctx); err == nil && name != "" {
+		return name
+	}
+	h, _ := os.Hostname()
+	return h
+}
+
+// prettyHostname returns the user-facing machine name where the OS has
+// one (macOS ComputerName, Linux PRETTY_HOSTNAME), or "".
+func prettyHostname() string {
+	switch runtime.GOOS {
+	case "darwin":
+		out, err := exec.Command("scutil", "--get", "ComputerName").Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	case "linux":
+		out, err := exec.Command("hostnamectl", "--pretty").Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	default:
+		return ""
+	}
 }
 
 func run(ctx context.Context, args []string) error {
@@ -117,13 +155,7 @@ func run(ctx context.Context, args []string) error {
 	}
 
 	if *nodeName == "" {
-		name, err := resolver.SelfName(ctx)
-		if err != nil {
-			h, _ := os.Hostname()
-			*nodeName = h
-		} else {
-			*nodeName = name
-		}
+		*nodeName = defaultNodeName(ctx, resolver)
 	}
 
 	client, err := hubclient.New(hubclient.Config{BaseURL: *hubURL})

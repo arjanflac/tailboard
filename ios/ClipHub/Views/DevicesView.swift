@@ -89,6 +89,18 @@ struct DevicesView: View {
         LazyVGrid(columns: columns, spacing: 12) {
             ForEach(viewModel.devices) { device in
                 DeviceTile(device: device)
+                    .contextMenu {
+                        // Removing an online device is pointless — it re-registers
+                        // on its next heartbeat — so the action only shows for
+                        // offline strays (reinstalls, retired hardware).
+                        if !device.online {
+                            Button(role: .destructive) {
+                                Task { await viewModel.removeDevice(device) }
+                            } label: {
+                                Label("Remove Device", systemImage: "trash")
+                            }
+                        }
+                    }
             }
         }
         .accessibilityLabel("Your devices")

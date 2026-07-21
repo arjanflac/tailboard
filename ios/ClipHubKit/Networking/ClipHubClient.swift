@@ -106,6 +106,12 @@ public actor ClipHubClient {
         return try decoder.decode([Device].self, from: data)
     }
 
+    /// Removes a device from the roster (spec: long-press → Remove device).
+    public func removeDevice(deviceID: String) async throws {
+        let (data, response) = try await delete("/api/devices/\(deviceID)")
+        try validate(response, body: data)
+    }
+
     public func getTransfers(deviceID: String, role: String? = nil, state: String? = nil) async throws -> [Transfer] {
         var components = URLComponents()
         var items = [URLQueryItem(name: "device_id", value: deviceID)]
@@ -244,6 +250,13 @@ public actor ClipHubClient {
     private func get(_ path: String) async throws -> (Data, HTTPURLResponse) {
         let url = try resolveURL(path)
         return try await perform(URLRequest(url: url))
+    }
+
+    private func delete(_ path: String) async throws -> (Data, HTTPURLResponse) {
+        let url = try resolveURL(path)
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        return try await perform(request)
     }
 
     private func post(_ path: String, json body: [String: Any]) async throws -> ClipItem {

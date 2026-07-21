@@ -193,6 +193,16 @@ final class AppViewModel {
         }
     }
 
+    /// Removes a device from the roster (offline strays, retired hardware).
+    func removeDevice(_ device: Device) async {
+        do {
+            try await client.removeDevice(deviceID: device.deviceID)
+            devices.removeAll { $0.deviceID == device.deviceID }
+        } catch {
+            errorMessage = UserFacingError.message(error)
+        }
+    }
+
     func decline(_ transfer: Transfer) async {
         do {
             _ = try await client.transferAction(

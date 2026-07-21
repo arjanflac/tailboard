@@ -66,6 +66,7 @@ type clipStore interface {
 	DeleteAll() error
 	LoadDevices() ([]protocol.Device, error)
 	SaveDevice(protocol.Device) error
+	DeleteDevice(deviceID string) error
 }
 
 // New creates a Hub, optionally backed by SQLite, and starts the TTL reaper.
@@ -160,6 +161,45 @@ func mergeStrings(existing, incoming []string) []string {
 	}
 	sort.Strings(merged)
 	return merged
+}
+
+// RemoveDevice deletes a device from the roster and the persistent store.
+// Returns false when the device is unknown.
+func (h *Hub) RemoveDevice(deviceID string) bool {
+	h.devicesMu.Lock()
+	defer h.devicesMu.Unlock()
+	if _, ok := h.devices[deviceID]; !ok {
+		return false
+	}
+	delete(h.devices, deviceID)
+	if h.store != nil {
+		if err := h.store.DeleteDevice(deviceID); err != nil {
+			slog.Error("failed to delete persisted device", "component", "hub_store", "device_id", deviceID, "error", err)
+		}
+	}
+	return true
+}
+
+// staleDeviceTTL is how long an offline device stays on the roster after
+// it was last seen. Devices that never come back (reinstalls, test
+// registrations, retired hardware) age out instead of accumulating.
+const staleDeviceTTL = 30 * 24 * time.Hour
+
+func (h *Hub) reapStaleDevices(now time.Time) {
+	h.devicesMu.Lock()
+	defer h.devicesMu.Unlock()
+	for id, device := range h.devices {
+		if device.Online || now.Sub(device.LastSeen) < staleDeviceTTL {
+			continue
+		}
+		delete(h.devices, id)
+		if h.store != nil {
+			if err := h.store.DeleteDevice(id); err != nil {
+				slog.Error("failed to delete stale device", "component", "hub_store", "device_id", id, "error", err)
+			}
+		}
+		slog.Info("reaped stale device", "component", "hub_devices", "device_id", id, "name", device.Name, "last_seen", device.LastSeen)
+	}
 }
 
 func (h *Hub) SetDeviceOnline(deviceID string, online bool) {
@@ -514,6 +554,7 @@ func (h *Hub) reapLoop() {
 
 func (h *Hub) reapExpired() {
 	now := time.Now()
+	h.reapStaleDevices(now)
 	if h.transfers != nil {
 		expired, removed := h.transfers.reapExpired(now)
 		for _, transfer := range expired {
