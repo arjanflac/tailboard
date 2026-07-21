@@ -15,7 +15,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 // IdentityFunc extracts a node/source name from an HTTP request.

@@ -12,12 +12,12 @@ import (
 )
 
 func TestHubHostnameFromEnv(t *testing.T) {
-	t.Setenv("CLIPHUB_HOSTNAME", "")
+	t.Setenv("TG_CLIPBOARD_HOSTNAME", "")
 	if got := HubHostnameFromEnv(); got != DefaultHubHostname {
 		t.Fatalf("expected default hostname %q, got %q", DefaultHubHostname, got)
 	}
 
-	t.Setenv("CLIPHUB_HOSTNAME", "custom-hub")
+	t.Setenv("TG_CLIPBOARD_HOSTNAME", "custom-hub")
 	if got := HubHostnameFromEnv(); got != "custom-hub" {
 		t.Fatalf("expected env hostname override, got %q", got)
 	}
@@ -110,7 +110,7 @@ func TestResolverHubURLMissingDiscoveryData(t *testing.T) {
 func TestResolverFindsEmbeddedHubByRole(t *testing.T) {
 	var probes []string
 	resolver := NewResolver(Config{
-		HubHostname: "cliphub",
+		HubHostname: "tg-clipboard",
 		RolePort:    9437,
 		readStatus: func(context.Context) (tailnetStatus, error) {
 			return tailnetStatus{
@@ -142,11 +142,11 @@ func TestResolverFindsEmbeddedHubByRole(t *testing.T) {
 }
 
 func TestRolePortFromEnv(t *testing.T) {
-	t.Setenv("CLIPHUB_ROLE_PORT", "10437")
+	t.Setenv("TG_CLIPBOARD_ROLE_PORT", "10437")
 	if got := DefaultConfig().RolePort; got != 10437 {
 		t.Fatalf("expected configured role port, got %d", got)
 	}
-	t.Setenv("CLIPHUB_ROLE_PORT", "invalid")
+	t.Setenv("TG_CLIPBOARD_ROLE_PORT", "invalid")
 	if got := DefaultConfig().RolePort; got != DefaultRolePort {
 		t.Fatalf("expected default role port, got %d", got)
 	}
@@ -222,7 +222,7 @@ func TestReadTailnetStatusCommandFailure(t *testing.T) {
 }
 
 func TestDefaultConfigUsesEnvOverride(t *testing.T) {
-	t.Setenv("CLIPHUB_HOSTNAME", "ci-hub")
+	t.Setenv("TG_CLIPBOARD_HOSTNAME", "ci-hub")
 	cfg := DefaultConfig()
 	if cfg.HubHostname != "ci-hub" {
 		t.Fatalf("expected env hostname in config, got %q", cfg.HubHostname)
@@ -236,7 +236,7 @@ func TestDefaultConfigUsesEnvOverride(t *testing.T) {
 }
 
 func TestHubURLLegacyHelperUsesEnv(t *testing.T) {
-	t.Setenv("CLIPHUB_HOSTNAME", "legacy-hub")
+	t.Setenv("TG_CLIPBOARD_HOSTNAME", "legacy-hub")
 
 	origPath := os.Getenv("PATH")
 	t.Setenv("PATH", "")

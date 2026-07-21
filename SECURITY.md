@@ -1,6 +1,6 @@
 # Security Policy
 
-ClipHub is still pre-release and does not publish tagged releases yet. Security fixes are currently made against the latest commit on `main`.
+tg-clipboard is still pre-release and does not publish tagged releases yet. Security fixes are currently made against the latest commit on `main`.
 
 ## Supported versions
 
@@ -13,9 +13,9 @@ ClipHub is still pre-release and does not publish tagged releases yet. Security 
 
 Please do not report security issues in public GitHub issues, pull requests, or discussions.
 
-Instead, email **eu@thalysguimaraes.com** with a subject like `[ClipHub security] short summary` and include:
+Instead, email **eu@thalysguimaraes.com** with a subject like `[tg-clipboard security] short summary` and include:
 
-- the affected component (`cliphub`, `clipd`, `tailclip`, iOS app/extension, or docs/setup),
+- the affected component (`tg-clipboard`, `tg-clipd`, `tg-clip`, iOS app/extension, or docs/setup),
 - the commit, branch, or binary build you tested,
 - clear reproduction steps or a proof of concept,
 - the impact you expect if the issue is exploitable,
@@ -38,12 +38,12 @@ If you are not sure whether something is security-sensitive, report it privately
 
 ## Operational privacy limitations
 
-ClipHub now exposes opt-in privacy controls for ignore lists, sensitive-content filtering, and explicit clear behavior, but a few limitations remain important:
+tg-clipboard now exposes opt-in privacy controls for ignore lists, sensitive-content filtering, and explicit clear behavior, but a few limitations remain important:
 
-- Privacy filters are not enabled by default. Operators must opt in with `clipd` flags or environment variables.
-- Clipboard history on the hub is stored as plain SQLite, and the iOS cache is stored as plain JSON. ClipHub does not yet add application-layer encryption on top of OS disk encryption and file permissions.
+- Privacy filters are not enabled by default. Operators must opt in with `tg-clipd` flags or environment variables.
+- Clipboard history on the hub is stored as plain SQLite, and the iOS cache is stored as plain JSON. tg-clipboard does not yet add application-layer encryption on top of OS disk encryption and file permissions.
 - App/process ignore rules are best-effort because they rely on foreground-window detection. On Linux, that currently requires `xdotool` to resolve the active process.
-- `tailclip clear` clears hub state and persisted history, and `tailclip clear --local` also clears the invoking machine's system clipboard. This does not retroactively wipe clipboard contents already written to other devices or offline caches.
+- `tg-clip clear` clears hub state and persisted history, and `tg-clip clear --local` also clears the invoking machine's system clipboard. This does not retroactively wipe clipboard contents already written to other devices or offline caches.
 
 ## Non-security bugs
 

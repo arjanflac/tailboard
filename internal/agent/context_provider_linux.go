@@ -14,7 +14,7 @@ import (
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
-	"github.com/thalysguimaraes/cliphub/internal/privacy"
+	"github.com/thalysguimaraes/tg-clipboard/internal/privacy"
 )
 
 type linuxContextProvider struct {
@@ -35,7 +35,7 @@ func newContextProvider() contextProvider {
 	case commandAvailable("xdotool"):
 		layer = "xdotool-fallback"
 	}
-	slog.Info("privacy foreground detector selected", "component", "clipd_privacy", "layer", layer)
+	slog.Info("privacy foreground detector selected", "component", "tg-clipd_privacy", "layer", layer)
 	return linuxContextProvider{layer: layer}
 }
 
@@ -51,7 +51,7 @@ func (p linuxContextProvider) CurrentContext() (privacy.Context, error) {
 			return ctx, nil
 		}
 		if commandAvailable("xdotool") {
-			slog.Debug("X11 EWMH detector failed; using xdotool fallback", "component", "clipd_privacy", "error", err)
+			slog.Debug("X11 EWMH detector failed; using xdotool fallback", "component", "tg-clipd_privacy", "error", err)
 			return xdotoolContext()
 		}
 		return privacy.Context{}, err

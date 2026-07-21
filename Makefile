@@ -6,18 +6,18 @@ RELEASE_MANIFEST ?=
 RELEASE_CHECKSUMS ?=
 RELEASE_ASSET_BASE_URL ?=
 
-.PHONY: all cliphub clipd tailclip test test-race lint clean release release-verify release-package-managers release-package-managers-verify
+.PHONY: all tg-clipboard tg-clipd tg-clip test test-race lint clean release release-verify release-package-managers release-package-managers-verify
 
-all: cliphub clipd tailclip
+all: tg-clipboard tg-clipd tg-clip
 
-cliphub:
-	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/cliphub ./cmd/cliphub
+tg-clipboard:
+	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/tg-clipboard ./cmd/tg-clipboard
 
-clipd:
-	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/clipd ./cmd/clipd
+tg-clipd:
+	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/tg-clipd ./cmd/tg-clipd
 
-tailclip:
-	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/tailclip ./cmd/tailclip
+tg-clip:
+	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/tg-clip ./cmd/tg-clip
 
 test:
 	go test ./...

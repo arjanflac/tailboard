@@ -83,17 +83,17 @@ func TestRenderReleaseNotesIncludesAssetsSummary(t *testing.T) {
 
 	notes, err := renderReleaseNotes(path, "v1.0.0", []Artifact{
 		{
-			Name: "clipd_v1.0.0_linux_amd64.tar.gz",
+			Name: "tg-clipd_v1.0.0_linux_amd64.tar.gz",
 			Target: Target{
-				Binary: "clipd",
+				Binary: "tg-clipd",
 				GOOS:   "linux",
 				GOARCH: "amd64",
 			},
 		},
 		{
-			Name: "cliphub_v1.0.0_linux_amd64.tar.gz",
+			Name: "tg-clipboard_v1.0.0_linux_amd64.tar.gz",
 			Target: Target{
-				Binary: "cliphub",
+				Binary: "tg-clipboard",
 				GOOS:   "linux",
 				GOARCH: "amd64",
 			},
@@ -104,11 +104,11 @@ func TestRenderReleaseNotesIncludesAssetsSummary(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"# ClipHub v1.0.0",
+		"# tg-clipboard v1.0.0",
 		"- deterministic archives",
-		"- `cliphub`: `linux/amd64`",
-		"cliphub_v1.0.0_checksums.txt",
-		"cliphub_v1.0.0_artifacts.json",
+		"- `tg-clipboard`: `linux/amd64`",
+		"tg-clipboard_v1.0.0_checksums.txt",
+		"tg-clipboard_v1.0.0_artifacts.json",
 	} {
 		if !strings.Contains(notes, want) {
 			t.Fatalf("expected %q in notes:\n%s", want, notes)
@@ -150,13 +150,13 @@ func TestCopyServiceDefinitionsByPlatform(t *testing.T) {
 
 func TestArchiveEntriesIncludesNestedServiceFiles(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "clipd"), []byte("binary"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "tg-clipd"), []byte("binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(root, "service"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "service", "clipd.service"), []byte("unit"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "service", "tg-clipd.service"), []byte("unit"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -164,7 +164,8 @@ func TestArchiveEntriesIncludesNestedServiceFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"clipd", filepath.Join("service", "clipd.service")}
+	// Entries are sorted; "service/…" sorts before "tg-clipd".
+	want := []string{filepath.Join("service", "tg-clipd.service"), "tg-clipd"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("unexpected entries: got %v want %v", got, want)
 	}

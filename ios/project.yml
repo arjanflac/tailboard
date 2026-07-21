@@ -1,4 +1,4 @@
-name: ClipHub
+name: TGClipboard
 options:
   bundleIdPrefix: com.thalys
   deploymentTarget:
@@ -10,147 +10,147 @@ settings:
   DEVELOPMENT_TEAM: ""  # Set your Apple Developer Team ID here
 
 targets:
-  ClipHubKit:
+  TGClipboardKit:
     type: framework
     platform: iOS
     sources:
-      - ClipHubKit
+      - TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.kit
-      INFOPLIST_FILE: ClipHubKit/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.kit
+      INFOPLIST_FILE: TGClipboardKit/Info.plist
 
-  ClipHub:
+  TGClipboard:
     type: application
     platform: iOS
     sources:
-      - ClipHub
+      - TGClipboard
     dependencies:
-      - target: ClipHubKit
-      - target: TailPasteKeyboard
+      - target: TGClipboardKit
+      - target: TGPasteKeyboard
         embed: true
-      - target: TailClipShare
+      - target: TGClipboardShare
         embed: true
-      - target: ClipHubWidget
+      - target: TGClipboardWidget
         embed: true
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub
-      INFOPLIST_FILE: ClipHub/Resources/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard
+      INFOPLIST_FILE: TGClipboard/Resources/Info.plist
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     entitlements:
-      path: ClipHub/ClipHub.entitlements
+      path: TGClipboard/TGClipboard.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.thalys.cliphub
+          - group.com.thalys.tgclipboard
         keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.thalys.cliphub
+          - $(AppIdentifierPrefix)group.com.thalys.tgclipboard
 
-  TailPasteKeyboard:
+  TGPasteKeyboard:
     type: app-extension
     platform: iOS
     sources:
-      - TailPasteKeyboard
+      - TGPasteKeyboard
       - path: SharedAssets/ExtensionAssets.xcassets
     dependencies:
-      - target: ClipHubKit
+      - target: TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.keyboard
-      INFOPLIST_FILE: TailPasteKeyboard/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.keyboard
+      INFOPLIST_FILE: TGPasteKeyboard/Info.plist
     entitlements:
-      path: TailPasteKeyboard/TailPasteKeyboard.entitlements
+      path: TGPasteKeyboard/TGPasteKeyboard.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.thalys.cliphub
+          - group.com.thalys.tgclipboard
         keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.thalys.cliphub
+          - $(AppIdentifierPrefix)group.com.thalys.tgclipboard
 
-  TailClipShare:
+  TGClipboardShare:
     type: app-extension
     platform: iOS
     sources:
-      - TailClipShare
+      - TGClipboardShare
       - path: SharedAssets/ExtensionAssets.xcassets
     dependencies:
-      - target: ClipHubKit
+      - target: TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.share
-      INFOPLIST_FILE: TailClipShare/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.share
+      INFOPLIST_FILE: TGClipboardShare/Info.plist
     entitlements:
-      path: TailClipShare/TailClipShare.entitlements
+      path: TGClipboardShare/TGClipboardShare.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.thalys.cliphub
+          - group.com.thalys.tgclipboard
         keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.thalys.cliphub
+          - $(AppIdentifierPrefix)group.com.thalys.tgclipboard
 
-  ClipHubWidget:
+  TGClipboardWidget:
     type: app-extension
     platform: iOS
     sources:
-      - ClipHubWidget
+      - TGClipboardWidget
       - path: SharedAssets/ExtensionAssets.xcassets
     dependencies:
-      - target: ClipHubKit
+      - target: TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.widget
-      INFOPLIST_FILE: ClipHubWidget/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.widget
+      INFOPLIST_FILE: TGClipboardWidget/Info.plist
       APPLICATION_EXTENSION_API_ONLY: true
     entitlements:
-      path: ClipHubWidget/ClipHubWidget.entitlements
+      path: TGClipboardWidget/TGClipboardWidget.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.thalys.cliphub
+          - group.com.thalys.tgclipboard
         keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.thalys.cliphub
+          - $(AppIdentifierPrefix)group.com.thalys.tgclipboard
 
-  ClipHubKitMac:
+  TGClipboardKitMac:
     type: framework
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: ClipHubKit
+      - path: TGClipboardKit
         excludes:
-          - "Models/ClipHubActivityAttributes.swift"
+          - "Models/TGClipboardActivityAttributes.swift"
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.kit.mac
-      PRODUCT_NAME: ClipHubKit
-      PRODUCT_MODULE_NAME: ClipHubKit
-      INFOPLIST_FILE: ClipHubKit/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.kit.mac
+      PRODUCT_NAME: TGClipboardKit
+      PRODUCT_MODULE_NAME: TGClipboardKit
+      INFOPLIST_FILE: TGClipboardKit/Info.plist
 
-  ClipHubMenuBar:
+  TGClipboardMenuBar:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: ../macos/ClipHubMenuBar
+      - path: ../macos/TGClipboardMenuBar
     dependencies:
-      - target: ClipHubKitMac
+      - target: TGClipboardKitMac
         embed: true
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.menubar
-      PRODUCT_NAME: ClipHub
-      INFOPLIST_FILE: ../macos/ClipHubMenuBar/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.menubar
+      PRODUCT_NAME: TGClipboard
+      INFOPLIST_FILE: ../macos/TGClipboardMenuBar/Info.plist
       ENABLE_HARDENED_RUNTIME: false
 
-  ClipHubTests:
+  TGClipboardTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - ClipHubTests
+      - TGClipboardTests
     dependencies:
-      - target: ClipHubKit
+      - target: TGClipboardKit
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.cliphub.tests
+      PRODUCT_BUNDLE_IDENTIFIER: com.thalys.tgclipboard.tests
 
 schemes:
-  ClipHub:
+  TGClipboard:
     build:
       targets:
-        ClipHub: all
-        ClipHubTests: [test]
+        TGClipboard: all
+        TGClipboardTests: [test]
     test:
       targets:
-        - ClipHubTests
-  ClipHubMenuBar:
+        - TGClipboardTests
+  TGClipboardMenuBar:
     build:
       targets:
-        ClipHubMenuBar: all
+        TGClipboardMenuBar: all

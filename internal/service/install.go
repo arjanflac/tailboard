@@ -106,7 +106,7 @@ func installWindows(name, executable string, args []string) (InstallResult, erro
 	for _, argument := range args {
 		command += ` "` + strings.ReplaceAll(argument, `"`, `\"`) + `"`
 	}
-	serviceName := "ClipHub-" + name
+	serviceName := "TGClipboard-" + name
 	_ = exec.Command("sc.exe", "stop", serviceName).Run()
 	_ = exec.Command("sc.exe", "delete", serviceName).Run()
 	output, err := exec.Command("sc.exe", "create", serviceName, "start=", "auto", "binPath=", command, "DisplayName=", description(name)).CombinedOutput()
@@ -131,13 +131,13 @@ func render(source string, data any) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
-func label(name string) string { return "com.thalys.cliphub." + name }
+func label(name string) string { return "com.thalys.tgclipboard." + name }
 
 func description(name string) string {
-	if name == "cliphub" {
-		return "ClipHub tailnet clipboard hub"
+	if name == "tg-clipboard" {
+		return "TGClipboard tailnet clipboard hub"
 	}
-	return "ClipHub clipboard synchronization agent"
+	return "TGClipboard clipboard synchronization agent"
 }
 
 func systemdQuote(value string) string {

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/hub"
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/hub"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func TestWSClientReconnectsAndCatchesUpAfterDrop(t *testing.T) {

@@ -1,4 +1,4 @@
-# ClipHub SPEC — Finishing the Vision, iOS, and the Tailnet Transfer Layer
+# tg-clipboard SPEC — Finishing the Vision, iOS, and the Tailnet Transfer Layer
 
 Status: implemented · Last updated: 2026-07-18
 
@@ -11,11 +11,11 @@ Tracks A–C and the recommended embedded-hub option from `docs/hubless.md` are 
 - privacy presets plus layered foreground detection and local audit output,
 - stable devices/capabilities, maintained iOS app/extensions/widgets/Intents, simulator CI, and a credential-gated TestFlight workflow,
 - durable resumable spool transfers, receiver consent/allowlists, iOS and desktop device surfaces, and capability-gated direct fetch,
-- `clipd --embed-hub` plus capability-based role discovery, removing the dedicated-machine requirement.
+- `tg-clipd --embed-hub` plus capability-based role discovery, removing the dedicated-machine requirement.
 
 Two boundaries remain intentional and documented rather than silently claimed:
 
-1. `clipd --tray` opens the shipped loopback-only cross-platform desktop companion in the default browser. A native menu-bar/taskbar wrapper is optional follow-up polish; the device/drop/progress/consent/pause feature surface itself is complete.
+1. `tg-clipd --tray` opens the shipped loopback-only cross-platform desktop companion in the default browser. A native menu-bar/taskbar wrapper is optional follow-up polish; the device/drop/progress/consent/pause feature surface itself is complete.
 2. External Homebrew/Scoop repositories and TestFlight uploads run only after their repository variables/secrets are configured. The workflows are implemented and locally validated, but this source change does not create third-party repositories or publish an Apple build.
 
 Transfer E2EE remains deferred exactly as scoped. The transfers-first protocol decision, algorithms, downgrade rule, metadata leakage, and key-lifecycle gates are recorded in `docs/e2ee-transfers.md`; no current UI claims E2EE.
@@ -24,7 +24,7 @@ This SPEC covers three tracks:
 
 1. **Track A — Finish the original vision.** Close the gaps the roadmap already names between what the docs promise and what ships.
 2. **Track B — iOS as a supported platform.** Turn the source-only iOS companion into a packaged, honest, first-class client.
-3. **Track C — Beyond the clipboard.** Extend ClipHub into a LocalSend alternative over the tailnet: targeted device-to-device transfer of files and payloads of arbitrary size.
+3. **Track C — Beyond the clipboard.** Extend tg-clipboard into a LocalSend alternative over the tailnet: targeted device-to-device transfer of files and payloads of arbitrary size.
 
 The tracks are ordered by dependency: Track C reuses the device registry and transport work from Tracks A/B, so the sequencing at the end of this document interleaves them deliberately.
 
@@ -34,11 +34,11 @@ The tracks are ordered by dependency: Track C reuses the device registry and tra
 
 What exists and works today:
 
-- **Hub (`cliphub`)** — tsnet node with auto-HTTPS, SQLite-backed history, monotonic sequence numbers, WebSocket fan-out with `since_seq` catch-up, raw blob endpoints, cursor-paged history, typed errors, health/readiness/metrics endpoints, graceful shutdown.
-- **Agent (`clipd`)** — 500 ms polling watcher, richest-MIME selection (png → html → plain), hash+MIME dedup, echo-loop prevention via read-back, opt-in privacy filters (app/process ignore lists, `secret`/`password-manager`/`otp` content classes, clear-on-block), pause/resume.
-- **CLI (`tailclip`)** — get/put/history/status/clear/pause/resume, file put with MIME detection, stdin piping.
+- **Hub (`tg-clipboard`)** — tsnet node with auto-HTTPS, SQLite-backed history, monotonic sequence numbers, WebSocket fan-out with `since_seq` catch-up, raw blob endpoints, cursor-paged history, typed errors, health/readiness/metrics endpoints, graceful shutdown.
+- **Agent (`tg-clipd`)** — 500 ms polling watcher, richest-MIME selection (png → html → plain), hash+MIME dedup, echo-loop prevention via read-back, opt-in privacy filters (app/process ignore lists, `secret`/`password-manager`/`otp` content classes, clear-on-block), pause/resume.
+- **CLI (`tg-clip`)** — get/put/history/status/clear/pause/resume, file put with MIME detection, stdin piping.
 - **Release engineering** — deterministic archives, checksums, Homebrew/Scoop/winget metadata generation, CI on three OSes with a race gate.
-- **iOS companion (~1,400 lines Swift, xcodegen project)** — container app (current clip, history, settings, onboarding), `ClipHubKit` framework (REST client, WebSocket manager, app-group cache), TailPaste keyboard (inserts current/recent hub clips), share extension (sends content to hub). Manual signing, no CI, no packaging.
+- **iOS companion (~1,400 lines Swift, xcodegen project)** — container app (current clip, history, settings, onboarding), `TGClipboardKit` framework (REST client, WebSocket manager, app-group cache), TailPaste keyboard (inserts current/recent hub clips), share extension (sends content to hub). Manual signing, no CI, no packaging.
 
 The honest gaps, from the repo's own docs:
 
@@ -73,18 +73,18 @@ The PowerShell-cmdlet backend is the weakest part of the desktop stack — slow 
 - macOS: keep polling `NSPasteboard.changeCount` (there is no change notification API), but poll the cheap `changeCount` integer instead of reading content each tick — read content only when the count moves.
 - Linux Wayland: use the `wlr-data-control` / `ext-data-control` protocol for event-driven watch where the compositor supports it; fall back to `wl-paste --watch`.
 - Windows: covered by A1.
-- Acceptance: idle `clipd` performs no content reads and no subprocess spawns when the clipboard hasn't changed.
+- Acceptance: idle `tg-clipd` performs no content reads and no subprocess spawns when the clipboard hasn't changed.
 
 ### A3. Release and packaging parity
 
-- Cross-build the hub for all platforms `clipd` ships for (darwin/arm64+amd64, linux/amd64+arm64, windows/amd64). tsnet is pure Go; there is no technical blocker.
+- Cross-build the hub for all platforms `tg-clipd` ships for (darwin/arm64+amd64, linux/amd64+arm64, windows/amd64). tsnet is pure Go; there is no technical blocker.
 - Add linux/arm64 across all binaries (Raspberry Pi hub is a natural deployment).
-- Ship the launchd/systemd units inside the release archives and add `clipd install-service` / `cliphub install-service` subcommands that write and load them. This is the single biggest onboarding-friction fix.
+- Ship the launchd/systemd units inside the release archives and add `tg-clipd install-service` / `tg-clipboard install-service` subcommands that write and load them. This is the single biggest onboarding-friction fix.
 - Publish the Homebrew tap and Scoop bucket as real repositories (metadata generation already exists; the last mile is the tap repos and a release-workflow push step).
 
 ### A4. Privacy-control hardening (roadmap's second bullet)
 
-- Replace the `xdotool` dependency on Linux with a layered detector: native Wayland foreground-window protocols where available → X11 EWMH via a small pure-Go xgb client → `xdotool` as last resort. Report which layer is active in `clipd` logs and `tailclip status`.
+- Replace the `xdotool` dependency on Linux with a layered detector: native Wayland foreground-window protocols where available → X11 EWMH via a small pure-Go xgb client → `xdotool` as last resort. Report which layer is active in `tg-clipd` logs and `tg-clip status`.
 - Add a `--privacy-preset strict|balanced|off` flag so users get sane bundles without learning four flags. `strict` = all sensitive classes + clear-on-block.
 - Emit a local (never synced) audit line when a rule blocks an item, so users can verify filters actually fire.
 - Document per-platform detection coverage as a table in security.md.
@@ -127,7 +127,7 @@ So the iOS interaction model, stated honestly:
 
 The Swift code is a solid skeleton; these are the concrete deltas:
 
-1. **Keyboard: send as well as paste.** Add a "Push clipboard" key that reads `UIPasteboard` (Full Access already required) and POSTs it to the hub. This makes the keyboard bidirectional and is the closest iOS can get to desktop `clipd`.
+1. **Keyboard: send as well as paste.** Add a "Push clipboard" key that reads `UIPasteboard` (Full Access already required) and POSTs it to the hub. This makes the keyboard bidirectional and is the closest iOS can get to desktop `tg-clipd`.
 2. **Images and rich content.** The keyboard currently filters to text. Support image clips: render a thumbnail, and on tap copy the image to the local pasteboard (keyboards can't insert images into the text proxy; copy-to-pasteboard is the correct fallback). Share extension should accept images, URLs, and files via `NSItemProvider` type identifiers and use the raw `/api/clip/blob` endpoint instead of base64 JSON.
 3. **App Intents / Shortcuts.** Expose `GetCurrentClip`, `PushClipboard`, `SendToHub(text/file)` as App Intents. This unlocks the Action button, Back Tap, and user automations — the pragmatic substitute for a background watcher.
 4. **Widgets + Live Activity.** A lock-screen/home widget showing the current hub clip (age + preview) with a tap-to-copy deep link. Cheap to build on the existing app-group cache.
@@ -136,14 +136,14 @@ The Swift code is a solid skeleton; these are the concrete deltas:
 
 ### B3. Networking/transport on iOS
 
-- Keep the current requirement: the **Tailscale app provides the tunnel**; ClipHub speaks plain HTTPS to `https://cliphub.<tailnet>.ts.net`. Detect "tailnet unreachable" and show a "Open Tailscale" fix-it button rather than a generic error.
+- Keep the current requirement: the **Tailscale app provides the tunnel**; tg-clipboard speaks plain HTTPS to `https://tg-clipboard.<tailnet>.ts.net`. Detect "tailnet unreachable" and show a "Open Tailscale" fix-it button rather than a generic error.
 - Do **not** embed libtailscale/tsnet in the iOS app for now: it would conflict with the user's existing Tailscale VPN profile (iOS allows one active packet tunnel), balloon the binary, and complicate App Store review. Revisit only if a keyboard-without-VPN story becomes critical.
 - Note the sharp edge: **keyboard extensions can reach the network only with Full Access**, and traffic still flows through the Tailscale tunnel. Document that the keyboard is fully functional offline from cache (already implemented) and degrades gracefully.
 
 ### B4. Packaging and support tier
 
 - Add an `ios-ci` GitHub Actions job on a macOS runner: `xcodegen generate` + `xcodebuild build test` (simulator, no signing). This alone moves iOS from "source dump" to "maintained."
-- Distribute via **TestFlight** as the supported path (personal team sideloading stays documented as the free alternative). App Store submission is a stretch goal — the keyboard's Full Access requirement invites review friction, and ClipHub-on-a-tailnet is inherently a self-hosted-audience product.
+- Distribute via **TestFlight** as the supported path (personal team sideloading stays documented as the free alternative). App Store submission is a stretch goal — the keyboard's Full Access requirement invites review friction, and tg-clipboard-on-a-tailnet is inherently a self-hosted-audience product.
 - Update platform-support.md: iOS becomes "supported companion (interaction model differs from desktop by OS design)" with the table from B1 as the canonical capability statement.
 
 ### B5. iOS acceptance criteria
@@ -163,7 +163,7 @@ Add a second primitive next to the clipboard: **transfers** — explicit, target
 
 What we take from LocalSend: pick a nearby device, drop files on it, no cloud, works for gigabytes. What we do differently (and better, given the tailnet):
 
-- **No discovery pain.** LocalSend needs mDNS on a shared LAN. ClipHub devices already share a network (the tailnet) and will already be registered with the hub — device discovery is a hub query, and it works across networks (phone on LTE → home server), which LocalSend cannot do.
+- **No discovery pain.** LocalSend needs mDNS on a shared LAN. tg-clipboard devices already share a network (the tailnet) and will already be registered with the hub — device discovery is a hub query, and it works across networks (phone on LTE → home server), which LocalSend cannot do.
 - **No pairing ceremony.** Tailnet membership is the auth, same trust model as the clipboard.
 - **Asynchronous by default.** LocalSend requires both devices online simultaneously. With the hub spooling transfers, "send now, receive when the laptop wakes up" works. Direct P2P remains an optimization, not a requirement.
 
@@ -173,9 +173,9 @@ Clipboard sync and transfers stay distinct primitives: the clipboard is broadcas
 
 **Phase 1 (spooled, ship first):** sender uploads to the hub; hub stores the transfer in a spool directory; hub notifies the target device over the existing WebSocket; receiver downloads and acks; hub deletes the spool (or lets TTL expire it).
 
-Why hub-first rather than P2P-first: it reuses every mechanism ClipHub already has (WebSocket fan-out, tsnet identity, sequence/catch-up thinking), it gives asynchronous delivery for free, and both endpoints only ever speak client→hub HTTPS, which is the only thing iOS extensions can reliably do.
+Why hub-first rather than P2P-first: it reuses every mechanism tg-clipboard already has (WebSocket fan-out, tsnet identity, sequence/catch-up thinking), it gives asynchronous delivery for free, and both endpoints only ever speak client→hub HTTPS, which is the only thing iOS extensions can reliably do.
 
-**Phase 2 (direct, optimization):** when both devices are desktop agents and online, the hub can broker a direct fetch — sender's `clipd` exposes a one-shot authenticated download endpoint on its tailnet address, receiver pulls directly, hub only carries the offer/ack metadata. Cuts the double-hop for multi-GB transfers. Gated behind the `capabilities` flag; falls back to spooling transparently.
+**Phase 2 (direct, optimization):** when both devices are desktop agents and online, the hub can broker a direct fetch — sender's `tg-clipd` exposes a one-shot authenticated download endpoint on its tailnet address, receiver pulls directly, hub only carries the offer/ack metadata. Cuts the double-hop for multi-GB transfers. Gated behind the `capabilities` flag; falls back to spooling transparently.
 
 ### C3. New hub surface
 
@@ -204,7 +204,7 @@ WebSocket gains message types alongside `clip`: `transfer_offer`, `transfer_stat
 
 Transfer state machine: `offered → accepted → transferring → complete` with exits to `declined | canceled | expired`. Spool TTL default 48 h (separate from clip TTL); expired transfers notify the sender.
 
-Storage: spool as files on disk (`~/.config/cliphub/spool/{transfer_id}/`), metadata in SQLite. **Not** in SQLite blobs — transfers are orders of magnitude beyond the 10 MiB clip cap. Hub enforces a configurable spool quota (`--spool-quota`, default e.g. 10 GiB) and per-transfer max size, both advertised via `/api/capabilities`.
+Storage: spool as files on disk (`~/.config/tg-clipboard/spool/{transfer_id}/`), metadata in SQLite. **Not** in SQLite blobs — transfers are orders of magnitude beyond the 10 MiB clip cap. Hub enforces a configurable spool quota (`--spool-quota`, default e.g. 10 GiB) and per-transfer max size, both advertised via `/api/capabilities`.
 
 ### C4. Client experience
 
@@ -215,19 +215,19 @@ Storage: spool as files on disk (`~/.config/cliphub/spool/{transfer_id}/`), meta
 3. **No visible size ceiling.** Multi-GB sends must feel routine — chunked/resumable transport, clear progress with rate/ETA, pause/resume.
 4. **Receiving is calm.** An incoming offer is one lightweight prompt (or silent, from allowlisted own-devices), lands in a predictable folder, and ends with a "Show in folder" affordance.
 
-Blip's model implies something ClipHub doesn't have yet: a **desktop GUI surface**. `clipd` grows a menu-bar/tray companion (Phase 3–4): device list with drag-and-drop targets, active transfer progress, incoming-offer prompts, and clipboard pause/resume for good measure. Keep it a thin shell over the existing agent — `clipd` stays headless-capable, the tray talks to it locally (extend the agent with a small local IPC/HTTP surface). CLI remains the scriptable path and ships first; the tray is what makes it feel like Blip. Where ClipHub deliberately differs from Blip: no accounts and no cross-user "friends" — the tailnet is the roster.
+Blip's model implies something tg-clipboard doesn't have yet: a **desktop GUI surface**. `tg-clipd` grows a menu-bar/tray companion (Phase 3–4): device list with drag-and-drop targets, active transfer progress, incoming-offer prompts, and clipboard pause/resume for good measure. Keep it a thin shell over the existing agent — `tg-clipd` stays headless-capable, the tray talks to it locally (extend the agent with a small local IPC/HTTP surface). CLI remains the scriptable path and ships first; the tray is what makes it feel like Blip. Where tg-clipboard deliberately differs from Blip: no accounts and no cross-user "friends" — the tailnet is the roster.
 
-CLI (`tailclip`):
+CLI (`tg-clip`):
 
 ```
-tailclip devices                         # list tailnet devices + online state
-tailclip send file.pdf --to laptop      # spool, notify, exit (or --wait for ack)
-tailclip send ./dir --to phone           # directories: tar or per-file set
-tailclip transfers                       # pending in/out
-tailclip receive [--id N] [--to DIR]     # accept + download (default ~/Downloads)
+tg-clip devices                         # list tailnet devices + online state
+tg-clip send file.pdf --to laptop      # spool, notify, exit (or --wait for ack)
+tg-clip send ./dir --to phone           # directories: tar or per-file set
+tg-clip transfers                       # pending in/out
+tg-clip receive [--id N] [--to DIR]     # accept + download (default ~/Downloads)
 ```
 
-`clipd` (desktop agent):
+`tg-clipd` (desktop agent):
 
 - Listens for `transfer_offer`; policy flag `--transfers accept|ask|off` (default `ask`).
 - `ask` surfaces a native notification ("iPhone wants to send photo.jpg (4.2 MB) — Accept / Decline") via osascript/notify-send/toast; accepted files land in `~/Downloads` (configurable), with a completion notification that can open the containing folder.
@@ -236,7 +236,7 @@ tailclip receive [--id N] [--to DIR]     # accept + download (default ~/Download
 iOS (Blip-style: the device list is the home screen):
 
 - Container app's main tab becomes the device list; tapping a device opens a drop target / recent-transfers view. Clipboard current/history moves to a second tab.
-- Share extension gains a device picker (share → ClipHub → choose "MacBook" instead of "clipboard"), using background `URLSession` uploads so large sends survive the extension lifetime.
+- Share extension gains a device picker (share → tg-clipboard → choose "MacBook" instead of "clipboard"), using background `URLSession` uploads so large sends survive the extension lifetime.
 - Inbox for incoming offers: accept/decline, downloads to the app's Documents (visible in Files), share-sheet re-export. Foreground-only receive is acceptable; a push-notification receive path is an explicit non-goal until someone runs a push relay.
 - App Intent `SendFileToDevice` for Shortcuts.
 
@@ -250,7 +250,7 @@ iOS (Blip-style: the device list is the home screen):
 
 ### C6. Explicit non-goals for Track C
 
-- No non-tailnet mode (no LAN mDNS discovery, no QR-code pairing with strangers). Tailscale's own Taildrop and LocalSend serve those; ClipHub's differentiation is the always-on hub inside a network you already trust.
+- No non-tailnet mode (no LAN mDNS discovery, no QR-code pairing with strangers). Tailscale's own Taildrop and LocalSend serve those; tg-clipboard's differentiation is the always-on hub inside a network you already trust.
 - No Android client in this SPEC (the protocol is plain HTTPS+WS, so nothing precludes one later).
 - No transfer history/archive; like the clipboard, the hub spool is a conveyor belt, not storage.
 
@@ -274,5 +274,5 @@ Each phase ends with docs updated (platform-support matrix, security.md, limitat
 2. **Directory semantics** — tar-on-send (simple, opaque) vs. per-file set (resumable, browsable)? Leaning per-file set with a manifest.
 3. **Hub spool on small devices** — if the hub runs on a Pi, a 4 GB video exceeds sensible spool quotas; is "direct fetch or fail" acceptable there, or do we need streaming pass-through (hub pipes sender→receiver without landing on disk) as a middle mode?
 4. **App Store vs TestFlight-only** for iOS — pursue review (Full Access keyboard + VPN-adjacent product) or accept TestFlight as the ceiling?
-5. **Rename?** "ClipHub" undersells a product that also moves files. Worth deciding before public positioning, painful after.
-6. **Hubless operation** — can the dedicated `cliphub` machine be removed entirely? Explored separately in [docs/hubless.md](docs/hubless.md); its recommendation (embedded hub role in `clipd`, role-based discovery) would land as a new Track A item.
+5. **Rename?** "tg-clipboard" undersells a product that also moves files. Worth deciding before public positioning, painful after.
+6. **Hubless operation** — can the dedicated `tg-clipboard` machine be removed entirely? Explored separately in [docs/hubless.md](docs/hubless.md); its recommendation (embedded hub role in `tg-clipd`, role-based discovery) would land as a new Track A item.

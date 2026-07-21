@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/release"
+	"github.com/thalysguimaraes/tg-clipboard/internal/release"
 )
 
 func main() {

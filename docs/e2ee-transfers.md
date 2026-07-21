@@ -4,7 +4,7 @@ Status: design accepted for a future protocol revision; implementation deferred
 
 ## Decision
 
-If ClipHub adds application-layer end-to-end encryption, targeted transfers ship first. Clipboard broadcast remains unchanged until a separate multi-recipient/key-rotation design exists.
+If tg-clipboard adds application-layer end-to-end encryption, targeted transfers ship first. Clipboard broadcast remains unchanged until a separate multi-recipient/key-rotation design exists.
 
 The current transfer protocol deliberately stays plaintext inside the trusted tailnet: the hub can read spool contents and direct-fetch metadata. The device registry already reserves `public_key`, but no client advertises an encryption capability and no UI claims encrypted delivery.
 

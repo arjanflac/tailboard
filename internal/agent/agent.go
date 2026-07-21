@@ -11,10 +11,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/clipboard"
-	"github.com/thalysguimaraes/cliphub/internal/hubclient"
-	"github.com/thalysguimaraes/cliphub/internal/privacy"
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/clipboard"
+	"github.com/thalysguimaraes/tg-clipboard/internal/hubclient"
+	"github.com/thalysguimaraes/tg-clipboard/internal/privacy"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 // Config holds agent configuration.
@@ -145,7 +145,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			return err
 		}
 		defer controlServer.Shutdown(context.Background())
-		slog.Info("desktop control surface active", "component", "clipd", "url", controlServer.URL)
+		slog.Info("desktop control surface active", "component", "tg-clipd", "url", controlServer.URL)
 		if a.openControl {
 			go openBrowser(controlServer.URL)
 		}
@@ -163,7 +163,7 @@ func (a *Agent) Run(ctx context.Context) error {
 					DeviceID: a.deviceID, Name: a.nodeName, Platform: runtime.GOOS,
 					Capabilities: capabilities,
 				}); err != nil {
-					slog.Warn("device registration failed", "component", "clipd", "error", err)
+					slog.Warn("device registration failed", "component", "tg-clipd", "error", err)
 				}
 			}
 			if !a.bootstrapped.Load() {
@@ -189,15 +189,15 @@ func (a *Agent) Run(ctx context.Context) error {
 	if watcher, ok := a.monitor.clip.(clipboard.Watcher); ok {
 		events, err := watcher.Watch(ctx)
 		if err != nil {
-			slog.Warn("event-driven clipboard watch unavailable; using polling", "component", "clipd", "error", err)
+			slog.Warn("event-driven clipboard watch unavailable; using polling", "component", "tg-clipd", "error", err)
 		} else {
 			watchEvents = events
 			pollEvents = nil
-			slog.Info("event-driven clipboard watch active", "component", "clipd")
+			slog.Info("event-driven clipboard watch active", "component", "tg-clipd")
 		}
 	}
 
-	slog.Info("clipd started", "component", "clipd", "hub_url", a.hubURL, "node_name", a.nodeName, "poll_interval", a.pollInterval)
+	slog.Info("tg-clipd started", "component", "tg-clipd", "hub_url", a.hubURL, "node_name", a.nodeName, "poll_interval", a.pollInterval)
 
 	for {
 		select {
@@ -209,7 +209,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			if !ok {
 				watchEvents = nil
 				pollEvents = ticker.C
-				slog.Warn("clipboard watch stopped; reverting to polling", "component", "clipd")
+				slog.Warn("clipboard watch stopped; reverting to polling", "component", "tg-clipd")
 				continue
 			}
 			a.pollClipboard(ctx)
@@ -230,7 +230,7 @@ func (a *Agent) pollClipboard(ctx context.Context) {
 			return
 		}
 		if err := a.sendToHub(ctx, ct); err != nil {
-			slog.Error("failed to send clip to hub, will retry", "component", "clipd", "error", err)
+			slog.Error("failed to send clip to hub, will retry", "component", "tg-clipd", "error", err)
 		} else {
 			a.monitor.MarkSent()
 		}
@@ -250,7 +250,7 @@ func (a *Agent) bootstrap(ctx context.Context) {
 			a.bootstrapped.Store(true)
 			return
 		}
-		slog.Warn("bootstrap retry", "component", "clipd_bootstrap", "attempt", attempt, "retry_delay", backoff)
+		slog.Warn("bootstrap retry", "component", "tg-clipd_bootstrap", "attempt", attempt, "retry_delay", backoff)
 		select {
 		case <-ctx.Done():
 			a.bootstrapped.Store(true)
@@ -260,7 +260,7 @@ func (a *Agent) bootstrap(ctx context.Context) {
 		backoff = min(backoff*2, 5*time.Second)
 	}
 
-	slog.Error("bootstrap retries exhausted; proceeding without hub state", "component", "clipd_bootstrap")
+	slog.Error("bootstrap retries exhausted; proceeding without hub state", "component", "tg-clipd_bootstrap")
 	a.bootstrapped.Store(true)
 }
 
@@ -268,17 +268,17 @@ func (a *Agent) bootstrap(ctx context.Context) {
 func (a *Agent) tryBootstrap(ctx context.Context) bool {
 	item, err := a.client.Current(ctx)
 	if errors.Is(err, hubclient.ErrNoCurrentClip) {
-		slog.Info("bootstrap found no current clip", "component", "clipd_bootstrap")
+		slog.Info("bootstrap found no current clip", "component", "tg-clipd_bootstrap")
 		a.bootstrapped.Store(true)
 		return true
 	}
 	if err != nil {
-		slog.Warn("bootstrap fetch failed", "component", "clipd_bootstrap", "error", err)
+		slog.Warn("bootstrap fetch failed", "component", "tg-clipd_bootstrap", "error", err)
 		return false
 	}
 
 	a.applyRemote(*item)
-	slog.Info("bootstrap applied hub clip", "component", "clipd_bootstrap", "sequence", item.Seq, "source", item.Source, "mime_type", item.MimeType)
+	slog.Info("bootstrap applied hub clip", "component", "tg-clipd_bootstrap", "sequence", item.Seq, "source", item.Source, "mime_type", item.MimeType)
 	a.bootstrapped.Store(true)
 	return true
 }
@@ -288,15 +288,15 @@ func (a *Agent) applyRemote(item protocol.ClipItem) {
 		return
 	}
 	if item.Source == a.nodeName {
-		slog.Debug("ignoring own update", "component", "clipd", "sequence", item.Seq)
+		slog.Debug("ignoring own update", "component", "tg-clipd", "sequence", item.Seq)
 		return
 	}
 
 	ct := itemToContent(item)
 	if err := a.monitor.ApplyRemote(ct); err != nil {
-		slog.Error("failed to apply remote clip", "component", "clipd", "error", err)
+		slog.Error("failed to apply remote clip", "component", "tg-clipd", "error", err)
 	} else {
-		slog.Info("applied remote clip", "component", "clipd", "sequence", item.Seq, "source", item.Source, "mime_type", item.MimeType)
+		slog.Info("applied remote clip", "component", "tg-clipd", "sequence", item.Seq, "source", item.Source, "mime_type", item.MimeType)
 	}
 }
 
@@ -316,7 +316,7 @@ func (a *Agent) sendToHub(ctx context.Context, ct clipboard.Content) error {
 		return err
 	}
 
-	slog.Info("sent clip to hub", "component", "clipd", "mime_type", ct.MimeType, "payload_bytes", len(ct.Data))
+	slog.Info("sent clip to hub", "component", "tg-clipd", "mime_type", ct.MimeType, "payload_bytes", len(ct.Data))
 	return nil
 }
 
@@ -360,7 +360,7 @@ func (a *Agent) isPausedByFile() bool {
 	if err != nil {
 		return false
 	}
-	_, err = os.Stat(filepath.Join(home, ".config", "cliphub", "paused"))
+	_, err = os.Stat(filepath.Join(home, ".config", "tg-clipboard", "paused"))
 	return err == nil
 }
 

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func TestStartServesPersistentHubRole(t *testing.T) {

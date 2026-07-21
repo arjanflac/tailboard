@@ -81,7 +81,7 @@ func (c *darwinClipboard) Write(ct Content) error {
 
 	// Write raw bytes to a temp file, then load via NSData to bypass
 	// pbcopy's locale-dependent encoding (macOS Roman under launchd).
-	tmp, err := os.CreateTemp("", "cliphub-*")
+	tmp, err := os.CreateTemp("", "tg-clipboard-*")
 	if err != nil {
 		return err
 	}

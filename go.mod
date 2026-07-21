@@ -1,4 +1,4 @@
-module github.com/thalysguimaraes/cliphub
+module github.com/thalysguimaraes/tg-clipboard
 
 go 1.26.1
 

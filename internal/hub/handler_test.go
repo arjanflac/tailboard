@@ -14,7 +14,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func devIdentity(r *http.Request) string { return "test-node" }
@@ -524,10 +524,10 @@ func TestHealthReadinessAndMetrics(t *testing.T) {
 
 	metrics := string(body)
 	for _, expected := range []string{
-		"cliphub_ready 1",
-		"cliphub_clips_stored_total 1",
-		"cliphub_clips_deduplicated_total 1",
-		"cliphub_http_requests_total",
+		"tg-clipboard_ready 1",
+		"tg-clipboard_clips_stored_total 1",
+		"tg-clipboard_clips_deduplicated_total 1",
+		"tg-clipboard_http_requests_total",
 	} {
 		if !strings.Contains(metrics, expected) {
 			t.Fatalf("expected metrics to contain %q, got %s", expected, metrics)

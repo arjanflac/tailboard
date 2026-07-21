@@ -134,17 +134,17 @@ func (o *Observer) Status(h *Hub) map[string]any {
 func (o *Observer) Metrics(h *Hub) string {
 	var b strings.Builder
 
-	writeMetric(&b, "cliphub_ready", "gauge", boolMetric(o.Ready()))
-	writeMetric(&b, "cliphub_http_requests_total", "counter", o.httpRequestsTotal.Load())
-	writeMetric(&b, "cliphub_clips_stored_total", "counter", o.clipsStoredTotal.Load())
-	writeMetric(&b, "cliphub_clips_deduplicated_total", "counter", o.clipsDeduplicatedTotal.Load())
-	writeMetric(&b, "cliphub_ws_connections_total", "counter", o.wsConnectionsTotal.Load())
-	writeMetric(&b, "cliphub_ws_disconnects_total", "counter", o.wsDisconnectsTotal.Load())
-	writeMetric(&b, "cliphub_ws_catchup_replays_total", "counter", o.wsCatchupReplaysTotal.Load())
-	writeMetric(&b, "cliphub_ws_catchup_items_total", "counter", o.wsCatchupItemsTotal.Load())
-	writeMetric(&b, "cliphub_sequence", "gauge", h.Seq())
-	writeMetric(&b, "cliphub_subscribers", "gauge", uint64(h.SubscriberCount()))
-	writeMetricFloat(&b, "cliphub_uptime_seconds", "gauge", time.Since(h.StartedAt()).Seconds())
+	writeMetric(&b, "tg-clipboard_ready", "gauge", boolMetric(o.Ready()))
+	writeMetric(&b, "tg-clipboard_http_requests_total", "counter", o.httpRequestsTotal.Load())
+	writeMetric(&b, "tg-clipboard_clips_stored_total", "counter", o.clipsStoredTotal.Load())
+	writeMetric(&b, "tg-clipboard_clips_deduplicated_total", "counter", o.clipsDeduplicatedTotal.Load())
+	writeMetric(&b, "tg-clipboard_ws_connections_total", "counter", o.wsConnectionsTotal.Load())
+	writeMetric(&b, "tg-clipboard_ws_disconnects_total", "counter", o.wsDisconnectsTotal.Load())
+	writeMetric(&b, "tg-clipboard_ws_catchup_replays_total", "counter", o.wsCatchupReplaysTotal.Load())
+	writeMetric(&b, "tg-clipboard_ws_catchup_items_total", "counter", o.wsCatchupItemsTotal.Load())
+	writeMetric(&b, "tg-clipboard_sequence", "gauge", h.Seq())
+	writeMetric(&b, "tg-clipboard_subscribers", "gauge", uint64(h.SubscriberCount()))
+	writeMetricFloat(&b, "tg-clipboard_uptime_seconds", "gauge", time.Since(h.StartedAt()).Seconds())
 
 	return b.String()
 }

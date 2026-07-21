@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	packageManagerHomepage       = "https://github.com/thalysguimaraes/cliphub"
-	packageManagerLicenseURL     = "https://github.com/thalysguimaraes/cliphub/blob/main/LICENSE"
+	packageManagerHomepage       = "https://github.com/thalysguimaraes/tg-clipboard"
+	packageManagerLicenseURL     = "https://github.com/thalysguimaraes/tg-clipboard/blob/main/LICENSE"
 	wingetPublisher              = "Thalys Guimaraes"
 	wingetPublisherURL           = "https://github.com/thalysguimaraes"
 	wingetManifestVersion        = "1.12.0"
@@ -156,60 +156,60 @@ type wingetNestedInstallerFile struct {
 
 var packageSpecs = []packageSpec{
 	{
-		Binary:      "cliphub",
-		Description: "Hub broker for ClipHub clipboard sync over Tailscale.",
+		Binary:      "tg-clipboard",
+		Description: "Hub broker for tg-clipboard clipboard sync over Tailscale.",
 		HomebrewTargets: []Target{
-			{Binary: "cliphub", GOOS: "darwin", GOARCH: "amd64"},
-			{Binary: "cliphub", GOOS: "darwin", GOARCH: "arm64"},
-			{Binary: "cliphub", GOOS: "linux", GOARCH: "amd64"},
-			{Binary: "cliphub", GOOS: "linux", GOARCH: "arm64"},
+			{Binary: "tg-clipboard", GOOS: "darwin", GOARCH: "amd64"},
+			{Binary: "tg-clipboard", GOOS: "darwin", GOARCH: "arm64"},
+			{Binary: "tg-clipboard", GOOS: "linux", GOARCH: "amd64"},
+			{Binary: "tg-clipboard", GOOS: "linux", GOARCH: "arm64"},
 		},
-		HomebrewTestCommand:  "#{bin}/cliphub -h 2>&1",
+		HomebrewTestCommand:  "#{bin}/tg-clipboard -h 2>&1",
 		HomebrewTestExitCode: 1,
 		HomebrewTestExpect:   "listen address in dev mode",
-		ScoopTarget:          &Target{Binary: "cliphub", GOOS: "windows", GOARCH: "amd64"},
-		WingetTarget:         &Target{Binary: "cliphub", GOOS: "windows", GOARCH: "amd64"},
-		WingetIdentifier:     "ThalysGuimaraes.ClipHub",
-		WingetPackageName:    "ClipHub Broker",
-		WingetMoniker:        "cliphub",
+		ScoopTarget:          &Target{Binary: "tg-clipboard", GOOS: "windows", GOARCH: "amd64"},
+		WingetTarget:         &Target{Binary: "tg-clipboard", GOOS: "windows", GOARCH: "amd64"},
+		WingetIdentifier:     "ThalysGuimaraes.TGClipboard",
+		WingetPackageName:    "tg-clipboard Broker",
+		WingetMoniker:        "tg-clipboard",
 		WingetTags:           []string{"clipboard", "tailscale", "sync", "server"},
 	},
 	{
-		Binary:      "clipd",
-		Description: "ClipHub desktop agent for clipboard sync over Tailscale.",
+		Binary:      "tg-clipd",
+		Description: "tg-clipboard desktop agent for clipboard sync over Tailscale.",
 		HomebrewTargets: []Target{
-			{Binary: "clipd", GOOS: "darwin", GOARCH: "amd64"},
-			{Binary: "clipd", GOOS: "darwin", GOARCH: "arm64"},
-			{Binary: "clipd", GOOS: "linux", GOARCH: "amd64"},
-			{Binary: "clipd", GOOS: "linux", GOARCH: "arm64"},
+			{Binary: "tg-clipd", GOOS: "darwin", GOARCH: "amd64"},
+			{Binary: "tg-clipd", GOOS: "darwin", GOARCH: "arm64"},
+			{Binary: "tg-clipd", GOOS: "linux", GOARCH: "amd64"},
+			{Binary: "tg-clipd", GOOS: "linux", GOARCH: "arm64"},
 		},
-		HomebrewTestCommand:  "#{bin}/clipd -h 2>&1",
+		HomebrewTestCommand:  "#{bin}/tg-clipd -h 2>&1",
 		HomebrewTestExitCode: 1,
 		HomebrewTestExpect:   "flag: help requested",
-		ScoopTarget:          &Target{Binary: "clipd", GOOS: "windows", GOARCH: "amd64"},
-		WingetTarget:         &Target{Binary: "clipd", GOOS: "windows", GOARCH: "amd64"},
-		WingetIdentifier:     "ThalysGuimaraes.Clipd",
-		WingetPackageName:    "ClipHub Agent (clipd)",
-		WingetMoniker:        "clipd",
+		ScoopTarget:          &Target{Binary: "tg-clipd", GOOS: "windows", GOARCH: "amd64"},
+		WingetTarget:         &Target{Binary: "tg-clipd", GOOS: "windows", GOARCH: "amd64"},
+		WingetIdentifier:     "ThalysGuimaraes.TGClipd",
+		WingetPackageName:    "tg-clipboard Agent (tg-clipd)",
+		WingetMoniker:        "tg-clipd",
 		WingetTags:           []string{"clipboard", "tailscale", "sync", "cli"},
 	},
 	{
-		Binary:      "tailclip",
-		Description: "ClipHub command-line client for clipboard sync over Tailscale.",
+		Binary:      "tg-clip",
+		Description: "tg-clipboard command-line client for clipboard sync over Tailscale.",
 		HomebrewTargets: []Target{
-			{Binary: "tailclip", GOOS: "darwin", GOARCH: "amd64"},
-			{Binary: "tailclip", GOOS: "darwin", GOARCH: "arm64"},
-			{Binary: "tailclip", GOOS: "linux", GOARCH: "amd64"},
-			{Binary: "tailclip", GOOS: "linux", GOARCH: "arm64"},
+			{Binary: "tg-clip", GOOS: "darwin", GOARCH: "amd64"},
+			{Binary: "tg-clip", GOOS: "darwin", GOARCH: "arm64"},
+			{Binary: "tg-clip", GOOS: "linux", GOARCH: "amd64"},
+			{Binary: "tg-clip", GOOS: "linux", GOARCH: "arm64"},
 		},
-		HomebrewTestCommand:  "#{bin}/tailclip 2>&1",
+		HomebrewTestCommand:  "#{bin}/tg-clip 2>&1",
 		HomebrewTestExitCode: 1,
-		HomebrewTestExpect:   "Usage: tailclip",
-		ScoopTarget:          &Target{Binary: "tailclip", GOOS: "windows", GOARCH: "amd64"},
-		WingetTarget:         &Target{Binary: "tailclip", GOOS: "windows", GOARCH: "amd64"},
-		WingetIdentifier:     "ThalysGuimaraes.Tailclip",
-		WingetPackageName:    "Tailclip",
-		WingetMoniker:        "tailclip",
+		HomebrewTestExpect:   "Usage: tg-clip",
+		ScoopTarget:          &Target{Binary: "tg-clip", GOOS: "windows", GOARCH: "amd64"},
+		WingetTarget:         &Target{Binary: "tg-clip", GOOS: "windows", GOARCH: "amd64"},
+		WingetIdentifier:     "ThalysGuimaraes.TGClip",
+		WingetPackageName:    "TGClip",
+		WingetMoniker:        "tg-clip",
 		WingetTags:           []string{"clipboard", "tailscale", "sync", "cli"},
 	},
 }
@@ -980,8 +980,17 @@ func wingetManifestDir(root, identifier, version string) string {
 	)
 }
 
+// homebrewClassName converts a binary name to a valid Ruby class name:
+// hyphenated names CamelCase per Homebrew convention (tg-clipd → TgClipd).
 func homebrewClassName(binary string) string {
-	return strings.ToUpper(binary[:1]) + binary[1:]
+	var builder strings.Builder
+	for _, part := range strings.Split(binary, "-") {
+		if part == "" {
+			continue
+		}
+		builder.WriteString(strings.ToUpper(part[:1]) + part[1:])
+	}
+	return builder.String()
 }
 
 func rubyString(value string) string {

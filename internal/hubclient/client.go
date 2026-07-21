@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 const defaultRequestTimeout = 10 * time.Second

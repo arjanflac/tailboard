@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 var (
@@ -41,7 +41,7 @@ func newTransferStore(dir string, quota, maxSize int64, ttl time.Duration) (*tra
 	temporary := false
 	if dir == "" {
 		var err error
-		dir, err = os.MkdirTemp("", "cliphub-spool-*")
+		dir, err = os.MkdirTemp("", "tg-clipboard-spool-*")
 		if err != nil {
 			return nil, err
 		}

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func TestDownloadDirectTransferFileUsesScopedBearer(t *testing.T) {

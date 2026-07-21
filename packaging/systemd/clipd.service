@@ -1,10 +1,10 @@
 [Unit]
-Description=ClipHub clipboard synchronization agent
+Description=TGClipboard clipboard synchronization agent
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/clipd
+ExecStart=/usr/local/bin/tg-clipd
 Restart=on-failure
 RestartSec=3
 

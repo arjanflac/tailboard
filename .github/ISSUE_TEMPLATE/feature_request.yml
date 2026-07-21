@@ -1,5 +1,5 @@
 name: Feature request
-description: Propose a new capability or workflow improvement for ClipHub.
+description: Propose a new capability or workflow improvement for TGClipboard.
 title: "[Feature]: "
 body:
   - type: markdown
@@ -8,7 +8,7 @@ body:
         Thanks for sharing an idea.
 
         Please use this template for feature work, workflow improvements, and substantial documentation requests. For sensitive security issues, follow the private reporting instructions in:
-        https://github.com/thalysguimaraes/cliphub/security/policy
+        https://github.com/thalysguimaraes/tg-clipboard/security/policy
   - type: textarea
     id: problem
     attributes:
@@ -22,9 +22,9 @@ body:
     attributes:
       label: Affected area
       options:
-        - cliphub (hub)
-        - clipd (desktop agent)
-        - tailclip (CLI)
+        - tg-clipboard (hub)
+        - tg-clipd (desktop agent)
+        - tg-clip (CLI)
         - iOS app or extensions
         - Build or release tooling
         - Documentation

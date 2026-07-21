@@ -22,7 +22,7 @@ server:
   port: 4040
 hooks:
   after_create: |
-    git clone --depth 1 https://github.com/thalysguimaraes/cliphub.git .
+    git clone --depth 1 https://github.com/thalysguimaraes/tg-clipboard.git .
   before_remove: |
     branch=$(git branch --show-current 2>/dev/null)
     if [ -n "$branch" ] && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then

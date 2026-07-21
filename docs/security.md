@@ -2,12 +2,12 @@
 
 See also: [Architecture](architecture.md), [Known Limitations](limitations.md), [Platform Support](platform-support.md), [Roadmap](roadmap.md), [README](../README.md), [SECURITY.md](../SECURITY.md)
 
-ClipHub is a sensitive product because it moves clipboard contents across devices. The security posture is intentionally simple: trust your tailnet, trust the hub you run inside it, and trust every device you connect to that hub.
+tg-clipboard is a sensitive product because it moves clipboard contents across devices. The security posture is intentionally simple: trust your tailnet, trust the hub you run inside it, and trust every device you connect to that hub.
 
 ## Security model
 
 - The normal deployment boundary is your Tailscale tailnet.
-- In tailnet mode, `cliphub` identifies callers through Tailscale/tsnet rather than separate ClipHub accounts or API tokens.
+- In tailnet mode, `tg-clipboard` identifies callers through Tailscale/tsnet rather than separate tg-clipboard accounts or API tokens.
 - Every connected client that can reach the hub can receive synced clipboard content.
 - The hub is not a blind relay. It reads, stores, and replays clipboard data.
 
@@ -21,14 +21,14 @@ ClipHub is a sensitive product because it moves clipboard contents across device
 
 ## Current privacy controls
 
-ClipHub now includes opt-in privacy controls on the desktop agent:
+tg-clipboard now includes opt-in privacy controls on the desktop agent:
 
 - `--ignore-apps` / `--ignore-processes` keep matching foreground contexts local.
 - `--filter-sensitive` can block `secret`, `password-manager`, and `otp` classes.
 - `--clear-on-block` can clear the local clipboard when a privacy rule blocks sync.
 - `--privacy-preset strict|balanced|off` provides reviewed policy bundles. Strict enables every sensitive class plus clear-on-block.
 - Every blocked item emits a local audit log entry; audit details are never uploaded.
-- `tailclip clear` removes hub clipboard state and persisted history, and `tailclip clear --local` also clears the invoking machine's clipboard.
+- `tg-clip clear` removes hub clipboard state and persisted history, and `tg-clip clear --local` also clears the invoking machine's clipboard.
 
 Foreground detection is best-effort and platform-specific:
 
@@ -40,7 +40,7 @@ Foreground detection is best-effort and platform-specific:
 | Linux fallback | `xdotool` | last-resort compatibility |
 | Windows | native foreground-window process lookup | active process identity |
 
-`tailclip status` and `clipd` logs report the selected detector layer. These controls reduce exposure, but they are not end-to-end secrecy or centrally enforced policy.
+`tg-clip status` and `tg-clipd` logs report the selected detector layer. These controls reduce exposure, but they are not end-to-end secrecy or centrally enforced policy.
 
 ## File-transfer security
 
@@ -52,19 +52,19 @@ Foreground detection is best-effort and platform-specific:
 - Direct fetch binds only the sender's Tailscale address, uses a random 256-bit bearer token scoped to one transfer, supports range reads, and remains subject to receiver SHA-256 verification. The hub carries the URL/token metadata but never fetches the bytes.
 - The device registry reserves a public-key field for the accepted transfers-first E2EE design. Encryption is not implemented today; the threat model, wire proposal, downgrade rule, and prerequisites are recorded in [Transfer E2EE Decision](e2ee-transfers.md).
 
-## What ClipHub protects well
+## What tg-clipboard protects well
 
 - It avoids adding another cloud account system or third-party sync service.
 - It keeps traffic inside your own tailnet in normal deployments.
 - It minimizes identity sprawl by reusing Tailscale's existing device/user trust.
 
-## What ClipHub does not currently protect against
+## What tg-clipboard does not currently protect against
 
 - A compromised or untrusted hub operator. The hub can read synced content.
 - A compromised client device. Any synced clipboard is available to that device once applied locally.
 - Clipboard broadcast remains non-selective. File transfers are targeted to a registered device and require consent, but this is not a general authorization system.
 - End-to-end encryption from source device to destination device.
-- At-rest encryption managed by ClipHub itself. Use OS or disk encryption if you need stronger local storage protections.
+- At-rest encryption managed by tg-clipboard itself. Use OS or disk encryption if you need stronger local storage protections.
 - Reliable retroactive wipe semantics after content was already synced.
 - Perfect context detection. Ignore rules are best-effort and depend on what the local platform can observe.
 
@@ -72,12 +72,12 @@ Foreground detection is best-effort and platform-specific:
 
 ### Production use
 
-- Run `cliphub` in normal tailnet mode for real usage.
-- Treat every machine running `clipd`, `tailclip`, or the iOS companion as trusted with the same data you would manually copy there.
+- Run `tg-clipboard` in normal tailnet mode for real usage.
+- Treat every machine running `tg-clipd`, `tg-clip`, or the iOS companion as trusted with the same data you would manually copy there.
 
 ### Development mode
 
-- `cliphub -dev` is intentionally a local-development mode.
+- `tg-clipboard -dev` is intentionally a local-development mode.
 - It defaults to `localhost:8080` and does not use the tailnet identity boundary.
 - If you bind it to a wider address, that is your responsibility; it is not the supported secure deployment shape.
 

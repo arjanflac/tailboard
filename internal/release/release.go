@@ -88,21 +88,21 @@ type Result struct {
 }
 
 var DefaultTargets = []Target{
-	{Binary: "clipd", GOOS: "darwin", GOARCH: "amd64"},
-	{Binary: "clipd", GOOS: "darwin", GOARCH: "arm64"},
-	{Binary: "clipd", GOOS: "linux", GOARCH: "amd64"},
-	{Binary: "clipd", GOOS: "linux", GOARCH: "arm64"},
-	{Binary: "clipd", GOOS: "windows", GOARCH: "amd64"},
-	{Binary: "cliphub", GOOS: "darwin", GOARCH: "amd64"},
-	{Binary: "cliphub", GOOS: "darwin", GOARCH: "arm64"},
-	{Binary: "cliphub", GOOS: "linux", GOARCH: "amd64"},
-	{Binary: "cliphub", GOOS: "linux", GOARCH: "arm64"},
-	{Binary: "cliphub", GOOS: "windows", GOARCH: "amd64"},
-	{Binary: "tailclip", GOOS: "darwin", GOARCH: "amd64"},
-	{Binary: "tailclip", GOOS: "darwin", GOARCH: "arm64"},
-	{Binary: "tailclip", GOOS: "linux", GOARCH: "amd64"},
-	{Binary: "tailclip", GOOS: "linux", GOARCH: "arm64"},
-	{Binary: "tailclip", GOOS: "windows", GOARCH: "amd64"},
+	{Binary: "tg-clipd", GOOS: "darwin", GOARCH: "amd64"},
+	{Binary: "tg-clipd", GOOS: "darwin", GOARCH: "arm64"},
+	{Binary: "tg-clipd", GOOS: "linux", GOARCH: "amd64"},
+	{Binary: "tg-clipd", GOOS: "linux", GOARCH: "arm64"},
+	{Binary: "tg-clipd", GOOS: "windows", GOARCH: "amd64"},
+	{Binary: "tg-clipboard", GOOS: "darwin", GOARCH: "amd64"},
+	{Binary: "tg-clipboard", GOOS: "darwin", GOARCH: "arm64"},
+	{Binary: "tg-clipboard", GOOS: "linux", GOARCH: "amd64"},
+	{Binary: "tg-clipboard", GOOS: "linux", GOARCH: "arm64"},
+	{Binary: "tg-clipboard", GOOS: "windows", GOARCH: "amd64"},
+	{Binary: "tg-clip", GOOS: "darwin", GOARCH: "amd64"},
+	{Binary: "tg-clip", GOOS: "darwin", GOARCH: "arm64"},
+	{Binary: "tg-clip", GOOS: "linux", GOARCH: "amd64"},
+	{Binary: "tg-clip", GOOS: "linux", GOARCH: "arm64"},
+	{Binary: "tg-clip", GOOS: "windows", GOARCH: "amd64"},
 }
 
 func Build(ctx context.Context, opts Options) (Result, error) {
@@ -290,15 +290,15 @@ func ResolveSourceDateEpoch(ctx context.Context, repoRoot, ref string) (int64, e
 }
 
 func checksumsFileName(version string) string {
-	return fmt.Sprintf("cliphub_%s_checksums.txt", sanitizeVersion(version))
+	return fmt.Sprintf("tg-clipboard_%s_checksums.txt", sanitizeVersion(version))
 }
 
 func notesFileName(version string) string {
-	return fmt.Sprintf("cliphub_%s_release_notes.md", sanitizeVersion(version))
+	return fmt.Sprintf("tg-clipboard_%s_release_notes.md", sanitizeVersion(version))
 }
 
 func manifestFileName(version string) string {
-	return fmt.Sprintf("cliphub_%s_artifacts.json", sanitizeVersion(version))
+	return fmt.Sprintf("tg-clipboard_%s_artifacts.json", sanitizeVersion(version))
 }
 
 func normalizeRepoRoot(repoRoot string) (string, error) {
@@ -614,7 +614,7 @@ func renderReleaseNotes(changelogPath, version string, artifacts []Artifact) (st
 	}
 
 	var builder strings.Builder
-	builder.WriteString("# ClipHub ")
+	builder.WriteString("# tg-clipboard ")
 	builder.WriteString(version)
 	builder.WriteString("\n\n")
 	builder.WriteString("_Generated from `CHANGELOG.md` (`")
@@ -631,7 +631,7 @@ func renderReleaseNotes(changelogPath, version string, artifacts []Artifact) (st
 	}
 
 	builder.WriteString("\n## Release Assets\n\n")
-	for _, binary := range []string{"cliphub", "clipd", "tailclip"} {
+	for _, binary := range []string{"tg-clipboard", "tg-clipd", "tg-clip"} {
 		targets, ok := grouped[binary]
 		if !ok {
 			continue

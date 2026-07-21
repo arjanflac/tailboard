@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/thalysguimaraes/cliphub/internal/privacy"
+	"github.com/thalysguimaraes/tg-clipboard/internal/privacy"
 )
 
 type shellContextProvider struct{}

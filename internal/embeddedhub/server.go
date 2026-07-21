@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/hub"
+	"github.com/thalysguimaraes/tg-clipboard/internal/hub"
 )
 
 const DefaultAddress = ":9437"
@@ -26,7 +26,7 @@ type Config struct {
 	TransferTTL     time.Duration
 }
 
-// Server is an in-process hub carried by a clipd instance.
+// Server is an in-process hub carried by a tg-clipd instance.
 type Server struct {
 	URL      string
 	listener net.Listener

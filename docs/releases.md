@@ -1,14 +1,14 @@
 # Release Engineering
 
-ClipHub releases are built from a single Linux host and published as deterministic archives, checksums, release notes, and a machine-readable manifest.
+tg-clipboard releases are built from a single Linux host and published as deterministic archives, checksums, release notes, and a machine-readable manifest.
 
 ## Supported targets
 
 | Binary | Targets |
 |--------|---------|
-| `cliphub` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64` |
-| `clipd` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64` |
-| `tailclip` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64` |
+| `tg-clipboard` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64` |
+| `tg-clipd` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64` |
+| `tg-clip` | `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64` |
 
 ## Local dry run
 
@@ -21,12 +21,12 @@ make release-verify VERSION=v0.1.1-rc1
 `make release` writes publishable assets to `dist/release/`:
 
 - platform archives (`.tar.gz` for Unix targets, `.zip` for Windows),
-- `cliphub_<version>_checksums.txt`,
-- `cliphub_<version>_release_notes.md`,
-- `cliphub_<version>_artifacts.json`.
-- `package-managers/homebrew/{cliphub,clipd,tailclip}.rb`,
-- `package-managers/scoop/{clipd,tailclip}.json`,
-- `package-managers/winget/manifests/t/ThalysGuimaraes/{Clipd,Tailclip}/<version>/*.yaml` after `make release-package-managers`.
+- `tg-clipboard_<version>_checksums.txt`,
+- `tg-clipboard_<version>_release_notes.md`,
+- `tg-clipboard_<version>_artifacts.json`.
+- `package-managers/homebrew/{tg-clipboard,tg-clipd,tg-clip}.rb`,
+- `package-managers/scoop/{tg-clipd,tg-clip}.json`,
+- `package-managers/winget/manifests/t/ThalysGuimaraes/{TGClipd,TGClip}/<version>/*.yaml` after `make release-package-managers`.
 
 `make release-verify` re-hashes every archive and confirms the checksum file, release notes, and manifest stay in sync.
 
@@ -35,18 +35,18 @@ Generate package-manager metadata from the release manifest/checksums with:
 ```bash
 make release-package-managers \
   VERSION=v0.1.1-rc1 \
-  RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/cliphub/releases/download/v0.1.1-rc1
+  RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/v0.1.1-rc1
 
 make release-package-managers-verify \
   VERSION=v0.1.1-rc1 \
-  RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/cliphub/releases/download/v0.1.1-rc1
+  RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/v0.1.1-rc1
 ```
 
 The package-manager step mirrors the shipped artifact matrix instead of inventing bundle-specific archives:
 
-- Homebrew formulas: `cliphub`, `clipd`, and `tailclip` for macOS and Linux on arm64/x86_64.
-- Scoop manifests: `cliphub`, `clipd`, and `tailclip` (Windows x86_64).
-- winget manifests: `ThalysGuimaraes.ClipHub`, `ThalysGuimaraes.Clipd`, and `ThalysGuimaraes.Tailclip` (Windows x86_64 portable zip packages).
+- Homebrew formulas: `tg-clipboard`, `tg-clipd`, and `tg-clip` for macOS and Linux on arm64/x86_64.
+- Scoop manifests: `tg-clipboard`, `tg-clipd`, and `tg-clip` (Windows x86_64).
+- winget manifests: `ThalysGuimaraes.tg-clipboard`, `ThalysGuimaraes.TGClipd`, and `ThalysGuimaraes.TGClip` (Windows x86_64 portable zip packages).
 
 ## GitHub release pipeline
 
@@ -57,7 +57,7 @@ The package-manager step mirrors the shipped artifact matrix instead of inventin
 3. runs `make release VERSION=<tag>`,
 4. runs `make release-verify VERSION=<tag>`,
 5. creates or updates the GitHub release and uploads the deterministic archives plus manifest/checksums,
-6. regenerates package-manager definitions from the published `cliphub_<tag>_artifacts.json` and `cliphub_<tag>_checksums.txt` assets,
+6. regenerates package-manager definitions from the published `tg-clipboard_<tag>_artifacts.json` and `tg-clipboard_<tag>_checksums.txt` assets,
 7. runs `make release-package-managers-verify VERSION=<tag>`,
 8. uploads the generated package-manager definition files to the same GitHub release.
 
@@ -65,13 +65,13 @@ The workflow updates existing releases in place with `gh release upload --clobbe
 
 When configured, it also commits formulas/manifests to real distribution repositories:
 
-- repository variable `HOMEBREW_TAP_REPOSITORY` (for example `owner/homebrew-cliphub`),
-- repository variable `SCOOP_BUCKET_REPOSITORY` (for example `owner/scoop-cliphub`),
+- repository variable `HOMEBREW_TAP_REPOSITORY` (for example `owner/homebrew-tg-clipboard`),
+- repository variable `SCOOP_BUCKET_REPOSITORY` (for example `owner/scoop-tg-clipboard`),
 - secret `PACKAGE_REPOS_TOKEN` with content-write access to those repositories.
 
 Absent configuration skips the external pushes without blocking core GitHub releases.
 
-Release archives also carry the matching launchd or systemd definitions. After extraction, `clipd install-service` and `cliphub install-service` install and load the appropriate background service.
+Release archives also carry the matching launchd or systemd definitions. After extraction, `tg-clipd install-service` and `tg-clipboard install-service` install and load the appropriate background service.
 
 ## Reproducibility notes
 
@@ -88,8 +88,8 @@ The repository dry-run path validates package-manager outputs with the same rele
 ```bash
 make release VERSION=v0.1.1-rc1
 make release-verify VERSION=v0.1.1-rc1
-make release-package-managers VERSION=v0.1.1-rc1 RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/cliphub/releases/download/v0.1.1-rc1
-make release-package-managers-verify VERSION=v0.1.1-rc1 RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/cliphub/releases/download/v0.1.1-rc1
+make release-package-managers VERSION=v0.1.1-rc1 RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/v0.1.1-rc1
+make release-package-managers-verify VERSION=v0.1.1-rc1 RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/v0.1.1-rc1
 ```
 
 `make release-package-managers-verify` checks that:

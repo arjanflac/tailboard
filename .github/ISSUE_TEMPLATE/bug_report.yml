@@ -8,16 +8,16 @@ body:
         Thanks for taking the time to report a bug.
 
         For vulnerabilities or sensitive security issues, do not file a public issue. Follow the private reporting instructions in the security policy:
-        https://github.com/thalysguimaraes/cliphub/security/policy
+        https://github.com/thalysguimaraes/tg-clipboard/security/policy
   - type: dropdown
     id: component
     attributes:
       label: Affected component
-      description: Which part of ClipHub is involved?
+      description: Which part of TGClipboard is involved?
       options:
-        - cliphub (hub)
-        - clipd (desktop agent)
-        - tailclip (CLI)
+        - tg-clipboard (hub)
+        - tg-clipd (desktop agent)
+        - tg-clip (CLI)
         - iOS app or extensions
         - Build or release tooling
         - Documentation
@@ -43,7 +43,7 @@ body:
     id: version
     attributes:
       label: Version, commit, or build
-      description: Share the tag, commit SHA, or describe how you built ClipHub.
+      description: Share the tag, commit SHA, or describe how you built TGClipboard.
       placeholder: main@398fff9, local branch, or binary release name
     validations:
       required: true
@@ -61,8 +61,8 @@ body:
       label: Steps to reproduce
       description: Include the exact inputs, commands, and conditions needed to reproduce the issue.
       placeholder: |
-        1. Start `cliphub -dev`
-        2. Start `clipd`
+        1. Start `tg-clipboard -dev`
+        2. Start `tg-clipd`
         3. Copy HTML content on machine A
         4. Observe machine B
       render: shell

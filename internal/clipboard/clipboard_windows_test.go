@@ -26,8 +26,8 @@ func TestWindowsClipboardRoundTripsNativeFormats(t *testing.T) {
 	}
 
 	tests := []Content{
-		{MimeType: "text/plain", Data: []byte("ClipHub Unicode ✓")},
-		{MimeType: "text/html", Data: []byte("<p><strong>ClipHub</strong> HTML</p>")},
+		{MimeType: "text/plain", Data: []byte("TGClipboard Unicode ✓")},
+		{MimeType: "text/html", Data: []byte("<p><strong>TGClipboard</strong> HTML</p>")},
 		{MimeType: "image/png", Data: imageData.Bytes()},
 	}
 	for _, want := range tests {

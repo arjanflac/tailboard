@@ -118,7 +118,7 @@ func (c *windowsClipboard) Watch(ctx context.Context) (<-chan struct{}, error) {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 
-		className, err := windows.UTF16PtrFromString(fmt.Sprintf("ClipHubClipboardWatcher-%d", os.Getpid()))
+		className, err := windows.UTF16PtrFromString(fmt.Sprintf("TGClipboardClipboardWatcher-%d", os.Getpid()))
 		if err != nil {
 			ready <- err
 			close(events)

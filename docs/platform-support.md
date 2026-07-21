@@ -4,18 +4,18 @@ See also: [Architecture](architecture.md), [Security & Privacy](security.md), [K
 
 ## Canonical support statement
 
-The main supported ClipHub sync path today is the desktop stack:
+The main supported tg-clipboard sync path today is the desktop stack:
 
-- `cliphub` as the hub,
-- `clipd` as the clipboard-watching agent,
-- `tailclip` as the direct CLI,
+- `tg-clipboard` as the hub,
+- `tg-clipd` as the clipboard-watching agent,
+- `tg-clip` as the direct CLI,
 - across macOS, Linux, and Windows.
 
 An iOS companion app, keyboard extension, share extension, and widgets are maintained in CI as a supported companion. Its interaction model intentionally differs from desktop because iOS does not permit background clipboard monitoring.
 
 ## Desktop clipboard capability matrix
 
-| Platform | `clipd` status | `text/plain` | `text/html` | `image/png` | Notes |
+| Platform | `tg-clipd` status | `text/plain` | `text/html` | `image/png` | Notes |
 | --- | --- | :---: | :---: | :---: | --- |
 | macOS | supported | yes | yes | yes | Uses a cheap `NSPasteboard.changeCount` check before reading content. |
 | Linux (Wayland) | supported | yes | yes | yes | Requires `wl-copy` and `wl-paste`; uses compositor-driven watch events. |
@@ -26,9 +26,9 @@ An iOS companion app, keyboard extension, share extension, and widgets are maint
 
 | Surface | Current state | Notes |
 | --- | --- | --- |
-| `cliphub` | supported on macOS, Linux, and Windows | Release archives cover Darwin AMD64/ARM64, Linux AMD64/ARM64, and Windows AMD64 and include service definitions. |
-| `clipd` | supported on macOS, Linux, and Windows | Rich clipboard parity plus a loopback device/transfer companion opened with `--tray`. |
-| `tailclip` | supported on macOS, Linux, and Windows | Includes clipboard commands plus device discovery and resumable, targeted file transfers. |
+| `tg-clipboard` | supported on macOS, Linux, and Windows | Release archives cover Darwin AMD64/ARM64, Linux AMD64/ARM64, and Windows AMD64 and include service definitions. |
+| `tg-clipd` | supported on macOS, Linux, and Windows | Rich clipboard parity plus a loopback device/transfer companion opened with `--tray`. |
+| `tg-clip` | supported on macOS, Linux, and Windows | Includes clipboard commands plus device discovery and resumable, targeted file transfers. |
 | iOS app + keyboard + share extension + widgets | supported companion; TestFlight is the intended distribution path | Requires iOS 17+, Tailscale connectivity, and Full Access for live keyboard networking. Simulator builds and tests run in CI. |
 
 ## iOS scope today
@@ -50,8 +50,8 @@ It is deliberately not a desktop background agent:
 
 ## Choosing a deployment target
 
-- For the common personal setup, run `clipd --embed-hub` on a frequently-on desktop. This provides the full broker and transfer spool without a dedicated machine.
-- Use standalone `cliphub` when you want an independently managed, always-on broker.
+- For the common personal setup, run `tg-clipd --embed-hub` on a frequently-on desktop. This provides the full broker and transfer spool without a dedicated machine.
+- Use standalone `tg-clipboard` when you want an independently managed, always-on broker.
 - Use the desktop stack for automatic two-way clipboard monitoring and unattended file receipt.
 - Use the iOS companion for explicit paste, copy, share, Shortcut, and transfer-inbox workflows.
-- Keep the Tailscale app connected on iOS. ClipHub intentionally does not embed a second VPN tunnel.
+- Keep the Tailscale app connected on iOS. tg-clipboard intentionally does not embed a second VPN tunnel.

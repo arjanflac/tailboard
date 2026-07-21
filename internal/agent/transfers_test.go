@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/thalysguimaraes/cliphub/internal/hubclient"
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/hubclient"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func TestTransferHelpers(t *testing.T) {

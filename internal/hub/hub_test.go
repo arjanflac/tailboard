@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func newTestHub() *Hub {

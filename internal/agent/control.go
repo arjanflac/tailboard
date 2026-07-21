@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 //go:embed control.html
@@ -69,7 +69,7 @@ func (a *Agent) startControlServer(ctx context.Context) (*controlServer, error) 
 	}
 	go func() {
 		if err := server.http.Serve(listener); err != nil && err != http.ErrServerClosed {
-			slog.Error("desktop control server stopped", "component", "clipd_control", "error", err)
+			slog.Error("desktop control server stopped", "component", "tg-clipd_control", "error", err)
 		}
 	}()
 	return server, nil
@@ -215,7 +215,7 @@ func (a *Agent) controlSendHandler(w http.ResponseWriter, r *http.Request) {
 			controlError(w, err, http.StatusBadRequest)
 			return
 		}
-		temp, err := os.CreateTemp("", "cliphub-control-*")
+		temp, err := os.CreateTemp("", "tg-clipboard-control-*")
 		if err != nil {
 			source.Close()
 			controlError(w, err, http.StatusInternalServerError)
@@ -328,7 +328,7 @@ func (a *Agent) controlTransferActionHandler(ctx context.Context, w http.Respons
 			writeControlJSON(w, http.StatusAccepted, map[string]string{"state": "accepting"})
 			go func(offer protocol.Transfer) {
 				if err := a.receiveTransfer(ctx, offer); err != nil {
-					slog.Error("desktop transfer acceptance failed", "component", "clipd_control", "transfer_id", offer.TransferID, "error", err)
+					slog.Error("desktop transfer acceptance failed", "component", "tg-clipd_control", "transfer_id", offer.TransferID, "error", err)
 				}
 			}(transfer)
 			return
@@ -395,7 +395,7 @@ func openBrowser(url string) {
 		command = exec.Command("xdg-open", url)
 	}
 	if err := command.Run(); err != nil {
-		slog.Debug("failed to open desktop control surface", "component", "clipd_control", "url", url, "error", err)
+		slog.Debug("failed to open desktop control surface", "component", "tg-clipd_control", "url", url, "error", err)
 	}
 }
 

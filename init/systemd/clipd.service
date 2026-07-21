@@ -1,21 +1,21 @@
 [Unit]
-Description=ClipHub - Clipboard sync agent
+Description=TGClipboard - Clipboard sync agent
 After=network-online.target tailscaled.service graphical-session.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/clipd
+ExecStart=/usr/local/bin/tg-clipd
 Restart=on-failure
 RestartSec=5
-# Hub is auto-discovered from tailnet. Set CLIPHUB_HUB to override the full URL,
-# or CLIPHUB_HOSTNAME to discover a non-default hub hostname:
-# Environment=CLIPHUB_HUB=https://cliphub.your-tailnet.ts.net
-# Environment=CLIPHUB_HOSTNAME=custom-hub
+# Hub is auto-discovered from tailnet. Set TG_CLIPBOARD_HUB to override the full URL,
+# or TG_CLIPBOARD_HOSTNAME to discover a non-default hub hostname:
+# Environment=TG_CLIPBOARD_HUB=https://tg-clipboard.your-tailnet.ts.net
+# Environment=TG_CLIPBOARD_HOSTNAME=custom-hub
 # Privacy controls are opt-in. Examples:
-# Environment=CLIPHUB_IGNORE_APPS=1Password,Bitwarden
-# Environment=CLIPHUB_FILTER_SENSITIVE=secret,otp
-# Environment=CLIPHUB_CLEAR_ON_BLOCK=true
+# Environment=TG_CLIPBOARD_IGNORE_APPS=1Password,Bitwarden
+# Environment=TG_CLIPBOARD_FILTER_SENSITIVE=secret,otp
+# Environment=TG_CLIPBOARD_CLEAR_ON_BLOCK=true
 
 [Install]
 WantedBy=default.target

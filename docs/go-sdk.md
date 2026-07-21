@@ -1,7 +1,7 @@
 # Public Go SDK Scope
 
 This note records the recommendation for `CLA-283` and scopes what should
-become public when ClipHub promotes a Go client out of `internal/hubclient`.
+become public when tg-clipboard promotes a Go client out of `internal/hubclient`.
 It is intentionally a design boundary, not the SDK implementation itself.
 
 ## Recommendation
@@ -12,13 +12,13 @@ instead of creating a separate Go module or repo.
 Recommended import path:
 
 ```go
-github.com/thalysguimaraes/cliphub/hubclient
+github.com/thalysguimaraes/tg-clipboard/hubclient
 ```
 
 Why this should stay in-repo first:
 
 - The current transport contract is still owned and exercised here: the hub
-  handlers, `tailclip`, `clipd`, and `internal/hubclient` all evolve together.
+  handlers, `tg-clip`, `tg-clipd`, and `internal/hubclient` all evolve together.
 - Paged history, blob upload/download, and typed error envelopes were just
   introduced as coordinated transport changes. Splitting the SDK now would add
   cross-repo release choreography before the public contract has much history.

@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/clipboard"
-	"github.com/thalysguimaraes/cliphub/internal/hub"
-	"github.com/thalysguimaraes/cliphub/internal/privacy"
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/clipboard"
+	"github.com/thalysguimaraes/tg-clipboard/internal/hub"
+	"github.com/thalysguimaraes/tg-clipboard/internal/privacy"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func TestNewReturnsClipboardInitError(t *testing.T) {
@@ -320,7 +320,7 @@ func TestPauseSourcesBlockRemoteApplyUntilResumed(t *testing.T) {
 			pause: func(t *testing.T, a *Agent) func() {
 				home := t.TempDir()
 				setTestHomeDir(t, home)
-				pausedPath := filepath.Join(home, ".config", "cliphub", "paused")
+				pausedPath := filepath.Join(home, ".config", "tg-clipboard", "paused")
 				if err := os.MkdirAll(filepath.Dir(pausedPath), 0o755); err != nil {
 					t.Fatalf("mkdir pause dir: %v", err)
 				}
@@ -384,7 +384,7 @@ func TestPauseSourcesBlockLocalCaptureUntilResumed(t *testing.T) {
 			pause: func(t *testing.T, a *Agent) func() {
 				home := t.TempDir()
 				setTestHomeDir(t, home)
-				pausedPath := filepath.Join(home, ".config", "cliphub", "paused")
+				pausedPath := filepath.Join(home, ".config", "tg-clipboard", "paused")
 				if err := os.MkdirAll(filepath.Dir(pausedPath), 0o755); err != nil {
 					t.Fatalf("mkdir pause dir: %v", err)
 				}

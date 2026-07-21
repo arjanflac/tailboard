@@ -74,7 +74,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Build shipped binaries
-        run: go build ./cmd/clipd ./cmd/cliphub ./cmd/tailclip
+        run: go build ./cmd/tg-clipd ./cmd/tg-clipboard ./cmd/tg-clip
 
   release-smoke:
     name: Release Smoke
@@ -90,9 +90,9 @@ jobs:
       - name: Verify release artifacts
         run: make release-verify VERSION=ci-snapshot
       - name: Generate package-manager metadata
-        run: make release-package-managers VERSION=ci-snapshot RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/cliphub/releases/download/ci-snapshot
+        run: make release-package-managers VERSION=ci-snapshot RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/ci-snapshot
       - name: Verify package-manager metadata
-        run: make release-package-managers-verify VERSION=ci-snapshot RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/cliphub/releases/download/ci-snapshot
+        run: make release-package-managers-verify VERSION=ci-snapshot RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/ci-snapshot
 
   ios-ci:
     name: iOS Build and Tests
@@ -109,8 +109,8 @@ jobs:
         run: |
           device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for runtime in d.values() for x in runtime if x["isAvailable"]))')"
           xcodebuild \
-            -project ClipHub.xcodeproj \
-            -scheme ClipHub \
+            -project TGClipboard.xcodeproj \
+            -scheme TGClipboard \
             -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=$device_id" \
             CODE_SIGNING_ALLOWED=NO \

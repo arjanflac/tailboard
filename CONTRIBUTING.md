@@ -1,6 +1,6 @@
-# Contributing to ClipHub
+# Contributing to tg-clipboard
 
-Thanks for investing time in ClipHub. This repository contains the Go hub/agent/CLI code plus the iOS client and extensions, so good contributions are usually focused, well-validated, and explicit about which surfaces they touch.
+Thanks for investing time in tg-clipboard. This repository contains the Go hub/agent/CLI code plus the iOS client and extensions, so good contributions are usually focused, well-validated, and explicit about which surfaces they touch.
 
 ## Before you start
 
@@ -14,11 +14,11 @@ Thanks for investing time in ClipHub. This repository contains the Go hub/agent/
 
 ### Core Go services and CLI
 
-ClipHub targets Go 1.21+ and uses the Makefile as the canonical local workflow:
+tg-clipboard targets Go 1.21+ and uses the Makefile as the canonical local workflow:
 
 ```bash
-git clone https://github.com/thalysguimaraes/cliphub.git
-cd cliphub
+git clone https://github.com/thalysguimaraes/tg-clipboard.git
+cd tg-clipboard
 make all
 make test
 make lint
@@ -26,9 +26,9 @@ make lint
 
 `make all` builds the three shipped binaries:
 
-- `cliphub` for the hub
-- `clipd` for the desktop agent
-- `tailclip` for CLI access
+- `tg-clipboard` for the hub
+- `tg-clipd` for the desktop agent
+- `tg-clip` for CLI access
 
 Clipboard behavior depends on the native tooling described in [README.md](README.md), so if you change clipboard integrations, mention the platform(s) you exercised in your PR.
 

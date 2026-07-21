@@ -9,9 +9,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/thalysguimaraes/cliphub/internal/hub"
-	"github.com/thalysguimaraes/cliphub/internal/hubclient"
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/hub"
+	"github.com/thalysguimaraes/tg-clipboard/internal/hubclient"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func TestControlServerStatePauseAndDropSend(t *testing.T) {

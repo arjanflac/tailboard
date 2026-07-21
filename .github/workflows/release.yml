@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          notes_file="dist/release/cliphub_${RELEASE_TAG}_release_notes.md"
+          notes_file="dist/release/tg-clipboard_${RELEASE_TAG}_release_notes.md"
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" dist/release/* --clobber
@@ -60,8 +60,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          manifest_url="https://github.com/thalysguimaraes/cliphub/releases/download/${RELEASE_TAG}/cliphub_${RELEASE_TAG}_artifacts.json"
-          checksums_url="https://github.com/thalysguimaraes/cliphub/releases/download/${RELEASE_TAG}/cliphub_${RELEASE_TAG}_checksums.txt"
+          manifest_url="https://github.com/thalysguimaraes/tg-clipboard/releases/download/${RELEASE_TAG}/tg-clipboard_${RELEASE_TAG}_artifacts.json"
+          checksums_url="https://github.com/thalysguimaraes/tg-clipboard/releases/download/${RELEASE_TAG}/tg-clipboard_${RELEASE_TAG}_checksums.txt"
 
           make release-package-managers \
             VERSION="${RELEASE_TAG}" \
@@ -74,8 +74,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          manifest_url="https://github.com/thalysguimaraes/cliphub/releases/download/${RELEASE_TAG}/cliphub_${RELEASE_TAG}_artifacts.json"
-          checksums_url="https://github.com/thalysguimaraes/cliphub/releases/download/${RELEASE_TAG}/cliphub_${RELEASE_TAG}_checksums.txt"
+          manifest_url="https://github.com/thalysguimaraes/tg-clipboard/releases/download/${RELEASE_TAG}/tg-clipboard_${RELEASE_TAG}_artifacts.json"
+          checksums_url="https://github.com/thalysguimaraes/tg-clipboard/releases/download/${RELEASE_TAG}/tg-clipboard_${RELEASE_TAG}_checksums.txt"
 
           make release-package-managers-verify \
             VERSION="${RELEASE_TAG}" \
@@ -110,7 +110,7 @@ jobs:
           git -C "$repo_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git -C "$repo_dir" add Formula
           if ! git -C "$repo_dir" diff --cached --quiet; then
-            git -C "$repo_dir" commit -m "cliphub ${RELEASE_TAG}"
+            git -C "$repo_dir" commit -m "tg-clipboard ${RELEASE_TAG}"
             git -C "$repo_dir" push
           fi
 
@@ -130,6 +130,6 @@ jobs:
           git -C "$repo_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git -C "$repo_dir" add bucket
           if ! git -C "$repo_dir" diff --cached --quiet; then
-            git -C "$repo_dir" commit -m "cliphub ${RELEASE_TAG}"
+            git -C "$repo_dir" commit -m "tg-clipboard ${RELEASE_TAG}"
             git -C "$repo_dir" push
           fi

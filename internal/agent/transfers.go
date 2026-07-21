@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func (a *Agent) handleTransferOffer(ctx context.Context, transfer protocol.Transfer) {
@@ -22,27 +22,27 @@ func (a *Agent) handleTransferOffer(ctx context.Context, transfer protocol.Trans
 		return
 	case "ask":
 		message := transferSummary(transfer)
-		notify("Incoming ClipHub transfer", message+" — run tailclip receive --id "+transfer.TransferID)
-		slog.Info("incoming transfer awaiting consent", "component", "clipd_transfers", "transfer_id", transfer.TransferID, "from_device", transfer.FromDevice)
+		notify("Incoming tg-clipboard transfer", message+" — run tg-clip receive --id "+transfer.TransferID)
+		slog.Info("incoming transfer awaiting consent", "component", "tg-clipd_transfers", "transfer_id", transfer.TransferID, "from_device", transfer.FromDevice)
 		return
 	case "accept":
 		if len(a.transferAllow) == 0 {
-			slog.Warn("auto-accept requires --transfer-allow", "component", "clipd_transfers", "transfer_id", transfer.TransferID)
+			slog.Warn("auto-accept requires --transfer-allow", "component", "tg-clipd_transfers", "transfer_id", transfer.TransferID)
 			return
 		}
 		if _, allowed := a.transferAllow[transfer.FromDevice]; !allowed {
-			slog.Info("incoming transfer is not allowlisted", "component", "clipd_transfers", "transfer_id", transfer.TransferID, "from_device", transfer.FromDevice)
+			slog.Info("incoming transfer is not allowlisted", "component", "tg-clipd_transfers", "transfer_id", transfer.TransferID, "from_device", transfer.FromDevice)
 			return
 		}
 	}
 
 	accepted, err := a.client.TransferAction(ctx, a.deviceID, transfer.TransferID, "accept")
 	if err != nil {
-		slog.Error("failed to accept transfer", "component", "clipd_transfers", "transfer_id", transfer.TransferID, "error", err)
+		slog.Error("failed to accept transfer", "component", "tg-clipd_transfers", "transfer_id", transfer.TransferID, "error", err)
 		return
 	}
 	if err := a.receiveTransfer(ctx, *accepted); err != nil {
-		slog.Error("transfer download failed", "component", "clipd_transfers", "transfer_id", accepted.TransferID, "error", err)
+		slog.Error("transfer download failed", "component", "tg-clipd_transfers", "transfer_id", accepted.TransferID, "error", err)
 	}
 }
 
@@ -66,8 +66,8 @@ func (a *Agent) receiveTransfer(ctx context.Context, transfer protocol.Transfer)
 	if _, err := a.client.TransferAction(ctx, a.deviceID, accepted.TransferID, "complete"); err != nil {
 		return err
 	}
-	notify("ClipHub transfer complete", transferSummary(accepted)+" saved to "+a.downloadDir)
-	slog.Info("transfer complete", "component", "clipd_transfers", "transfer_id", accepted.TransferID, "download_dir", a.downloadDir)
+	notify("tg-clipboard transfer complete", transferSummary(accepted)+" saved to "+a.downloadDir)
+	slog.Info("transfer complete", "component", "tg-clipd_transfers", "transfer_id", accepted.TransferID, "download_dir", a.downloadDir)
 	return nil
 }
 
@@ -80,7 +80,7 @@ func (a *Agent) downloadTransferFile(ctx context.Context, transfer protocol.Tran
 	if _, err := os.Stat(destination); err == nil {
 		return fmt.Errorf("refusing to overwrite %s", destination)
 	}
-	temp, err := os.CreateTemp(a.downloadDir, ".cliphub-*.part")
+	temp, err := os.CreateTemp(a.downloadDir, ".tg-clipboard-*.part")
 	if err != nil {
 		return err
 	}
@@ -144,6 +144,6 @@ func notify(title, message string) {
 		return
 	}
 	if err := command.Run(); err != nil {
-		slog.Debug("native notification failed", "component", "clipd_transfers", "error", err)
+		slog.Debug("native notification failed", "component", "tg-clipd_transfers", "error", err)
 	}
 }

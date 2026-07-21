@@ -16,12 +16,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 const (
 	// DefaultHubHostname preserves the historic tailnet hostname.
-	DefaultHubHostname  = "cliphub"
+	DefaultHubHostname  = "tg-clipboard"
 	DefaultRolePort     = 9437
 	defaultCacheTTL     = 30 * time.Second
 	defaultProbeTimeout = 3 * time.Second
@@ -87,7 +87,7 @@ func DefaultConfig() Config {
 
 // HubHostnameFromEnv returns the configured tailnet hostname for the hub.
 func HubHostnameFromEnv() string {
-	if value := strings.TrimSpace(os.Getenv("CLIPHUB_HOSTNAME")); value != "" {
+	if value := strings.TrimSpace(os.Getenv("TG_CLIPBOARD_HOSTNAME")); value != "" {
 		return value
 	}
 	return DefaultHubHostname
@@ -439,7 +439,7 @@ func trimDNS(dns string) string {
 }
 
 func rolePortFromEnv() int {
-	value := strings.TrimSpace(os.Getenv("CLIPHUB_ROLE_PORT"))
+	value := strings.TrimSpace(os.Getenv("TG_CLIPBOARD_ROLE_PORT"))
 	if value == "" {
 		return DefaultRolePort
 	}

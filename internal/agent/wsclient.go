@@ -9,7 +9,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/thalysguimaraes/cliphub/internal/protocol"
+	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 // wsReadLimit is the WebSocket read limit: MaxContentSize + headroom for JSON framing.
@@ -34,7 +34,7 @@ func (c *WSClient) Run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			slog.Warn("websocket disconnected", "component", "clipd_stream", "error", err, "retry_delay", backoff)
+			slog.Warn("websocket disconnected", "component", "tg-clipd_stream", "error", err, "retry_delay", backoff)
 			select {
 			case <-ctx.Done():
 				return
@@ -68,7 +68,7 @@ func (c *WSClient) connect(ctx context.Context) error {
 
 	conn.SetReadLimit(wsReadLimit)
 
-	slog.Info("connected to hub", "component", "clipd_stream", "hub_stream_url", url)
+	slog.Info("connected to hub", "component", "tg-clipd_stream", "hub_stream_url", url)
 
 	if c.OnConnected != nil {
 		c.OnConnected()

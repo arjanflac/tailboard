@@ -1,10 +1,10 @@
 [Unit]
-Description=ClipHub tailnet clipboard hub
+Description=TGClipboard tailnet clipboard hub
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/cliphub
+ExecStart=/usr/local/bin/tg-clipboard
 Restart=on-failure
 RestartSec=3
 

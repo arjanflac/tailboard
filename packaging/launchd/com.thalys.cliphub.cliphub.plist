@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.thalys.cliphub.cliphub</string>
-  <key>ProgramArguments</key><array><string>/usr/local/bin/cliphub</string></array>
+  <key>Label</key><string>com.thalys.tgclipboard.tg-clipboard</string>
+  <key>ProgramArguments</key><array><string>/usr/local/bin/tg-clipboard</string></array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
 </dict>
