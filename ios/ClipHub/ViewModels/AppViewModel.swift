@@ -46,10 +46,26 @@ final class AppViewModel {
 
     init() {
         self.showOnboarding = !store.onboardingCompleted
+        // iOS censors UIDevice.name to "iPhone" for third-party apps, so the
+        // user-chosen name in the store is the identity; upgrade the legacy
+        // lowercase default once.
+        if store.sourceName == "iphone" {
+            store.sourceName = UIDevice.current.name
+        }
         self.client = ClipHubClient(baseURL: store.hubURL, sourceName: store.sourceName)
         self.history = cache.load()
         self.currentClip = store.cachedCurrentClip
 
+    }
+
+    /// Renames this device: persists the name and re-registers with the hub
+    /// so every roster shows it immediately.
+    func renameDevice(to name: String) async {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != store.sourceName else { return }
+        store.sourceName = trimmed
+        await client.updateSourceName(trimmed)
+        await refresh()
     }
 
     // MARK: - Configuration
@@ -107,7 +123,7 @@ final class AppViewModel {
         do {
             _ = try await client.registerDevice(
                 deviceID: store.deviceID,
-                name: UIDevice.current.name
+                name: store.sourceName
             )
             async let clipTask = client.getCurrentClip()
             async let histTask = client.getHistory(limit: 50)
@@ -363,9 +379,13 @@ final class AppViewModel {
     }
 }
 
-// Extension to allow updating the actor's URL from outside
+// Extensions to allow updating the actor's config from outside
 extension ClipHubClient {
     public func updateBaseURL(_ url: URL) async {
         baseURL = url
+    }
+
+    public func updateSourceName(_ name: String) async {
+        sourceName = name
     }
 }

@@ -6,6 +6,8 @@ struct SettingsView: View {
     @Environment(AppViewModel.self) private var viewModel
     @Environment(\.openURL) private var openURL
     private let store = AppGroupStore()
+    @State private var deviceName = AppGroupStore().sourceName
+    @FocusState private var nameFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -16,8 +18,14 @@ struct SettingsView: View {
                     }
 
                     LabeledContent("This Device") {
-                        Text(store.sourceName)
-                            .foregroundStyle(.secondary)
+                        TextField("Device name", text: $deviceName)
+                            .multilineTextAlignment(.trailing)
+                            .focused($nameFocused)
+                            .submitLabel(.done)
+                            .onSubmit { commitRename() }
+                            .onChange(of: nameFocused) { _, focused in
+                                if !focused { commitRename() }
+                            }
                     }
 
                     Button("View Devices") {
@@ -60,6 +68,15 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
         }
+    }
+
+    private func commitRename() {
+        let name = deviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            deviceName = store.sourceName
+            return
+        }
+        Task { await viewModel.renameDevice(to: name) }
     }
 
     private var statusColor: Color {
