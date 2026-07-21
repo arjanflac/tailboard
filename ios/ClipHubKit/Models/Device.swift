@@ -54,6 +54,21 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
         case publicKey = "public_key"
         case lastSeen = "last_seen"
     }
+
+    /// The hub omits `capabilities` when empty (Go `omitempty`) — e.g. in
+    /// the register response. A missing list must decode as [], not fail:
+    /// this decode aborting silently blanked the whole app, because
+    /// registerDevice is the first call in refresh().
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        deviceID = try container.decode(String.self, forKey: .deviceID)
+        name = try container.decode(String.self, forKey: .name)
+        platform = try container.decode(String.self, forKey: .platform)
+        capabilities = try container.decodeIfPresent([String].self, forKey: .capabilities) ?? []
+        publicKey = try container.decodeIfPresent(String.self, forKey: .publicKey)
+        online = try container.decodeIfPresent(Bool.self, forKey: .online) ?? false
+        lastSeen = try container.decode(Date.self, forKey: .lastSeen)
+    }
 }
 
 public struct TransferFile: Codable, Hashable, Sendable {

@@ -169,7 +169,9 @@ func (s *transferStore) create(from string, req protocol.CreateTransferRequest) 
 func (s *transferStore) list(deviceID, role, state string) []protocol.Transfer {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var out []protocol.Transfer
+	// Non-nil so an empty roster serializes as [] — clients decode a JSON
+	// null as a hard error, and this endpoint is part of every app refresh.
+	out := make([]protocol.Transfer, 0, len(s.transfers))
 	for _, transfer := range s.transfers {
 		if state != "" && transfer.State != state {
 			continue

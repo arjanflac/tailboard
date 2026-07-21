@@ -114,6 +114,8 @@ public actor ClipHubClient {
         components.queryItems = items
         let (data, response) = try await get("/api/transfers?\(components.percentEncodedQuery ?? "")")
         try validate(response, body: data)
+        // Older hubs serialize an empty roster as JSON null (Go nil slice).
+        if data == Data("null".utf8) || data == Data("null\n".utf8) { return [] }
         return try decoder.decode([Transfer].self, from: data)
     }
 
