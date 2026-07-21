@@ -40,9 +40,9 @@ targets:
       path: TGClipboard/TGClipboard.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.thalys.tgclipboard
+          - group.com.thalys.cliphub
         keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.thalys.tgclipboard
+          - $(AppIdentifierPrefix)group.com.thalys.cliphub
 
   TGPasteKeyboard:
     type: app-extension
@@ -59,9 +59,9 @@ targets:
       path: TGPasteKeyboard/TGPasteKeyboard.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.thalys.tgclipboard
+          - group.com.thalys.cliphub
         keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.thalys.tgclipboard
+          - $(AppIdentifierPrefix)group.com.thalys.cliphub
 
   TGClipboardShare:
     type: app-extension
@@ -78,9 +78,9 @@ targets:
       path: TGClipboardShare/TGClipboardShare.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.thalys.tgclipboard
+          - group.com.thalys.cliphub
         keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.thalys.tgclipboard
+          - $(AppIdentifierPrefix)group.com.thalys.cliphub
 
   TGClipboardWidget:
     type: app-extension
@@ -98,9 +98,9 @@ targets:
       path: TGClipboardWidget/TGClipboardWidget.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.thalys.tgclipboard
+          - group.com.thalys.cliphub
         keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.thalys.tgclipboard
+          - $(AppIdentifierPrefix)group.com.thalys.cliphub
 
   TGClipboardKitMac:
     type: framework

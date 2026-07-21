@@ -20,7 +20,7 @@ open TGClipboard.xcodeproj
 2. Add a Framework target "TGClipboardKit"
 3. Add a Custom Keyboard Extension target "TGPasteKeyboard"
 4. Add a Share Extension target "TGClipboardShare"
-5. Enable App Groups (`group.com.thalys.tgclipboard`) on all 4 targets
+5. Enable App Groups (`group.com.thalys.cliphub`) on all 4 targets
 6. Add all Swift source files to their respective targets
 7. All 3 extension/app targets should embed TGClipboardKit
 

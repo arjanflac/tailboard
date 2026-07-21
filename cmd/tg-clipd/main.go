@@ -58,7 +58,8 @@ func defaultNodeName(ctx context.Context, resolver *discover.Resolver) string {
 func prettyHostname() string {
 	switch runtime.GOOS {
 	case "darwin":
-		out, err := exec.Command("scutil", "--get", "ComputerName").Output()
+		// Absolute path: launchd agents often run without /usr/sbin on PATH.
+		out, err := exec.Command("/usr/sbin/scutil", "--get", "ComputerName").Output()
 		if err != nil {
 			return ""
 		}

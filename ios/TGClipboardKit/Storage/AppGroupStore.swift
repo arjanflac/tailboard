@@ -2,7 +2,7 @@ import Foundation
 
 /// Shared configuration and cache accessible by all targets via App Group.
 public struct AppGroupStore: @unchecked Sendable {
-    public static let suiteName = "group.com.thalys.tgclipboard"
+    public static let suiteName = "group.com.thalys.cliphub"
 
     private let defaults: UserDefaults
 
