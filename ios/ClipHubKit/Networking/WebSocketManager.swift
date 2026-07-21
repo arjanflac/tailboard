@@ -79,7 +79,7 @@ public final class WebSocketManager: @unchecked Sendable {
         connectionState = .connected
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .clipHubISO8601
 
         while isRunning {
             let message = try await wsTask.receive()

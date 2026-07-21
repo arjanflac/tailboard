@@ -36,7 +36,7 @@ public actor ClipHubClient {
         self.session = URLSession(configuration: config)
 
         self.decoder = JSONDecoder()
-        self.decoder.dateDecodingStrategy = .iso8601
+        self.decoder.dateDecodingStrategy = .clipHubISO8601
     }
 
     // MARK: - GET /api/clip

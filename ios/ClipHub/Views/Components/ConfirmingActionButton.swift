@@ -5,6 +5,40 @@ import SwiftUI
 /// success haptic, then reverts. The confirmation fires only after the
 /// action reports success, so feedback stays causal. Under Reduce Motion the
 /// morph is a plain cross-fade (no bounce, no spring).
+/// Compact circular secondary action (Send, etc.) with the same causal
+/// ✓ confirmation behavior as ConfirmingActionButton.
+struct CircleActionButton: View {
+    let systemImage: String
+    let confirmedIcon: String
+    var action: () async -> Void
+
+    @State private var confirmed = false
+    @State private var running = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button {
+            guard !running else { return }
+            running = true
+            Task {
+                await action()
+                running = false
+                withAnimation(reduceMotion ? .none : .clipHub) { confirmed = true }
+                try? await Task.sleep(for: .seconds(1.6))
+                withAnimation(reduceMotion ? .none : .clipHub) { confirmed = false }
+            }
+        } label: {
+            Image(systemName: confirmed ? confirmedIcon : systemImage)
+                .font(.body.weight(.semibold))
+                .frame(width: 44, height: 44)
+                .symbolEffect(.bounce, value: confirmed)
+        }
+        .buttonStyle(.bordered)
+        .clipShape(Circle())
+        .sensoryFeedback(.success, trigger: confirmed) { _, new in new }
+    }
+}
+
 struct ConfirmingActionButton: View {
     let title: String
     let confirmedTitle: String

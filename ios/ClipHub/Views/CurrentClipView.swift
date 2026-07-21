@@ -69,89 +69,79 @@ struct CurrentClipView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Clip card
+    // MARK: - Hero clip card
 
+    /// The clip is the hero: big content on a gradient card, sender byline
+    /// with a colored avatar dot, and one prominent action — Copy. Send and
+    /// Share ride along as compact circles.
     @ViewBuilder
     private func clipCard(_ clip: ClipItem) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
+            heroContent(clip)
+
+            HStack(spacing: 6) {
                 Image(systemName: clip.kindSymbol)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 32, height: 32)
-                    .background(Color.accentColor.opacity(0.12), in: Circle())
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(clip.displaySummary)
-                        .font(.footnote.weight(.semibold))
-                    Text("from \(clip.source) · \(clip.createdAt, style: .relative) ago")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
+                    .font(.caption2.weight(.semibold))
+                Text(clip.displaySummary)
+                    .font(.caption.weight(.semibold))
+                Text("·")
+                    .foregroundStyle(.secondary)
+                Text("\(clip.source), \(clip.createdAt, style: .relative) ago")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
             }
 
-            clipContent(clip)
-
-            // Primary action row: Copy / Send / Share (spec §5.1).
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 ConfirmingActionButton(
                     title: "Copy",
                     confirmedTitle: "Copied",
-                    systemImage: "doc.on.doc",
+                    systemImage: "doc.on.doc.fill",
                     prominent: true
                 ) {
                     viewModel.copyToPasteboard(clip)
                 }
 
-                ConfirmingActionButton(
-                    title: "Send clipboard",
-                    confirmedTitle: "Sent",
-                    systemImage: "paperplane"
-                ) {
+                circleAction("paperplane.fill", label: "Send my clipboard", confirmedIcon: "checkmark") {
                     await viewModel.pushPasteboardToHub()
                 }
 
-                if clip.isText, let content = clip.content {
-                    ShareLink(item: content) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                    .buttonStyle(.bordered)
-                } else if clip.mimeType == "image/png", let data = clip.data,
-                   let uiImage = UIImage(data: data) {
-                    ShareLink(
-                        item: Image(uiImage: uiImage),
-                        preview: SharePreview(
-                            "Image from \(clip.source)",
-                            image: Image(uiImage: uiImage)
-                        )
-                    ) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                    .buttonStyle(.bordered)
-                }
+                shareCircle(clip)
             }
         }
-        .padding()
-        .background(
-            Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-        )
+        .padding(18)
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.accentColor.opacity(0.14),
+                            Color(.secondarySystemGroupedBackground),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottom
+                    )
+                )
+                .background(
+                    Color(.secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+                )
+        }
         .overlay {
             if contrast == .increased {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .stroke(Color(.separator), lineWidth: 1)
             }
         }
     }
 
     @ViewBuilder
-    private func clipContent(_ clip: ClipItem) -> some View {
+    private func heroContent(_ clip: ClipItem) -> some View {
         if clip.isText, let content = clip.content {
             Text(content)
-                .font(.body)
+                .font(content.count <= 80 ? .title3.weight(.medium) : .body)
+                .lineLimit(8)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else if clip.mimeType == "image/png", let data = clip.data,
@@ -159,13 +149,57 @@ struct CurrentClipView: View {
             Image(uiImage: uiImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .cornerRadius(8)
+                .frame(maxHeight: 260)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .accessibilityLabel("Image clip from \(clip.source)")
         } else {
-            Label("Binary clip · \(clip.formattedByteCount)", systemImage: "doc")
-                .font(.body)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                Image(systemName: "doc.fill")
+                    .font(.title2)
+                    .foregroundStyle(Color.accentColor)
+                Text(clip.displaySummary)
+                    .font(.title3.weight(.medium))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// Compact circular secondary action with a transient ✓ confirmation.
+    @ViewBuilder
+    private func circleAction(
+        _ systemImage: String,
+        label: String,
+        confirmedIcon: String,
+        action: @escaping () async -> Void
+    ) -> some View {
+        CircleActionButton(systemImage: systemImage, confirmedIcon: confirmedIcon, action: action)
+            .accessibilityLabel(label)
+    }
+
+    @ViewBuilder
+    private func shareCircle(_ clip: ClipItem) -> some View {
+        Group {
+            if clip.isText, let content = clip.content {
+                ShareLink(item: content) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                }
+            } else if clip.mimeType == "image/png", let data = clip.data,
+                      let uiImage = UIImage(data: data) {
+                ShareLink(
+                    item: Image(uiImage: uiImage),
+                    preview: SharePreview("Image from \(clip.source)", image: Image(uiImage: uiImage))
+                ) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                }
+            }
+        }
+        .buttonStyle(.bordered)
+        .clipShape(Circle())
+        .accessibilityLabel("Share")
     }
 
     // MARK: - Recent history

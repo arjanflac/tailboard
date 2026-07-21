@@ -19,7 +19,7 @@ public struct ClipCache: Sendable {
 
     public func load() -> [ClipItem] {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
-        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
+        let d = JSONDecoder(); d.dateDecodingStrategy = .clipHubISO8601
         return (try? d.decode([ClipItem].self, from: data)) ?? []
     }
 }

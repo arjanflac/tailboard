@@ -21,7 +21,7 @@ final class ConsolidatedDisplayTests: XCTestCase {
         }
         json += "\n}"
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .clipHubISO8601
         return try decoder.decode(ClipItem.self, from: Data(json.utf8))
     }
 
@@ -37,7 +37,7 @@ final class ConsolidatedDisplayTests: XCTestCase {
         }
         """
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .clipHubISO8601
         return try decoder.decode(Device.self, from: Data(json.utf8))
     }
 

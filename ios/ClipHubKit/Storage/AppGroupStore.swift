@@ -68,7 +68,7 @@ public struct AppGroupStore: @unchecked Sendable {
     public var cachedCurrentClip: ClipItem? {
         get {
             guard let data = defaults.data(forKey: "cachedCurrentClip") else { return nil }
-            let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
+            let d = JSONDecoder(); d.dateDecodingStrategy = .clipHubISO8601
             return try? d.decode(ClipItem.self, from: data)
         }
         nonmutating set {
@@ -82,7 +82,7 @@ public struct AppGroupStore: @unchecked Sendable {
     public var cachedRecentClips: [ClipItem] {
         get {
             guard let data = defaults.data(forKey: "cachedRecentClips") else { return [] }
-            let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
+            let d = JSONDecoder(); d.dateDecodingStrategy = .clipHubISO8601
             return (try? d.decode([ClipItem].self, from: data)) ?? []
         }
         nonmutating set {

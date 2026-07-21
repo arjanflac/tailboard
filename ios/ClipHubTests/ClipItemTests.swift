@@ -18,7 +18,7 @@ final class ClipItemTests: XCTestCase {
         """.data(using: .utf8)!
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .clipHubISO8601
 
         let item = try decoder.decode(ClipItem.self, from: json)
         XCTAssertEqual(item.seq, 42)
@@ -45,7 +45,7 @@ final class ClipItemTests: XCTestCase {
         """.data(using: .utf8)!
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .clipHubISO8601
 
         let item = try decoder.decode(ClipItem.self, from: json)
         XCTAssertEqual(item.mimeType, "image/png")
@@ -83,7 +83,7 @@ final class ClipItemTests: XCTestCase {
         """.data(using: .utf8)!
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .clipHubISO8601
 
         let msg = try decoder.decode(WSMessage.self, from: json)
         XCTAssertEqual(msg.type, "clip_update")
