@@ -47,7 +47,7 @@ func TestNewReturnsClipboardInitError(t *testing.T) {
 
 func TestNewDefaultsTransfersToDownloads(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHomeDir(t, home)
 
 	a, err := New(Config{
 		HubURL:    "http://example.com",

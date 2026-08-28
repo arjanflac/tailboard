@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -164,8 +165,8 @@ func xmlEscape(value string) string {
 
 func launchdPath(executable, home string) string {
 	paths := []string{
-		filepath.Dir(executable),
-		filepath.Join(home, ".local", "bin"),
+		path.Dir(filepath.ToSlash(executable)),
+		path.Join(filepath.ToSlash(home), ".local", "bin"),
 		"/opt/homebrew/bin",
 		"/opt/homebrew/sbin",
 		"/usr/local/bin",
