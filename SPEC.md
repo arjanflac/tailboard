@@ -35,7 +35,7 @@ The tracks are ordered by dependency: Track C reuses the device registry and tra
 What exists and works today:
 
 - **Hub (`tg-clipboard`)** — tsnet node with auto-HTTPS, SQLite-backed history, monotonic sequence numbers, WebSocket fan-out with `since_seq` catch-up, raw blob endpoints, cursor-paged history, typed errors, health/readiness/metrics endpoints, graceful shutdown.
-- **Agent (`tg-clipd`)** — 500 ms polling watcher, richest-MIME selection (png → html → plain), hash+MIME dedup, echo-loop prevention via read-back, opt-in privacy filters (app/process ignore lists, `secret`/`password-manager`/`otp` content classes, clear-on-block), pause/resume.
+- **Agent (`tg-clipd`)** — 500 ms polling watcher, cross-device MIME selection (png → plain → HTML-only fallback), hash+MIME dedup, echo-loop prevention via read-back, opt-in privacy filters (app/process ignore lists, `secret`/`password-manager`/`otp` content classes, clear-on-block), pause/resume.
 - **CLI (`tg-clip`)** — get/put/history/status/clear/pause/resume, file put with MIME detection, stdin piping.
 - **Release engineering** — deterministic archives, checksums, Homebrew/Scoop/winget metadata generation, CI on three OSes with a race gate.
 - **iOS companion (~1,400 lines Swift, xcodegen project)** — container app (current clip, history, settings, onboarding), `TGClipboardKit` framework (REST client, WebSocket manager, app-group cache), TailPaste keyboard (inserts current/recent hub clips), share extension (sends content to hub). Manual signing, no CI, no packaging.

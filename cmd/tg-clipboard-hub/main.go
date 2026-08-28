@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/discover"
-	"github.com/thalysguimaraes/tg-clipboard/internal/hub"
-	"github.com/thalysguimaraes/tg-clipboard/internal/service"
+	"github.com/arjanflac/tailboard/internal/discover"
+	"github.com/arjanflac/tailboard/internal/hub"
+	"github.com/arjanflac/tailboard/internal/service"
 	"tailscale.com/tsnet"
 )
 
@@ -25,7 +25,7 @@ var version = "dev"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "install-service" {
-		result, err := service.Install("tg-clipboard", os.Args[2:])
+		result, err := service.Install("hub", os.Args[2:])
 		if err != nil {
 			slog.Error("service install failed", "component", "tg-clipboard", "error", err)
 			os.Exit(1)

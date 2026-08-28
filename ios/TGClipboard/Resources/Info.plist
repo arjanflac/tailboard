@@ -11,19 +11,23 @@
 	<key>TGClipboardAppIdentifierPrefix</key>
 	<string>$(AppIdentifierPrefix)</string>
 	<key>CFBundleName</key>
-	<string>tg-clipboard</string>
+	<string>Tailboard</string>
 	<key>CFBundleDisplayName</key>
-	<string>tg-clipboard</string>
+	<string>Tailboard</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1</string>
+	<string>1.7</string>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>9</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
 	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>

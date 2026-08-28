@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 //go:embed control.html
@@ -326,11 +326,7 @@ func (a *Agent) controlTransferActionHandler(ctx context.Context, w http.Respons
 	for _, transfer := range transfers {
 		if transfer.TransferID == id && transfer.State == "offered" {
 			writeControlJSON(w, http.StatusAccepted, map[string]string{"state": "accepting"})
-			go func(offer protocol.Transfer) {
-				if err := a.receiveTransfer(ctx, offer); err != nil {
-					slog.Error("desktop transfer acceptance failed", "component", "tg-clipd_control", "transfer_id", offer.TransferID, "error", err)
-				}
-			}(transfer)
+			go a.receiveTransferOnce(ctx, transfer)
 			return
 		}
 	}

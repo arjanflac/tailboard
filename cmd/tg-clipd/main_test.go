@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/agent"
+	"github.com/arjanflac/tailboard/internal/agent"
 )
 
 type stubAgentRunner struct {

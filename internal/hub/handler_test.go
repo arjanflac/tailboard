@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/arjanflac/tailboard/internal/protocol"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 func devIdentity(r *http.Request) string { return "test-node" }

@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/clipboard"
-	"github.com/thalysguimaraes/tg-clipboard/internal/hub"
-	"github.com/thalysguimaraes/tg-clipboard/internal/privacy"
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/clipboard"
+	"github.com/arjanflac/tailboard/internal/hub"
+	"github.com/arjanflac/tailboard/internal/privacy"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 func TestNewReturnsClipboardInitError(t *testing.T) {
@@ -42,6 +42,24 @@ func TestNewReturnsClipboardInitError(t *testing.T) {
 	}
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected wrapped error %v, got %v", wantErr, err)
+	}
+}
+
+func TestNewDefaultsTransfersToDownloads(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	a, err := New(Config{
+		HubURL:    "http://example.com",
+		NodeName:  "test",
+		Clipboard: &fakeClipboard{},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	want := filepath.Join(home, "Downloads")
+	if a.downloadDir != want {
+		t.Fatalf("downloadDir = %q, want %q", a.downloadDir, want)
 	}
 }
 

@@ -168,6 +168,25 @@ func TestResolverSelfNameMissingHostname(t *testing.T) {
 	}
 }
 
+func TestResolverSelfNamePrefersMagicDNSLabel(t *testing.T) {
+	resolver := NewResolver(Config{
+		readStatus: func(context.Context) (tailnetStatus, error) {
+			return tailnetStatus{Self: tailnetNode{
+				HostName: "Arjan's MacBook Air",
+				DNSName:  "laptop.example.ts.net.",
+			}}, nil
+		},
+	})
+
+	name, err := resolver.SelfName(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "laptop" {
+		t.Fatalf("unexpected self name %q", name)
+	}
+}
+
 func TestResolverSelfIPPrefersIPv4(t *testing.T) {
 	resolver := NewResolver(Config{
 		interfaceIPs: func() ([]net.IP, error) { return nil, nil },

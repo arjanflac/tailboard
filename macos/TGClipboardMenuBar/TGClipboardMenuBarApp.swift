@@ -12,11 +12,12 @@ struct TGClipboardMenuBarApp: App {
         } label: {
             // Dropping files on the menu bar icon stages them and opens the
             // popover in "pick a device" mode — the fastest send path.
-            Image(systemName: viewModel.status.symbolName)
+            Image("TailboardMenuBar")
                 // Default SF Symbol rendering is oversized next to system
                 // status items; match their ~13pt optical size.
-                .font(.system(size: 13, weight: .regular))
-                .imageScale(.medium)
+                .resizable()
+                .renderingMode(.template)
+                .frame(width: 16, height: 16)
                 .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                     stageDrop(providers)
                 }

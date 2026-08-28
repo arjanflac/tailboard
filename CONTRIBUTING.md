@@ -1,6 +1,8 @@
-# Contributing to tg-clipboard
+# Contributing to Tailboard
 
-Thanks for investing time in tg-clipboard. This repository contains the Go hub/agent/CLI code plus the iOS client and extensions, so good contributions are usually focused, well-validated, and explicit about which surfaces they touch.
+Thanks for investing time in Tailboard. This repository contains the Go
+hub/agent/CLI, Android app, and Apple apps/extensions, so good contributions
+are focused, well validated, and explicit about which surfaces they touch.
 
 ## Before you start
 
@@ -14,25 +16,36 @@ Thanks for investing time in tg-clipboard. This repository contains the Go hub/a
 
 ### Core Go services and CLI
 
-tg-clipboard targets Go 1.21+ and uses the Makefile as the canonical local workflow:
+Tailboard targets the Go version declared in `go.mod` and uses the Makefile as
+the canonical local workflow:
 
 ```bash
-git clone https://github.com/thalysguimaraes/tg-clipboard.git
-cd tg-clipboard
+git clone https://github.com/arjanflac/tailboard.git
+cd tailboard
 make all
 make test
 make lint
 ```
 
-`make all` builds the three shipped binaries:
+`make all` builds the Tailboard-named local hub, engine, and CLI. Compatibility
+targets for the upstream binary names remain available in the Makefile.
 
-- `tg-clipboard` for the hub
-- `tg-clipd` for the desktop agent
-- `tg-clip` for CLI access
+- `Tailboard Hub` for the hub
+- `Tailboard Engine` for the desktop agent
+- `tailboard` for CLI access
 
 Clipboard behavior depends on the native tooling described in [README.md](README.md), so if you change clipboard integrations, mention the platform(s) you exercised in your PR.
 
-### iOS work
+### Android work
+
+Use JDK 17 and an Android SDK, then run:
+
+```bash
+cd android
+./gradlew test lint assembleDebug
+```
+
+### iOS and macOS work
 
 If you touch anything under [`ios/`](ios/README.md), follow the setup in [ios/README.md](ios/README.md). At minimum, contributors should:
 
@@ -41,7 +54,9 @@ cd ios
 xcodegen generate
 ```
 
-Then open the generated Xcode project and note the simulator/device validation you ran in the pull request. There is no repo-level automation for the iOS target today, so explicit manual validation notes matter.
+Then open the generated Xcode project and note the simulator/device validation
+you ran in the pull request. CI covers simulator builds and tests; physical
+device behavior still requires explicit manual validation notes.
 
 ## Making a change
 

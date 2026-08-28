@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 func TestTransferLifecycleWithRangeDownload(t *testing.T) {

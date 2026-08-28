@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/arjanflac/tailboard/internal/privacy"
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
-	"github.com/thalysguimaraes/tg-clipboard/internal/privacy"
 )
 
 type linuxContextProvider struct {

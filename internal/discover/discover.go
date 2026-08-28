@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 const (
@@ -185,11 +185,17 @@ func (r *Resolver) cacheURL(hubURL string) {
 	}
 }
 
-// SelfName returns this node's tailscale hostname.
+// SelfName returns this node's MagicDNS label, falling back to its host name.
 func (r *Resolver) SelfName(ctx context.Context) (string, error) {
 	status, _, err := r.status(ctx)
 	if err != nil {
 		return "", err
+	}
+	if dnsName := trimDNS(status.Self.DNSName); dnsName != "" {
+		if label, _, found := strings.Cut(dnsName, "."); found {
+			return label, nil
+		}
+		return dnsName, nil
 	}
 	if status.Self.HostName == "" {
 		return "", fmt.Errorf("empty hostname in tailscale status")

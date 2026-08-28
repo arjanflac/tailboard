@@ -61,7 +61,7 @@ struct TGPasteView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                     } else {
-                        Text("tg-paste")
+                        Text("Tailboard")
                     }
                 }
                 .font(.body.weight(.medium))
@@ -70,8 +70,8 @@ struct TGPasteView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(viewModel.currentClip == nil)
-            .accessibilityLabel(viewModel.currentClip == nil ? "tg-paste, nothing to insert" : "Paste current clip")
-            .accessibilityHint("Inserts the most recent tg-clipboard clip into the current text field")
+            .accessibilityLabel(viewModel.currentClip == nil ? "Tailboard, nothing to insert" : "Paste current clip")
+            .accessibilityHint("Inserts the most recent Tailboard clip into the current text field")
 
             Button(action: viewModel.pushClipboard) {
                 Image(systemName: "arrow.up.doc.fill")

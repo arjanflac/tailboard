@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 func TestStoreRecoversFromInterruptedLegacyWrite(t *testing.T) {

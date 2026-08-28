@@ -5,6 +5,7 @@ public enum TGClipboardError: Error, LocalizedError {
     case hubUnreachable(underlying: Error)
     case httpError(statusCode: Int, body: String)
     case emptyClipboard
+    case unsupportedClipboardType(String)
     case decodingError(Error)
 
     public var errorDescription: String? {
@@ -13,6 +14,7 @@ public enum TGClipboardError: Error, LocalizedError {
         case .hubUnreachable(let e): return "Hub unreachable: \(e.localizedDescription)"
         case .httpError(let code, let body): return "HTTP \(code): \(body)"
         case .emptyClipboard: return "Clipboard is empty on the hub"
+        case .unsupportedClipboardType(let type): return "Clipboard type \(type) is not supported on iPhone"
         case .decodingError(let e): return "Decode error: \(e.localizedDescription)"
         }
     }
@@ -31,7 +33,7 @@ public actor TGClipboardClient {
 
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 10
-        config.timeoutIntervalForResource = 30
+        config.timeoutIntervalForResource = 300
         config.waitsForConnectivity = true
         self.session = URLSession(configuration: config)
 
@@ -188,6 +190,63 @@ public actor TGClipboardClient {
         request.setValue("bytes 0-*/\(data.count)", forHTTPHeaderField: "Content-Range")
         BackgroundUploadCoordinator.shared.schedule(request: request, fileURL: staged)
         return created.transfer
+    }
+
+    /// Uploads a transfer and does not return until the hub has persisted the
+    /// complete payload. Share extensions use this path so "Sent" means the
+    /// bytes actually arrived instead of merely being queued in a background
+    /// session that iOS may defer or abandon after the sheet closes.
+    public func uploadTransfer(
+        deviceID: String,
+        toDevice: String,
+        data: Data,
+        fileName: String,
+        mimeType: String
+    ) async throws -> Transfer {
+        let safeName = URL(fileURLWithPath: fileName).lastPathComponent
+        let created = try await createTransfer(
+            deviceID: deviceID,
+            toDevice: toDevice,
+            fileName: safeName,
+            size: Int64(data.count),
+            mimeType: mimeType,
+            sha256: ClipHash.sha256Hex(data)
+        )
+        guard let uploadPath = created.uploadURLs.first else {
+            _ = try? await transferAction(
+                deviceID: deviceID,
+                transferID: created.transfer.transferID,
+                action: "cancel"
+            )
+            throw TGClipboardError.hubUnreachable(
+                underlying: URLError(.badServerResponse)
+            )
+        }
+
+        do {
+            let url = try resolveURL(uploadPath)
+            var request = URLRequest(url: url)
+            request.httpMethod = "PUT"
+            request.timeoutInterval = 300
+            request.setValue(deviceID, forHTTPHeaderField: "X-Clip-Device-ID")
+            request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+            request.setValue("bytes 0-*/\(data.count)", forHTTPHeaderField: "Content-Range")
+            let (responseData, response) = try await session.upload(for: request, from: data)
+            guard let http = response as? HTTPURLResponse else {
+                throw TGClipboardError.hubUnreachable(
+                    underlying: URLError(.badServerResponse)
+                )
+            }
+            try validate(http, body: responseData)
+            return try decoder.decode(Transfer.self, from: responseData)
+        } catch {
+            _ = try? await transferAction(
+                deviceID: deviceID,
+                transferID: created.transfer.transferID,
+                action: "cancel"
+            )
+            throw error
+        }
     }
 
     public func transferAction(deviceID: String, transferID: String, action: String) async throws -> Transfer {

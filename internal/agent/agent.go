@@ -8,13 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/clipboard"
-	"github.com/thalysguimaraes/tg-clipboard/internal/hubclient"
-	"github.com/thalysguimaraes/tg-clipboard/internal/privacy"
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/clipboard"
+	"github.com/arjanflac/tailboard/internal/hubclient"
+	"github.com/arjanflac/tailboard/internal/privacy"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 // Config holds agent configuration.
@@ -49,6 +50,9 @@ type Agent struct {
 	warnedCtx      atomic.Bool
 	transferPolicy string
 	transferAllow  map[string]struct{}
+	transferMu     sync.Mutex
+	receiving      map[string]struct{}
+	downloadMu     sync.Mutex
 	downloadDir    string
 	controlAddr    string
 	openControl    bool
@@ -128,6 +132,7 @@ func New(cfg Config) (*Agent, error) {
 		ctxProvider:    resolveContextProvider(cfg),
 		transferPolicy: cfg.TransferPolicy,
 		transferAllow:  allow,
+		receiving:      make(map[string]struct{}),
 		downloadDir:    cfg.DownloadDir,
 		controlAddr:    cfg.ControlAddr,
 		openControl:    cfg.OpenControl,
@@ -169,13 +174,20 @@ func (a *Agent) Run(ctx context.Context) error {
 			if !a.bootstrapped.Load() {
 				a.bootstrap(ctx)
 			}
+			go a.recoverIncomingTransfers(ctx)
 		},
 		OnUpdate: func(item protocol.ClipItem) {
 			a.applyRemote(item)
 		},
 		OnTransfer: func(transfer protocol.Transfer) {
-			if transfer.State == "offered" && transfer.ToDevice == a.deviceID {
+			if transfer.ToDevice != a.deviceID {
+				return
+			}
+			switch transfer.State {
+			case "offered":
 				go a.handleTransferOffer(ctx, transfer)
+			case "accepted", "transferring":
+				go a.receiveTransferOnce(ctx, transfer)
 			}
 		},
 	}

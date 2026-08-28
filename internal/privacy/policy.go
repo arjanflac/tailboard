@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/clipboard"
+	"github.com/arjanflac/tailboard/internal/clipboard"
 )
 
 type SensitiveClass string

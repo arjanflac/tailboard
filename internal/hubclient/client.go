@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 const defaultRequestTimeout = 10 * time.Second
@@ -570,15 +570,17 @@ func (c *Client) do(ctx context.Context, method string, endpoint string, body io
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	var cancel context.CancelFunc
 	if c.requestTimeout > 0 {
-		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.requestTimeout)
-		defer cancel()
 	}
 
 	if len(values) > 0 && values[0] != nil {
 		parsedURL, err := url.Parse(endpoint)
 		if err != nil {
+			if cancel != nil {
+				cancel()
+			}
 			return nil, err
 		}
 		parsedURL.RawQuery = values[0].Encode()
@@ -587,6 +589,9 @@ func (c *Client) do(ctx context.Context, method string, endpoint string, body io
 
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
 		return nil, err
 	}
 	for key, value := range headers {
@@ -597,9 +602,29 @@ func (c *Client) do(ctx context.Context, method string, endpoint string, body io
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		if cancel != nil {
+			cancel()
+		}
 		return nil, err
 	}
+	// The request context must stay alive until the caller finishes reading the
+	// response body. Canceling here (for example with a deferred cancel) races
+	// JSON decoding and truncates larger transfer lists with context.Canceled.
+	if cancel != nil {
+		resp.Body = &cancelReadCloser{ReadCloser: resp.Body, cancel: cancel}
+	}
 	return resp, nil
+}
+
+type cancelReadCloser struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (r *cancelReadCloser) Close() error {
+	err := r.ReadCloser.Close()
+	r.cancel()
+	return err
 }
 
 func (c *Client) endpoint(parts ...string) string {

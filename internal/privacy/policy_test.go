@@ -3,7 +3,7 @@ package privacy
 import (
 	"testing"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/clipboard"
+	"github.com/arjanflac/tailboard/internal/clipboard"
 )
 
 func TestParseSensitiveClassesRejectsUnknown(t *testing.T) {

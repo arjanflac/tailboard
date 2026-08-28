@@ -36,14 +36,14 @@ final class KeyboardViewModel {
         // Load cached data immediately (no network).
         self.currentClip = store.cachedCurrentClip
         self.recentClips = store.cachedRecentClips
-        self.setupHint = store.hubURL == nil ? "Open tg-clipboard to finish setup" : nil
+        self.setupHint = store.hubURL == nil ? "Open Tailboard to finish setup" : nil
     }
 
     // MARK: - Refresh
 
     func refresh() {
         guard let hubURL = store.hubURL else {
-            setupHint = "Open tg-clipboard to finish setup"
+            setupHint = "Open Tailboard to finish setup"
             return
         }
         setupHint = nil
@@ -109,7 +109,7 @@ final class KeyboardViewModel {
 
     func pushClipboard() {
         guard let hubURL = store.hubURL else {
-            setupHint = "Open tg-clipboard to finish setup"
+            setupHint = "Open Tailboard to finish setup"
             return
         }
         status = .working("Sending…")

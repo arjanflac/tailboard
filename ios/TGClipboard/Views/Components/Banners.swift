@@ -129,3 +129,16 @@ struct CopiedPill: View {
             .bannerMaterial(cornerRadius: 999)
     }
 }
+
+struct ReceivedPill: View {
+    let message: String
+
+    var body: some View {
+        Label(message, systemImage: "checkmark.circle.fill")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .bannerMaterial(cornerRadius: 999)
+    }
+}

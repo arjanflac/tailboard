@@ -7,9 +7,9 @@ import (
 	urlpkg "net/url"
 	"time"
 
+	"github.com/arjanflac/tailboard/internal/protocol"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
 )
 
 // wsReadLimit is the WebSocket read limit: MaxContentSize + headroom for JSON framing.

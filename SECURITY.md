@@ -1,6 +1,7 @@
 # Security Policy
 
-tg-clipboard is still pre-release and does not publish tagged releases yet. Security fixes are currently made against the latest commit on `main`.
+Tailboard is still pre-release and does not publish supported binaries yet.
+Security fixes are made against the latest commit on `main`.
 
 ## Supported versions
 
@@ -13,9 +14,12 @@ tg-clipboard is still pre-release and does not publish tagged releases yet. Secu
 
 Please do not report security issues in public GitHub issues, pull requests, or discussions.
 
-Instead, email **eu@thalysguimaraes.com** with a subject like `[tg-clipboard security] short summary` and include:
+Use the repository's private **Report a vulnerability** flow under GitHub's
+Security tab. Do not send a sensitive report to the upstream tg-clipboard
+maintainer unless the issue also affects the upstream project. Include:
 
-- the affected component (`tg-clipboard`, `tg-clipd`, `tg-clip`, iOS app/extension, or docs/setup),
+- the affected component (Tailboard Engine, hub, CLI, Android app, Apple app or
+  extension, or docs/setup),
 - the commit, branch, or binary build you tested,
 - clear reproduction steps or a proof of concept,
 - the impact you expect if the issue is exploitable,
@@ -23,7 +27,8 @@ Instead, email **eu@thalysguimaraes.com** with a subject like `[tg-clipboard sec
 
 You should receive an acknowledgment within 5 business days. The maintainer will keep the report private while confirming impact, preparing a fix, and coordinating disclosure.
 
-If a report is confirmed, the project may use a private email thread and/or a GitHub security advisory to coordinate the fix and disclosure timeline.
+If a report is confirmed, the project will use the private GitHub security
+advisory to coordinate the fix and disclosure timeline.
 
 ## What counts as a security issue
 

@@ -22,4 +22,10 @@ public struct ClipCache: Sendable {
         let d = JSONDecoder(); d.dateDecodingStrategy = .tgSpringISO8601
         return (try? d.decode([ClipItem].self, from: data)) ?? []
     }
+
+    /// Atomically replaces the offline history with an empty array without
+    /// reading the previous file.
+    public func clear() {
+        save([])
+    }
 }

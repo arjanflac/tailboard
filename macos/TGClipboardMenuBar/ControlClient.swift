@@ -29,7 +29,7 @@ enum ControlError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .engineNotRunning: return "tg-clipboard engine isn't running"
+        case .engineNotRunning: return "Tailboard Engine isn't running"
         case .requestFailed(let message): return message
         }
     }
@@ -49,10 +49,10 @@ actor ControlClient {
         self.session = URLSession(configuration: config)
         self.decoder = JSONDecoder()
         // Go emits RFC3339Nano; plain .iso8601 rejects fractional seconds.
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
         decoder.dateDecodingStrategy = .custom { decoder in
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let plain = ISO8601DateFormatter()
             let value = try decoder.singleValueContainer().decode(String.self)
             if let date = fractional.date(from: value) ?? plain.date(from: value) {
                 return date

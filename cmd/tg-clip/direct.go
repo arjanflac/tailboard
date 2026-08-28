@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 type directTransferServer struct {

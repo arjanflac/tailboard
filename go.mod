@@ -1,4 +1,4 @@
-module github.com/thalysguimaraes/tg-clipboard
+module github.com/arjanflac/tailboard
 
 go 1.26.1
 

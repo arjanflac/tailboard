@@ -9,11 +9,13 @@ public enum UserFacingError {
         if let clipError = error as? TGClipboardError {
             switch clipError {
             case .noHubURL:
-                return "Open TGClipboard once to finish setup, then try again."
+                return "Open Tailboard once to finish setup, then try again."
             case .hubUnreachable(let underlying):
                 return connectivityMessage(underlying)
             case .emptyClipboard:
                 return "Nothing to send — copy something first."
+            case .unsupportedClipboardType:
+                return "This clipboard format can't be copied on iPhone yet."
             case .httpError(let code, _):
                 switch code {
                 case 401, 403:
@@ -26,7 +28,7 @@ public enum UserFacingError {
                     return "The sync server returned an error (\(code)). Try again."
                 }
             case .decodingError:
-                return "The sync server sent an unexpected response. Update TGClipboard and try again."
+                return "The sync server sent an unexpected response. Update Tailboard and try again."
             }
         }
         if error is URLError {

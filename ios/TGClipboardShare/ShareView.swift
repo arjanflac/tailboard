@@ -31,7 +31,7 @@ struct ShareView: View {
                 reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 1.0),
                 value: viewModel.state
             )
-            .navigationTitle("tg-clipboard")
+            .navigationTitle("Tailboard")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -80,11 +80,11 @@ struct ShareView: View {
                 ContentUnavailableView(
                     "Nothing to Send",
                     systemImage: "doc.questionmark",
-                    description: Text("This content can't be sent with tg-clipboard.")
+                    description: Text("This content can't be sent with Tailboard.")
                 )
             }
 
-            if viewModel.hasContent {
+            if viewModel.hasContent && viewModel.showsDestinationPicker {
                 destinationPicker
             }
 
@@ -146,7 +146,7 @@ struct ShareView: View {
 
     private var destinationPicker: some View {
         Picker("Send to", selection: $viewModel.selectedDeviceID) {
-            Label("All my devices (clipboard)", systemImage: "doc.on.clipboard")
+            Label("Choose a device", systemImage: "questionmark.circle")
                 .tag("")
             ForEach(viewModel.devices) { device in
                 Label {
@@ -177,7 +177,7 @@ struct ShareView: View {
             .frame(height: 44) // fixed height: no layout jump when the spinner appears
         }
         .buttonStyle(.borderedProminent)
-        .disabled(viewModel.state == .sending || !viewModel.hasContent)
+        .disabled(viewModel.state == .sending || !viewModel.canSend)
         .accessibilityHint("Sends the content, then dismisses the sheet")
     }
 

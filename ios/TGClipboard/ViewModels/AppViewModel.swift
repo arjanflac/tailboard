@@ -30,6 +30,7 @@ final class AppViewModel {
     var showOnboarding: Bool
     var isLoading = false
     var errorMessage: String?
+    private(set) var privacyWipeRequested = false
 
     // MARK: - Navigation / presentation state
 
@@ -39,23 +40,67 @@ final class AppViewModel {
     /// Transient confirmation shown when a copy came from the widget deep link.
     var copiedBannerVisible = false
     private var copiedBannerTask: Task<Void, Never>?
+    var receivedBannerMessage: String?
+    private var receivedBannerTask: Task<Void, Never>?
+    private var sceneIsActive = false
 
     // MARK: - Live Activity
 
     private(set) var liveActivityRunning = false
 
     init() {
-        self.showOnboarding = !store.onboardingCompleted
-        // iOS censors UIDevice.name to "iPhone" for third-party apps, so the
-        // user-chosen name in the store is the identity; upgrade the legacy
-        // lowercase default once.
-        if store.sourceName == "iphone" {
-            store.sourceName = UIDevice.current.name
+        let arguments = ProcessInfo.processInfo.arguments
+        let shouldWipe = arguments.contains("--privacy-wipe")
+        let initialStore = AppGroupStore()
+        let initialCache = ClipCache()
+        for argument in arguments {
+            if argument.hasPrefix("--tailboard-hub="),
+               let url = URL(string: String(argument.dropFirst("--tailboard-hub=".count))) {
+                initialStore.hubURL = url
+            } else if argument.hasPrefix("--tailboard-device-name=") {
+                initialStore.sourceName = String(
+                    argument.dropFirst("--tailboard-device-name=".count)
+                )
+            } else if argument.hasPrefix("--tailboard-default-target=") {
+                initialStore.defaultTransferDeviceName = String(
+                    argument.dropFirst("--tailboard-default-target=".count)
+                )
+            }
         }
-        self.client = TGClipboardClient(baseURL: store.hubURL, sourceName: store.sourceName)
-        self.history = cache.load()
-        self.currentClip = store.cachedCurrentClip
+        if shouldWipe {
+            // Clear first, before any clipboard payload is decoded into the
+            // view model or rendered by SwiftUI.
+            initialStore.clearClipboardCache()
+            initialCache.clear()
+            UIPasteboard.general.items = []
+        }
+        self.showOnboarding = !initialStore.onboardingCompleted
+        self.client = TGClipboardClient(
+            baseURL: initialStore.hubURL,
+            sourceName: initialStore.sourceName
+        )
+        self.history = shouldWipe ? [] : initialCache.load()
+        self.currentClip = shouldWipe ? nil : initialStore.cachedCurrentClip
+        self.privacyWipeRequested = shouldWipe
 
+    }
+
+    @MainActor
+    func finishPrivacyWipe() async {
+        guard privacyWipeRequested else { return }
+        currentClip = nil
+        history = []
+        store.clearClipboardCache()
+        cache.clear()
+        UIPasteboard.general.items = []
+        WidgetCenter.shared.reloadAllTimelines()
+        if #available(iOS 18.0, *) {
+            ControlCenter.shared.reloadAllControls()
+        }
+        for activity in Activity<TGClipboardActivityAttributes>.activities {
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
+        privacyWipeRequested = false
     }
 
     /// Renames this device: persists the name and re-registers with the hub
@@ -104,6 +149,30 @@ final class AppViewModel {
         }
     }
 
+    @MainActor
+    func handlePendingControlAction() async {
+        guard let action = store.takePendingControlAction() else { return }
+        selectedTab = .clipboard
+        switch action {
+        case "send":
+            let succeeded = await pushPasteboardToHub()
+            store.recordControlDiagnostic(
+                action: "Send",
+                status: succeeded ? "Succeeded" : "Failed",
+                detail: succeeded ? "Clipboard sent" : (errorMessage ?? "Clipboard could not be sent")
+            )
+        case "receive":
+            let succeeded = await receiveLatestClipboard()
+            store.recordControlDiagnostic(
+                action: "Receive",
+                status: succeeded ? "Succeeded" : "Failed",
+                detail: succeeded ? "Clipboard copied on iPhone" : (errorMessage ?? "Clipboard could not be received")
+            )
+        default:
+            break
+        }
+    }
+
     private func showCopiedBanner() {
         copiedBannerTask?.cancel()
         copiedBannerVisible = true
@@ -138,6 +207,8 @@ final class AppViewModel {
             transfers = currentTransfers
             errorMessage = nil
 
+            autoAcceptNextMacTransfer()
+
             cacheCurrentClip(clip)
             store.cachedRecentClips = hist
             cache.save(hist)
@@ -161,27 +232,43 @@ final class AppViewModel {
     }
 
     func accept(_ transfer: Transfer) async {
+        guard !receivingTransferIDs.contains(transfer.transferID) else { return }
         receivingTransferIDs.insert(transfer.transferID)
-        defer { receivingTransferIDs.remove(transfer.transferID) }
+        defer {
+            receivingTransferIDs.remove(transfer.transferID)
+            autoAcceptNextMacTransfer()
+        }
+        var acceptedTransferID: String?
         do {
-            let accepted = try await client.transferAction(
-                deviceID: store.deviceID,
-                transferID: transfer.transferID,
-                action: "accept"
-            )
+            let accepted: Transfer
+            if transfer.state == "accepted" || transfer.state == "transferring" {
+                accepted = transfer
+            } else {
+                accepted = try await client.transferAction(
+                    deviceID: store.deviceID,
+                    transferID: transfer.transferID,
+                    action: "accept"
+                )
+            }
+            acceptedTransferID = accepted.transferID
             let documents = FileManager.default.urls(
                 for: .documentDirectory,
                 in: .userDomainMask
             )[0]
+            try FileManager.default.createDirectory(
+                at: documents,
+                withIntermediateDirectories: true
+            )
+            var savedNames: [String] = []
             for (index, file) in accepted.files.enumerated() {
                 let name = URL(fileURLWithPath: file.name).lastPathComponent
                 guard !name.isEmpty, name != ".", name != ".." else {
                     throw CocoaError(.fileWriteInvalidFileName)
                 }
-                let finalURL = documents.appendingPathComponent(name)
-                guard !FileManager.default.fileExists(atPath: finalURL.path) else {
-                    throw CocoaError(.fileWriteFileExists)
+                if try matchingDocument(in: documents, transferFile: file) != nil {
+                    continue
                 }
+                let finalURL = availableDocumentURL(in: documents, preferredName: name)
                 let partialURL = documents.appendingPathComponent(".\(UUID().uuidString).part")
                 defer { try? FileManager.default.removeItem(at: partialURL) }
                 try await client.downloadTransferFile(
@@ -195,17 +282,100 @@ final class AppViewModel {
                     throw CocoaError(.fileReadCorruptFile)
                 }
                 try FileManager.default.moveItem(at: partialURL, to: finalURL)
+                savedNames.append(finalURL.lastPathComponent)
             }
             _ = try await client.transferAction(
                 deviceID: store.deviceID,
                 transferID: accepted.transferID,
                 action: "complete"
             )
-            await MainActor.run { notifier.notificationOccurred(.success) }
+            let receiveMessage = savedNames.isEmpty
+                ? "Already saved in Files → Tailboard"
+                : "Saved to Files → Tailboard"
+            await MainActor.run {
+                notifier.notificationOccurred(.success)
+                showReceivedBanner(receiveMessage)
+            }
             await refresh()
         } catch {
+            if let acceptedTransferID {
+                _ = try? await client.transferAction(
+                    deviceID: store.deviceID,
+                    transferID: acceptedTransferID,
+                    action: "cancel"
+                )
+            }
             await MainActor.run { notifier.notificationOccurred(.error) }
             errorMessage = UserFacingError.message(error)
+            await refresh()
+        }
+    }
+
+    private func matchingDocument(in directory: URL, transferFile: TransferFile) throws -> URL? {
+        let contents = try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+        for candidate in contents {
+            let values = try candidate.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+            guard values.isRegularFile == true,
+                  Int64(values.fileSize ?? -1) == transferFile.size else { continue }
+            if try ClipHash.sha256Hex(fileURL: candidate)
+                .caseInsensitiveCompare(transferFile.sha256) == .orderedSame {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    private func availableDocumentURL(in directory: URL, preferredName: String) -> URL {
+        let original = URL(fileURLWithPath: preferredName)
+        let stem = original.deletingPathExtension().lastPathComponent
+        let fileExtension = original.pathExtension
+        for number in 1..<10_000 {
+            let candidateName: String
+            if number == 1 {
+                candidateName = preferredName
+            } else if fileExtension.isEmpty {
+                candidateName = "\(stem) (\(number))"
+            } else {
+                candidateName = "\(stem) (\(number)).\(fileExtension)"
+            }
+            let candidate = directory.appendingPathComponent(candidateName)
+            if !FileManager.default.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        return directory.appendingPathComponent("\(UUID().uuidString)-\(preferredName)")
+    }
+
+    private func autoAcceptNextMacTransfer() {
+        guard sceneIsActive, receivingTransferIDs.isEmpty else { return }
+        let macDeviceIDs = Set(
+            devices
+                .filter { $0.platform.caseInsensitiveCompare("darwin") == .orderedSame }
+                .map(\.deviceID)
+        )
+        let candidates = transfers.filter {
+            $0.toDevice == store.deviceID
+                && macDeviceIDs.contains($0.fromDevice)
+                && ($0.state == "offered" || $0.state == "accepted" || $0.state == "transferring")
+        }
+        guard let next = candidates.max(by: { $0.createdAt < $1.createdAt }) else { return }
+        Task { @MainActor [weak self] in
+            await self?.accept(next)
+        }
+    }
+
+    @MainActor
+    private func showReceivedBanner(_ message: String) {
+        receivedBannerTask?.cancel()
+        receivedBannerMessage = message
+        receivedBannerTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            self.receivedBannerMessage = nil
         }
     }
 
@@ -264,7 +434,26 @@ final class AppViewModel {
         }
     }
 
+    @MainActor
+    private func receiveLatestClipboard() async -> Bool {
+        do {
+            guard let clip = try await client.getCurrentClip() else {
+                errorMessage = "The shared clipboard is empty."
+                return false
+            }
+            currentClip = clip
+            cacheCurrentClip(clip)
+            guard copyToPasteboard(clip) else { return false }
+            showCopiedBanner()
+            return true
+        } catch {
+            errorMessage = UserFacingError.message(error)
+            return false
+        }
+    }
+
     func setSceneActive(_ active: Bool) {
+        sceneIsActive = active
         if active {
             liveActivityRunning = !Activity<TGClipboardActivityAttributes>.activities.isEmpty
             setupWebSocket()
@@ -373,6 +562,7 @@ final class AppViewModel {
                 } else {
                     self.transfers.insert(transfer, at: 0)
                 }
+                self.autoAcceptNextMacTransfer()
             }
         }
         wsManager.start()

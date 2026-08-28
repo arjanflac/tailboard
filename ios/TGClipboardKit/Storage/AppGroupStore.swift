@@ -1,8 +1,15 @@
 import Foundation
 
+public struct ControlDiagnostic: Sendable {
+    public let action: String
+    public let status: String
+    public let detail: String
+    public let updatedAt: Date
+}
+
 /// Shared configuration and cache accessible by all targets via App Group.
 public struct AppGroupStore: @unchecked Sendable {
-    public static let suiteName = "group.com.thalys.cliphub"
+    public static let suiteName = "group.com.arjanflac.tgclipboard"
 
     private let defaults: UserDefaults
 
@@ -25,7 +32,10 @@ public struct AppGroupStore: @unchecked Sendable {
                 defaults.removeObject(forKey: "hubURL")
                 return legacy
             }
-            return nil
+            // This personal build has a fixed MagicDNS hub. Keeping a
+            // fallback here makes App Intents and extensions independent of
+            // keychain availability in their short-lived processes.
+            return URL(string: "http://tailboard-hub:9437")
         }
         nonmutating set {
             SharedKeychain.write(newValue.map { Data($0.absoluteString.utf8) }, account: "hubURL")
@@ -36,8 +46,78 @@ public struct AppGroupStore: @unchecked Sendable {
     // MARK: - Source name
 
     public var sourceName: String {
-        get { defaults.string(forKey: "sourceName") ?? "iphone" }
-        nonmutating set { defaults.set(newValue, forKey: "sourceName") }
+        get {
+            let value = defaults.string(forKey: "sourceName") ?? "iphone"
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "iphone" : trimmed.lowercased()
+        }
+        nonmutating set {
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            defaults.set(trimmed.isEmpty ? "iphone" : trimmed.lowercased(), forKey: "sourceName")
+        }
+    }
+
+    public var defaultTransferDeviceName: String {
+        get { defaults.string(forKey: "defaultTransferDeviceName") ?? "" }
+        nonmutating set {
+            defaults.set(
+                newValue.trimmingCharacters(in: .whitespacesAndNewlines),
+                forKey: "defaultTransferDeviceName"
+            )
+        }
+    }
+
+    // MARK: - Control Center diagnostics
+
+    public var lastControlDiagnostic: ControlDiagnostic? {
+        guard let action = defaults.string(forKey: "lastControlAction"),
+              let status = defaults.string(forKey: "lastControlStatus"),
+              let updatedAt = defaults.object(forKey: "lastControlUpdatedAt") as? Date else {
+            return nil
+        }
+        return ControlDiagnostic(
+            action: action,
+            status: status,
+            detail: defaults.string(forKey: "lastControlDetail") ?? "",
+            updatedAt: updatedAt
+        )
+    }
+
+    public func recordControlDiagnostic(action: String, status: String, detail: String = "") {
+        defaults.set(action, forKey: "lastControlAction")
+        defaults.set(status, forKey: "lastControlStatus")
+        defaults.set(detail, forKey: "lastControlDetail")
+        defaults.set(Date(), forKey: "lastControlUpdatedAt")
+        // Control extensions are intentionally short lived. Flush this tiny
+        // diagnostic record before the process is suspended so a failed tap
+        // can always be inspected from the containing app or CoreDevice.
+        defaults.synchronize()
+    }
+
+    public func requestControlAction(_ action: String) {
+        defaults.set(action, forKey: "pendingControlAction")
+        defaults.synchronize()
+    }
+
+    public func takePendingControlAction() -> String? {
+        guard let action = defaults.string(forKey: "pendingControlAction") else { return nil }
+        defaults.removeObject(forKey: "pendingControlAction")
+        defaults.synchronize()
+        return action
+    }
+
+    public var configuredControlKinds: [String] {
+        defaults.stringArray(forKey: "configuredControlKinds") ?? []
+    }
+
+    public var configuredControlsUpdatedAt: Date? {
+        defaults.object(forKey: "configuredControlsUpdatedAt") as? Date
+    }
+
+    public func recordConfiguredControls(_ kinds: [String]) {
+        defaults.set(kinds.sorted(), forKey: "configuredControlKinds")
+        defaults.set(Date(), forKey: "configuredControlsUpdatedAt")
+        defaults.synchronize()
     }
 
     public var deviceID: String {
@@ -90,5 +170,14 @@ public struct AppGroupStore: @unchecked Sendable {
             let trimmed = Array(newValue.prefix(10))
             defaults.set(try? e.encode(trimmed), forKey: "cachedRecentClips")
         }
+    }
+
+    /// Removes clipboard payloads while preserving connection, device, and
+    /// onboarding settings. This method never decodes or logs the old values.
+    public func clearClipboardCache() {
+        defaults.removeObject(forKey: "cachedCurrentClip")
+        defaults.removeObject(forKey: "cachedRecentClips")
+        defaults.set(0, forKey: "lastSeq")
+        defaults.synchronize()
     }
 }

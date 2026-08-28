@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/clipboard"
+	"github.com/arjanflac/tailboard/internal/clipboard"
 )
 
 // fakeClipboard is an in-memory clipboard for testing.

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 // Config holds hub configuration.

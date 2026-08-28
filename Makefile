@@ -6,12 +6,21 @@ RELEASE_MANIFEST ?=
 RELEASE_CHECKSUMS ?=
 RELEASE_ASSET_BASE_URL ?=
 
-.PHONY: all tg-clipboard tg-clipd tg-clip test test-race lint clean release release-verify release-package-managers release-package-managers-verify
+.PHONY: all tailboard-hub tailboard-engine tailboard tg-clipboard tg-clipd tg-clip test test-race lint clean release release-verify release-package-managers release-package-managers-verify
 
-all: tg-clipboard tg-clipd tg-clip
+all: tailboard-hub tailboard-engine tailboard
+
+tailboard-hub:
+	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o "bin/Tailboard Hub" ./cmd/tg-clipboard-hub
+
+tailboard-engine:
+	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o "bin/Tailboard Engine" ./cmd/tg-clipd
+
+tailboard:
+	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/tailboard ./cmd/tg-clip
 
 tg-clipboard:
-	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/tg-clipboard ./cmd/tg-clipboard
+	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/tg-clipboard ./cmd/tg-clipboard-hub
 
 tg-clipd:
 	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/tg-clipd ./cmd/tg-clipd

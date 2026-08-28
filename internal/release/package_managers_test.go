@@ -18,7 +18,7 @@ func TestBuildAndVerifyPackageManagersFromLocalArtifacts(t *testing.T) {
 
 	distDir := writePackageManagerFixture(t, "v1.2.3")
 	outDir := filepath.Join(distDir, "package-managers")
-	baseURL := "https://github.com/thalysguimaraes/tg-clipboard/releases/download/v1.2.3"
+	baseURL := "https://github.com/arjanflac/tailboard/releases/download/v1.2.3"
 
 	result, err := BuildPackageManagers(context.Background(), PackageManagerOptions{
 		RepoRoot:         ".",
@@ -46,7 +46,7 @@ func TestBuildAndVerifyPackageManagersFromLocalArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`url "https://github.com/thalysguimaraes/tg-clipboard/releases/download/v1.2.3/tg-clipboard_v1.2.3_artifacts.json"`,
+		`url "https://github.com/arjanflac/tailboard/releases/download/v1.2.3/tg-clipboard_v1.2.3_artifacts.json"`,
 		`tg-clipd_v1.2.3_darwin_arm64.tar.gz`,
 		`tg-clipd_v1.2.3_linux_arm64.tar.gz`,
 		`tg-clipd_v1.2.3_linux_amd64.tar.gz`,
@@ -73,7 +73,7 @@ func TestBuildAndVerifyPackageManagersFromLocalArtifacts(t *testing.T) {
 	}
 
 	var wingetInstaller wingetInstallerManifest
-	wingetInstallerPath := filepath.Join(outDir, "winget", "manifests", "t", "ThalysGuimaraes", "TGClip", "1.2.3", "ThalysGuimaraes.TGClip.installer.yaml")
+	wingetInstallerPath := filepath.Join(outDir, "winget", "manifests", "a", "ArjanFlac", "Tailboard", "1.2.3", "ArjanFlac.Tailboard.installer.yaml")
 	if err := readWingetYAML(wingetInstallerPath, &wingetInstaller); err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestBuildPackageManagersFromPublishedManifestURLs(t *testing.T) {
 	}
 
 	var versionManifest wingetVersionManifest
-	versionPath := filepath.Join(outDir, "winget", "manifests", "t", "ThalysGuimaraes", "TGClipd", "2.0.0", "ThalysGuimaraes.TGClipd.yaml")
+	versionPath := filepath.Join(outDir, "winget", "manifests", "a", "ArjanFlac", "TailboardEngine", "2.0.0", "ArjanFlac.TailboardEngine.yaml")
 	if err := readWingetYAML(versionPath, &versionManifest); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestWriteWingetYAMLIncludesSchemaComment(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "manifest.yaml")
 	if err := writeWingetYAML(path, wingetVersionManifest{
-		PackageIdentifier: "ThalysGuimaraes.TGClipd",
+		PackageIdentifier: "ArjanFlac.TailboardEngine",
 		PackageVersion:    "1.0.0",
 		DefaultLocale:     "en-US",
 		ManifestType:      "version",
@@ -241,7 +241,7 @@ func TestWriteWingetYAMLIncludesSchemaComment(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(strings.TrimSpace(strings.SplitN(string(content), "\n\n", 2)[1])), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.PackageIdentifier != "ThalysGuimaraes.TGClipd" {
+	if decoded.PackageIdentifier != "ArjanFlac.TailboardEngine" {
 		t.Fatalf("unexpected decoded identifier: %q", decoded.PackageIdentifier)
 	}
 }

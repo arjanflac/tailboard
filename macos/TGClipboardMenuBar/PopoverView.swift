@@ -42,7 +42,7 @@ struct PopoverView: View {
             Image(systemName: "powerplug")
                 .font(.system(size: 28))
                 .foregroundStyle(.secondary)
-            Text("tg-clipboard engine isn't running")
+            Text("Tailboard Engine isn't running")
                 .font(.headline)
             Text("Start it to sync your clipboard and send files.")
                 .font(.caption)
@@ -113,7 +113,7 @@ struct PopoverView: View {
                 VStack(spacing: 6) {
                     Text("No devices yet")
                         .font(.callout.weight(.medium))
-                    Text("Install tg-clipboard on your phone — it finds this Mac automatically.")
+                    Text("Install Tailboard on your phone — it finds this Mac automatically.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -192,7 +192,7 @@ struct PopoverView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Open Downloads")
+                .help("Open Tailboard Downloads")
             }
             Button {
                 NSApp.terminate(nil)
@@ -201,7 +201,7 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help("Quit tg-clipboard")
+            .help("Quit Tailboard")
         }
     }
 }

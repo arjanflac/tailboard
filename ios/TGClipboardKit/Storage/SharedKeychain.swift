@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 enum SharedKeychain {
-    private static let service = "com.thalys.cliphub.shared"
+    private static let service = "com.arjanflac.tgclipboard.shared"
 
     static func read(_ account: String) -> Data? {
         var query = baseQuery(account)

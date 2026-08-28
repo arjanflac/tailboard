@@ -7,9 +7,12 @@ import TGClipboardKit
 struct DevicesView: View {
     @Environment(AppViewModel.self) private var viewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let store = AppGroupStore()
 
     private var incoming: [Transfer] {
-        viewModel.transfers.filter { $0.state == "offered" }
+        viewModel.transfers.filter {
+            $0.state == "offered" && $0.toDevice == store.deviceID
+        }
     }
 
     private let columns = [
@@ -121,12 +124,12 @@ struct DevicesView: View {
             VStack(spacing: 6) {
                 Text("Your devices show up here")
                     .font(.title3.weight(.semibold))
-                Text("Install tg-clipboard on your Mac and it finds this iPhone automatically — no setup, no pairing codes.")
+                Text("Install Tailboard on your Mac and it finds this iPhone automatically — no setup, no pairing codes.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            Link("Set up my Mac", destination: URL(string: "https://github.com/thalysguimaraes/tg-clipboard")!)
+            Link("Set up my Mac", destination: URL(string: "https://github.com/arjanflac/tailboard")!)
                 .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal, 32)

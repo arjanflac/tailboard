@@ -3,8 +3,8 @@ package agent
 import (
 	"sync"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/clipboard"
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/clipboard"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 // ClipboardMonitor tracks clipboard state and prevents feedback loops.

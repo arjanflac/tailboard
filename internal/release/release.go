@@ -400,6 +400,12 @@ func copyServiceDefinitions(repoRoot, stagingDir string, target Target) error {
 }
 
 func buildBinary(ctx context.Context, repoRoot string, target Target, version, outputPath string) error {
+	commandName := target.Binary
+	if commandName == "tg-clipboard" {
+		// Keep the established public binary name while the source package makes
+		// the hub role explicit.
+		commandName = "tg-clipboard-hub"
+	}
 	cmd := exec.CommandContext(
 		ctx,
 		"go",
@@ -410,7 +416,7 @@ func buildBinary(ctx context.Context, repoRoot string, target Target, version, o
 		fmt.Sprintf("-s -w -X main.version=%s", version),
 		"-o",
 		outputPath,
-		"./cmd/"+target.Binary,
+		"./cmd/"+commandName,
 	)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(),

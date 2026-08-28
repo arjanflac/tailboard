@@ -27,7 +27,7 @@ private struct ClipProvider: TimelineProvider {
         return ClipEntry(
             date: clip?.createdAt ?? .now,
             preview: clip?.preview,
-            source: clip?.source ?? "tg-clipboard"
+            source: clip?.source ?? "Tailboard"
         )
     }
 }
@@ -76,7 +76,7 @@ private struct ClipWidgetView: View {
 
     private var accessoryBody: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Label("tg-clipboard", systemImage: "doc.on.clipboard")
+            Label("Tailboard", systemImage: "doc.on.clipboard")
                 .font(.caption2.weight(.semibold))
             if let preview = entry.preview {
                 Text(preview)
@@ -147,7 +147,7 @@ private struct ClipWidgetView: View {
         HStack(spacing: 4) {
             Image(systemName: "doc.on.clipboard")
                 .foregroundStyle(Color.accentColor)
-            Text("tg-clipboard")
+            Text("Tailboard")
         }
         .font(.caption.weight(.semibold))
         .accessibilityHidden(true)
@@ -179,7 +179,7 @@ private struct CurrentClipWidget: Widget {
             ClipWidgetView(entry: entry)
         }
         .configurationDisplayName("Current Clip")
-        .description("Shows the latest cached tg-clipboard item. Tap to copy it.")
+        .description("Shows the latest cached Tailboard item. Tap to copy it.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
 }
@@ -246,5 +246,9 @@ struct TGClipboardWidgetBundle: WidgetBundle {
     var body: some Widget {
         CurrentClipWidget()
         TGClipboardLiveActivity()
+        if #available(iOS 18.0, *) {
+            SendClipboardControl()
+            ReceiveClipboardControl()
+        }
     }
 }

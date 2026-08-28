@@ -1,0 +1,1 @@
+Tailboard Mac-to-Pixel receive smoke test.

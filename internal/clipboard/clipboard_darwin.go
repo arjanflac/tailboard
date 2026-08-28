@@ -3,6 +3,7 @@
 package clipboard
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -78,9 +79,15 @@ func (c *darwinClipboard) Write(ct Content) error {
 	if !ok {
 		return fmt.Errorf("unsupported MIME type for macOS clipboard: %s", ct.MimeType)
 	}
+	if ct.MimeType == "text/plain" {
+		cmd := exec.Command("/usr/bin/pbcopy")
+		cmd.Stdin = bytes.NewReader(ct.Data)
+		cmd.Env = append(os.Environ(), "LANG=en_US.UTF-8", "LC_CTYPE=en_US.UTF-8")
+		return cmd.Run()
+	}
 
 	// Write raw bytes to a temp file, then load via NSData to bypass
-	// pbcopy's locale-dependent encoding (macOS Roman under launchd).
+	// text coercion for rich or binary clipboard formats.
 	tmp, err := os.CreateTemp("", "tg-clipboard-*")
 	if err != nil {
 		return err

@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"text/template"
+	"time"
 )
 
 type InstallResult struct {
@@ -64,8 +65,21 @@ func installLaunchd(name, executable string, args []string) (InstallResult, erro
 	}
 	domain := fmt.Sprintf("gui/%d", os.Getuid())
 	_ = exec.Command("launchctl", "bootout", domain+"/"+label(name)).Run()
-	if output, err := exec.Command("launchctl", "bootstrap", domain, path).CombinedOutput(); err != nil {
-		return InstallResult{Path: path, Platform: "launchd"}, fmt.Errorf("launchctl bootstrap: %w: %s", err, strings.TrimSpace(string(output)))
+	var bootstrapOutput []byte
+	var bootstrapErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		bootstrapOutput, bootstrapErr = exec.Command("launchctl", "bootstrap", domain, path).CombinedOutput()
+		if bootstrapErr == nil {
+			break
+		}
+		time.Sleep(time.Duration(attempt+1) * 150 * time.Millisecond)
+	}
+	if bootstrapErr != nil {
+		return InstallResult{Path: path, Platform: "launchd"}, fmt.Errorf(
+			"launchctl bootstrap: %w: %s",
+			bootstrapErr,
+			strings.TrimSpace(string(bootstrapOutput)),
+		)
 	}
 	return InstallResult{Path: path, Platform: "launchd", Loaded: true}, nil
 }
@@ -106,7 +120,7 @@ func installWindows(name, executable string, args []string) (InstallResult, erro
 	for _, argument := range args {
 		command += ` "` + strings.ReplaceAll(argument, `"`, `\"`) + `"`
 	}
-	serviceName := "TGClipboard-" + name
+	serviceName := "Tailboard-" + name
 	_ = exec.Command("sc.exe", "stop", serviceName).Run()
 	_ = exec.Command("sc.exe", "delete", serviceName).Run()
 	output, err := exec.Command("sc.exe", "create", serviceName, "start=", "auto", "binPath=", command, "DisplayName=", description(name)).CombinedOutput()
@@ -131,13 +145,13 @@ func render(source string, data any) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
-func label(name string) string { return "com.thalys.cliphub." + name }
+func label(name string) string { return "com.arjanflac.tailboard." + name }
 
 func description(name string) string {
-	if name == "tg-clipboard" {
-		return "TGClipboard tailnet clipboard hub"
+	if name == "hub" {
+		return "Tailboard private clipboard and file hub"
 	}
-	return "TGClipboard clipboard synchronization agent"
+	return "Tailboard clipboard and file synchronization engine"
 }
 
 func systemdQuote(value string) string {

@@ -19,11 +19,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/clipboard"
-	"github.com/thalysguimaraes/tg-clipboard/internal/deviceid"
-	"github.com/thalysguimaraes/tg-clipboard/internal/discover"
-	"github.com/thalysguimaraes/tg-clipboard/internal/hubclient"
-	"github.com/thalysguimaraes/tg-clipboard/internal/protocol"
+	"github.com/arjanflac/tailboard/internal/clipboard"
+	"github.com/arjanflac/tailboard/internal/deviceid"
+	"github.com/arjanflac/tailboard/internal/discover"
+	"github.com/arjanflac/tailboard/internal/hubclient"
+	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
 // version is injected via ldflags in reproducible release builds.
@@ -77,7 +77,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
-	hostName, _ := os.Hostname()
+	hostName := os.Getenv("TG_CLIPBOARD_NODE")
+	if hostName == "" {
+		resolver := discover.NewResolver(discover.DefaultConfig())
+		if tailnetName, resolveErr := resolver.SelfName(ctx); resolveErr == nil {
+			hostName = tailnetName
+		}
+	}
+	if hostName == "" {
+		hostName, _ = os.Hostname()
+	}
 	_, _ = hub.RegisterDevice(ctx, protocol.RegisterDeviceRequest{
 		DeviceID: localDeviceID, Name: hostName, Platform: runtime.GOOS,
 		Capabilities: []string{"clipboard", "transfers", "direct-fetch-source"},

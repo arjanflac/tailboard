@@ -36,5 +36,13 @@ struct ContentView: View {
             }
         }
         .animation(reduceMotion ? .none : .tgSpring, value: vm.showOnboarding)
+        .overlay(alignment: .top) {
+            if let message = vm.receivedBannerMessage {
+                ReceivedPill(message: message)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(reduceMotion ? .none : .tgSpring, value: vm.receivedBannerMessage)
     }
 }

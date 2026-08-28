@@ -1,6 +1,7 @@
-# tg-clipboard iOS
+# Tailboard for iOS
 
-iOS companion for tg-clipboard: device-first container app, tg-paste keyboard, share extension, widgets, Live Activity, and App Intents.
+iOS companion for Tailboard: device-first container app, custom paste keyboard,
+share extension, widgets, Live Activity, and App Intents.
 
 ## Setup
 
@@ -20,7 +21,7 @@ open TGClipboard.xcodeproj
 2. Add a Framework target "TGClipboardKit"
 3. Add a Custom Keyboard Extension target "TGPasteKeyboard"
 4. Add a Share Extension target "TGClipboardShare"
-5. Enable App Groups (`group.com.thalys.cliphub`) on all 4 targets
+5. Enable App Groups (`group.com.arjanflac.tgclipboard`) on all 4 targets
 6. Add all Swift source files to their respective targets
 7. All 3 extension/app targets should embed TGClipboardKit
 
@@ -28,17 +29,18 @@ open TGClipboard.xcodeproj
 
 1. Set your Apple Developer Team ID in project.yml or Xcode signing settings
 2. Build and run on your iPhone
-3. Connect the Tailscale app, then enter the HTTPS hub URL shown by your tg-clipboard deployment.
-4. Enable the keyboard: Settings → General → Keyboard → Keyboards → Add → tg-clipboard → Allow Full Access
+3. Connect Tailscale, then configure the private hub from onboarding or the
+   ignored `config.local.env` installer flow.
+4. Enable the keyboard: Settings → General → Keyboard → Keyboards → Add → Tailboard Paste → Allow Full Access
 
 Hub configuration is shared through Keychain. Clip previews remain cached in the app group so the keyboard can paste recent text while offline.
 
 ## Architecture
 
 - **TGClipboardKit**: shared framework with REST client, WebSocket manager, models, storage
-- **tg-clipboard**: device roster, transfer inbox, current clip, history, settings, widgets, and Shortcuts actions
+- **Tailboard**: device roster, transfer inbox, current clip, history, settings, widgets, and Shortcuts actions
 - **TGPasteKeyboard**: inserts text, copies image clips to the pasteboard, and can push the local clipboard
-- **TGClipboardShare**: sends text/images to the clipboard hub or file sets to a chosen device using background uploads
+- **TGClipboardShare**: sends text to the shared clipboard and waits for file uploads to reach the default Mac before reporting success
 
 ## iOS interaction model
 
@@ -47,20 +49,26 @@ iOS does not allow background clipboard observation. Every local clipboard read 
 - Paste with the keyboard.
 - Copy a hub clip from the app, widget deep link, or Shortcut.
 - Send from the share sheet, keyboard Push action, app, or Shortcut.
-- Accept incoming files from the foreground app transfer inbox; downloaded files live in the app's Documents container and are visible through Files.
+- The share extension asks for a file destination by default. Saving a default
+  device in Settings restores one-tap automatic sends. The receiver must allow
+  the iPhone's device ID.
+- iOS 18+ exposes **Send Clipboard** and **Receive Clipboard** controls. A
+  UI-less extension cannot reliably use the system pasteboard, so each control
+  opens Tailboard and completes its user-requested clipboard access in the
+  foreground app. The last execution result appears in Settings.
+- While Tailboard is foregrounded, incoming Mac files are accepted automatically.
+  Downloads live in Files → On My iPhone → Tailboard. Filename collisions are
+  numbered and identical retries are deduplicated.
 
 The keyboard needs Full Access for live networking. Without it, cached clips remain available.
 
 ## CI and distribution
 
-The iOS CI job generates the Xcode project, builds the app and all extensions for the simulator, and runs unit tests. `.github/workflows/testflight.yml` archives and uploads on an `ios-v*` tag or manual dispatch when these repository secrets are configured:
-
-- `APP_STORE_CONNECT_API_KEY_ID`
-- `APP_STORE_CONNECT_API_ISSUER_ID`
-- `APP_STORE_CONNECT_API_KEY_BASE64`
-- `APPLE_TEAM_ID`
-
-The API key needs App Manager access so Xcode can manage automatic signing for the app and embedded extensions. Local signing remains available for contributors and personal deployments.
+The iOS CI job generates the Xcode project, builds the app and all extensions
+for the simulator, and runs unit tests. Public/TestFlight publishing is
+intentionally disabled until the repository's naming, bundle identifiers,
+signing ownership, and release support policy are final. Local signing remains
+available for contributors and personal deployments.
 
 ## Requirements
 

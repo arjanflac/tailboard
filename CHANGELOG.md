@@ -4,7 +4,7 @@ All notable changes to this project should be documented in this file.
 
 This changelog is intentionally human-maintained. Update `## Unreleased` in the same pull request whenever a change is user-facing, operationally important, security-sensitive, or changes how contributors work with the repository.
 
-tg-clipboard does not publish tagged releases yet. Until it does, keep entries under `## Unreleased`. Once tagged releases begin, move those entries into a versioned or dated heading and start a fresh `## Unreleased` section.
+Tailboard does not publish supported tagged releases yet. Until it does, keep entries under `## Unreleased`. Once tagged releases begin, move those entries into a versioned or dated heading and start a fresh `## Unreleased` section.
 
 Suggested headings:
 
@@ -17,6 +17,13 @@ Suggested headings:
 
 ### Added
 
+- Standalone Tailboard repository preserving the upstream tg-clipboard Git
+  history and MIT attribution.
+- Android Clipboard, Devices, and Settings tabs with current clip, recent
+  history, live device status, Quick Settings setup, and file-destination UX.
+- Optional default file destinations on Android and iOS; fresh installs ask in
+  the share sheet while configured destinations send immediately.
+- Android CI alongside the existing Go and iOS validation.
 - Governance baseline for contributors and maintainers, including contribution, security, and conduct documentation plus GitHub issue and pull request templates.
 - Deterministic release automation that builds publishable archives, writes SHA-256 checksums, generates release notes, and records release metadata for GitHub releases.
 - Package-manager release metadata generation for Homebrew, Scoop, and winget, driven by the published release manifest/checksum assets instead of rebuilding binaries.
@@ -25,6 +32,11 @@ Suggested headings:
 
 ### Changed
 
+- Mac transfers now land directly in `~/Downloads`.
+- iOS Control Center actions open Tailboard and complete pasteboard access in
+  the foreground app process.
+- Public release and TestFlight workflows are disabled pending the documented
+  release-readiness gates.
 - `make release` now emits publishable assets under `dist/release`, and `make release-verify` validates checksum and manifest consistency for dry runs and CI.
 - `make release-package-managers` and `make release-package-managers-verify` now stage and validate the generated Homebrew/Scoop/winget definitions in CI and the tagged release workflow.
 - Added raw blob upload/download endpoints, cursor-paged history responses, and typed HTTP error envelopes so large tg-clipboard API payloads no longer need to rely solely on base64-in-JSON workflows.
@@ -32,3 +44,11 @@ Suggested headings:
 ### Security
 
 - Documented current privacy limitations, including plaintext-at-rest history storage and the scope of explicit clipboard clear behavior.
+
+### Fixed
+
+- Prefer `text/plain` over an accompanying browser/Notes HTML representation
+  on Mac so Android and iPhone receive readable text instead of markup.
+- Convert legacy HTML clips to readable plain text in the Android receive path.
+- Shrink the Android adaptive foreground so the full Tailboard mark fits Pixel
+  launcher's round icon mask.

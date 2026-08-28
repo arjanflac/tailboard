@@ -1,39 +1,5 @@
 import AppIntents
-import UIKit
 import TGClipboardKit
-
-struct GetCurrentClipIntent: AppIntent {
-    static var title: LocalizedStringResource = "Get Current Clip"
-    static var description = IntentDescription("Gets the current text clip from your synced clipboard.")
-
-    func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        let store = AppGroupStore()
-        guard let hubURL = store.hubURL else { throw TGClipboardError.noHubURL }
-        let client = TGClipboardClient(baseURL: hubURL, sourceName: store.sourceName)
-        let value = try await client.getCurrentClip()?.content ?? ""
-        return .result(value: value)
-    }
-}
-
-struct PushClipboardIntent: AppIntent {
-    static var title: LocalizedStringResource = "Send Clipboard"
-    static var description = IntentDescription("Sends this device's clipboard to your other devices.")
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        let store = AppGroupStore()
-        guard let hubURL = store.hubURL else { throw TGClipboardError.noHubURL }
-        let client = TGClipboardClient(baseURL: hubURL, sourceName: store.sourceName)
-        if let image = UIPasteboard.general.image, let data = image.pngData() {
-            _ = try await client.postClip(data: data, mimeType: "image/png")
-        } else if let text = UIPasteboard.general.string, !text.isEmpty {
-            _ = try await client.postClip(content: text)
-        } else {
-            throw TGClipboardError.emptyClipboard
-        }
-        return .result()
-    }
-}
 
 struct SendToHubIntent: AppIntent {
     static var title: LocalizedStringResource = "Send Text to Devices"
@@ -89,6 +55,12 @@ struct TGClipboardShortcuts: AppShortcutsProvider {
             phrases: ["Get current clip from \(.applicationName)"],
             shortTitle: "Get Current Clip",
             systemImageName: "doc.on.clipboard"
+        )
+        AppShortcut(
+            intent: ReceiveClipboardIntent(),
+            phrases: ["Receive clipboard with \(.applicationName)"],
+            shortTitle: "Receive Clipboard",
+            systemImageName: "arrow.down.doc"
         )
         AppShortcut(
             intent: SendFileToDeviceIntent(),

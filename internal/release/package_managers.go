@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	packageManagerHomepage       = "https://github.com/thalysguimaraes/tg-clipboard"
-	packageManagerLicenseURL     = "https://github.com/thalysguimaraes/tg-clipboard/blob/main/LICENSE"
-	wingetPublisher              = "Thalys Guimaraes"
-	wingetPublisherURL           = "https://github.com/thalysguimaraes"
+	packageManagerHomepage       = "https://github.com/arjanflac/tailboard"
+	packageManagerLicenseURL     = "https://github.com/arjanflac/tailboard/blob/main/LICENSE"
+	wingetPublisher              = "arjanflac"
+	wingetPublisherURL           = "https://github.com/arjanflac"
 	wingetManifestVersion        = "1.12.0"
 	homebrewFormulaSyntaxChecker = "ruby"
 )
@@ -169,7 +169,7 @@ var packageSpecs = []packageSpec{
 		HomebrewTestExpect:   "listen address in dev mode",
 		ScoopTarget:          &Target{Binary: "tg-clipboard", GOOS: "windows", GOARCH: "amd64"},
 		WingetTarget:         &Target{Binary: "tg-clipboard", GOOS: "windows", GOARCH: "amd64"},
-		WingetIdentifier:     "ThalysGuimaraes.TGClipboard",
+		WingetIdentifier:     "ArjanFlac.TailboardHub",
 		WingetPackageName:    "tg-clipboard Broker",
 		WingetMoniker:        "tg-clipboard",
 		WingetTags:           []string{"clipboard", "tailscale", "sync", "server"},
@@ -188,7 +188,7 @@ var packageSpecs = []packageSpec{
 		HomebrewTestExpect:   "flag: help requested",
 		ScoopTarget:          &Target{Binary: "tg-clipd", GOOS: "windows", GOARCH: "amd64"},
 		WingetTarget:         &Target{Binary: "tg-clipd", GOOS: "windows", GOARCH: "amd64"},
-		WingetIdentifier:     "ThalysGuimaraes.TGClipd",
+		WingetIdentifier:     "ArjanFlac.TailboardEngine",
 		WingetPackageName:    "tg-clipboard Agent (tg-clipd)",
 		WingetMoniker:        "tg-clipd",
 		WingetTags:           []string{"clipboard", "tailscale", "sync", "cli"},
@@ -207,7 +207,7 @@ var packageSpecs = []packageSpec{
 		HomebrewTestExpect:   "Usage: tg-clip",
 		ScoopTarget:          &Target{Binary: "tg-clip", GOOS: "windows", GOARCH: "amd64"},
 		WingetTarget:         &Target{Binary: "tg-clip", GOOS: "windows", GOARCH: "amd64"},
-		WingetIdentifier:     "ThalysGuimaraes.TGClip",
+		WingetIdentifier:     "ArjanFlac.Tailboard",
 		WingetPackageName:    "TGClip",
 		WingetMoniker:        "tg-clip",
 		WingetTags:           []string{"clipboard", "tailscale", "sync", "cli"},

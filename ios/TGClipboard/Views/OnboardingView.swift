@@ -9,7 +9,7 @@ struct OnboardingView: View {
     @Environment(AppViewModel.self) private var viewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var hubURLText = ""
+    @State private var hubURLText = "http://tailboard-hub:9437"
     @State private var sourceName = ""
     @State private var isProbing = false
     @State private var probeError: String?
@@ -33,7 +33,7 @@ struct OnboardingView: View {
                     .foregroundStyle(.tint)
                     .accessibilityHidden(true)
 
-                Text("tg-clipboard")
+                Text("Tailboard")
                     .font(.largeTitle.bold())
 
                 Text("Your clipboard and files, on every device. Private, over Tailscale.")

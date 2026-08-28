@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/thalysguimaraes/tg-clipboard/internal/privacy"
+import "github.com/arjanflac/tailboard/internal/privacy"
 
 type contextProvider interface {
 	CurrentContext() (privacy.Context, error)

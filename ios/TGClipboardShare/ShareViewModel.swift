@@ -29,6 +29,9 @@ final class ShareViewModel {
     var thumbnail: UIImage?
     var devices: [Device] = []
     var selectedDeviceID = ""
+    private var extractionComplete = false
+    private var devicesLoaded = false
+    private var autoSendStarted = false
 
     var hasContent: Bool { contentToSend != nil || dataToSend != nil }
 
@@ -43,8 +46,23 @@ final class ShareViewModel {
     /// success message. The no-device selection sends to every device via
     /// the shared clipboard.
     var destinationName: String {
-        guard !selectedDeviceID.isEmpty else { return "All my devices (clipboard)" }
-        return devices.first(where: { $0.deviceID == selectedDeviceID })?.name ?? "device"
+        guard !selectedDeviceID.isEmpty else {
+            return dataToSend == nil ? "All my devices (clipboard)" : "a device"
+        }
+        guard let device = devices.first(where: { $0.deviceID == selectedDeviceID }) else {
+            return "device"
+        }
+        return device.platform.caseInsensitiveCompare("darwin") == .orderedSame
+            ? "MacBook"
+            : device.name
+    }
+
+    var showsDestinationPicker: Bool {
+        dataToSend != nil && store.defaultTransferDeviceName.isEmpty
+    }
+
+    var canSend: Bool {
+        hasContent && (dataToSend == nil || !selectedDeviceID.isEmpty)
     }
 
     // MARK: - Extraction
@@ -60,7 +78,7 @@ final class ShareViewModel {
                         mimeType = "text/plain"
                         previewText = String(text.prefix(500))
                         suggestedName = provider.suggestedName ?? "Shared Text.txt"
-                        state = .ready
+                        await markExtractionComplete()
                         return
                     }
                 }
@@ -71,7 +89,7 @@ final class ShareViewModel {
                         mimeType = "text/plain"
                         previewText = url.absoluteString
                         suggestedName = provider.suggestedName ?? "Shared Link.txt"
-                        state = .ready
+                        await markExtractionComplete()
                         return
                     }
                 }
@@ -83,7 +101,7 @@ final class ShareViewModel {
                         previewText = ""
                         thumbnail = Self.makeThumbnail(from: data)
                         suggestedName = provider.suggestedName ?? "Shared Image.png"
-                        state = .ready
+                        await markExtractionComplete()
                         return
                     }
                 }
@@ -97,35 +115,50 @@ final class ShareViewModel {
                     mimeType = type.preferredMIMEType ?? "application/octet-stream"
                     previewText = ""
                     suggestedName = provider.suggestedName ?? "Shared File"
-                    state = .ready
+                    await markExtractionComplete()
                     return
                 }
             }
         }
         previewText = ""
-        state = .ready // hasContent stays false; the view explains it
+        await markExtractionComplete() // hasContent stays false; the view explains it
     }
 
     // MARK: - Devices
 
     func loadDevices() async {
-        guard let hubURL = store.hubURL else { return }
+        guard let hubURL = store.hubURL else {
+            devicesLoaded = true
+            return
+        }
         let client = TGClipboardClient(baseURL: hubURL, sourceName: store.sourceName)
         do {
             devices = try await client.getDevices()
                 .filter { $0.deviceID != store.deviceID && $0.capabilities.contains("transfers") }
                 .sorted { $0.online && !$1.online }
+            if let defaultDevice = devices.first(where: {
+                $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .caseInsensitiveCompare(store.defaultTransferDeviceName) == .orderedSame
+            }) {
+                selectedDeviceID = defaultDevice.deviceID
+            }
         } catch {
             // Clipboard send remains available when the roster is offline.
         }
+        devicesLoaded = true
+        await maybeAutoSend()
     }
 
     // MARK: - Send
 
     func send() async {
         guard hasContent else { return }
+        if dataToSend != nil && selectedDeviceID.isEmpty {
+            state = .failed("Choose a destination device.")
+            return
+        }
         guard let hubURL = store.hubURL else {
-            state = .failed("Open tg-clipboard once to finish setup, then try again.")
+            state = .failed("Open Tailboard once to finish setup, then try again.")
             return
         }
 
@@ -156,13 +189,43 @@ final class ShareViewModel {
             throw TGClipboardError.emptyClipboard
         }
 
-        _ = try await client.scheduleTransferUpload(
+        _ = try await client.uploadTransfer(
             deviceID: store.deviceID,
             toDevice: selectedDeviceID,
             data: data,
             fileName: URL(fileURLWithPath: suggestedName).lastPathComponent,
             mimeType: mimeType
         )
+    }
+
+    private func markExtractionComplete() async {
+        extractionComplete = true
+        await maybeAutoSend()
+    }
+
+    private func maybeAutoSend() async {
+        guard extractionComplete, devicesLoaded, !autoSendStarted else { return }
+
+        guard hasContent else {
+            state = .ready
+            return
+        }
+
+        if contentToSend != nil {
+            // Text and links are clipboard updates, not downloaded .txt files.
+            selectedDeviceID = ""
+        } else if selectedDeviceID.isEmpty && !store.defaultTransferDeviceName.isEmpty {
+            state = .failed("The default file destination is not available.")
+            return
+        } else if selectedDeviceID.isEmpty {
+            // Fresh installs ask in the share sheet. Wait for the person's
+            // selection instead of silently choosing the first Mac.
+            state = .ready
+            return
+        }
+
+        autoSendStarted = true
+        await send()
     }
 
     // MARK: - Helpers

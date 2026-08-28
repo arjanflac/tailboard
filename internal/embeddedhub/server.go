@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/hub"
+	"github.com/arjanflac/tailboard/internal/hub"
 )
 
 const DefaultAddress = ":9437"

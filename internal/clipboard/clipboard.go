@@ -28,8 +28,10 @@ func (c Content) Empty() bool {
 
 // Clipboard reads and writes the system clipboard with MIME type support.
 type Clipboard interface {
-	// ReadBest returns the richest available clipboard content.
-	// Priority: image/png > text/html > text/plain.
+	// ReadBest returns the most useful cross-device clipboard content.
+	// Priority: image/png > text/plain > text/html. Plain text intentionally
+	// wins over an equivalent HTML representation because mobile clients paste
+	// a text clip literally and should never expose markup copied by a browser.
 	ReadBest() (Content, error)
 
 	// Write sets the clipboard to the given content.
@@ -53,8 +55,8 @@ type Watcher interface {
 // typePriority defines the preference order for reading clipboard content.
 // Higher index = higher priority.
 var typePriority = []string{
-	"text/plain",
 	"text/html",
+	"text/plain",
 	"image/png",
 }
 

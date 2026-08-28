@@ -1,5 +1,11 @@
 # Release Engineering
 
+> [!WARNING]
+> This document describes inherited core packaging machinery. Tailboard's
+> public publishing workflows are intentionally disabled while the product
+> name, supported artifacts, signing ownership, and package identifiers are
+> under review. Treat the commands below as dry-run tooling only.
+
 tg-clipboard releases are built from a single Linux host and published as deterministic archives, checksums, release notes, and a machine-readable manifest.
 
 ## Supported targets
@@ -26,7 +32,7 @@ make release-verify VERSION=v0.1.1-rc1
 - `tg-clipboard_<version>_artifacts.json`.
 - `package-managers/homebrew/{tg-clipboard,tg-clipd,tg-clip}.rb`,
 - `package-managers/scoop/{tg-clipd,tg-clip}.json`,
-- `package-managers/winget/manifests/t/ThalysGuimaraes/{TGClipd,TGClip}/<version>/*.yaml` after `make release-package-managers`.
+- `package-managers/winget/manifests/t/ArjanFlac/{TailboardEngine,Tailboard}/<version>/*.yaml` after `make release-package-managers`.
 
 `make release-verify` re-hashes every archive and confirms the checksum file, release notes, and manifest stay in sync.
 
@@ -35,18 +41,18 @@ Generate package-manager metadata from the release manifest/checksums with:
 ```bash
 make release-package-managers \
   VERSION=v0.1.1-rc1 \
-  RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/v0.1.1-rc1
+  RELEASE_ASSET_BASE_URL=https://github.com/arjanflac/tailboard/releases/download/v0.1.1-rc1
 
 make release-package-managers-verify \
   VERSION=v0.1.1-rc1 \
-  RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/v0.1.1-rc1
+  RELEASE_ASSET_BASE_URL=https://github.com/arjanflac/tailboard/releases/download/v0.1.1-rc1
 ```
 
 The package-manager step mirrors the shipped artifact matrix instead of inventing bundle-specific archives:
 
 - Homebrew formulas: `tg-clipboard`, `tg-clipd`, and `tg-clip` for macOS and Linux on arm64/x86_64.
 - Scoop manifests: `tg-clipboard`, `tg-clipd`, and `tg-clip` (Windows x86_64).
-- winget manifests: `ThalysGuimaraes.tg-clipboard`, `ThalysGuimaraes.TGClipd`, and `ThalysGuimaraes.TGClip` (Windows x86_64 portable zip packages).
+- winget manifests: `ArjanFlac.tg-clipboard`, `ArjanFlac.TailboardEngine`, and `ArjanFlac.Tailboard` (Windows x86_64 portable zip packages).
 
 ## GitHub release pipeline
 
@@ -88,8 +94,8 @@ The repository dry-run path validates package-manager outputs with the same rele
 ```bash
 make release VERSION=v0.1.1-rc1
 make release-verify VERSION=v0.1.1-rc1
-make release-package-managers VERSION=v0.1.1-rc1 RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/v0.1.1-rc1
-make release-package-managers-verify VERSION=v0.1.1-rc1 RELEASE_ASSET_BASE_URL=https://github.com/thalysguimaraes/tg-clipboard/releases/download/v0.1.1-rc1
+make release-package-managers VERSION=v0.1.1-rc1 RELEASE_ASSET_BASE_URL=https://github.com/arjanflac/tailboard/releases/download/v0.1.1-rc1
+make release-package-managers-verify VERSION=v0.1.1-rc1 RELEASE_ASSET_BASE_URL=https://github.com/arjanflac/tailboard/releases/download/v0.1.1-rc1
 ```
 
 `make release-package-managers-verify` checks that:

@@ -70,7 +70,7 @@ final class MenuBarViewModel: NSObject {
 
     var statusLine: String {
         switch status {
-        case .engineOff: return "tg-clipboard engine isn't running"
+        case .engineOff: return "Tailboard Engine isn't running"
         case .paused: return "Paused"
         case .offline: return "Offline — reconnecting…"
         case .noTailscale: return "Tailscale is off"

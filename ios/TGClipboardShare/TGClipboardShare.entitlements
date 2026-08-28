@@ -4,11 +4,11 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.thalys.cliphub</string>
+		<string>group.com.arjanflac.tgclipboard</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)group.com.thalys.cliphub</string>
+		<string>$(AppIdentifierPrefix)group.com.arjanflac.tgclipboard</string>
 	</array>
 </dict>
 </plist>

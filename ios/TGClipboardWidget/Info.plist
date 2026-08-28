@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>TGClipboard Widget</string>
+	<string>Tailboard Widget</string>
 	<key>CFBundleDisplayName</key>
-	<string>tg-clipboard</string>
+	<string>Tailboard</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleExecutable</key>
@@ -13,9 +13,14 @@
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>1.7</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>9</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>TGClipboardAppIdentifierPrefix</key>
 	<string>$(AppIdentifierPrefix)</string>
 	<key>NSExtension</key>

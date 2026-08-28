@@ -12,7 +12,7 @@ instead of creating a separate Go module or repo.
 Recommended import path:
 
 ```go
-github.com/thalysguimaraes/tg-clipboard/hubclient
+github.com/arjanflac/tailboard/hubclient
 ```
 
 Why this should stay in-repo first:

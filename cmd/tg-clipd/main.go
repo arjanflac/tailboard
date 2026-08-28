@@ -18,13 +18,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/thalysguimaraes/tg-clipboard/internal/agent"
-	"github.com/thalysguimaraes/tg-clipboard/internal/deviceid"
-	"github.com/thalysguimaraes/tg-clipboard/internal/discover"
-	"github.com/thalysguimaraes/tg-clipboard/internal/embeddedhub"
-	"github.com/thalysguimaraes/tg-clipboard/internal/hubclient"
-	"github.com/thalysguimaraes/tg-clipboard/internal/privacy"
-	"github.com/thalysguimaraes/tg-clipboard/internal/service"
+	"github.com/arjanflac/tailboard/internal/agent"
+	"github.com/arjanflac/tailboard/internal/deviceid"
+	"github.com/arjanflac/tailboard/internal/discover"
+	"github.com/arjanflac/tailboard/internal/embeddedhub"
+	"github.com/arjanflac/tailboard/internal/hubclient"
+	"github.com/arjanflac/tailboard/internal/privacy"
+	"github.com/arjanflac/tailboard/internal/service"
 )
 
 // version is injected via ldflags in reproducible release builds.
@@ -77,14 +77,14 @@ func prettyHostname() string {
 
 func run(ctx context.Context, args []string) error {
 	if len(args) > 0 && args[0] == "install-service" {
-		result, err := service.Install("tg-clipd", args[1:])
+		result, err := service.Install("engine", args[1:])
 		if err != nil {
 			return err
 		}
 		slog.Info("service installed", "component", "tg-clipd", "platform", result.Platform, "path", result.Path, "loaded", result.Loaded)
 		return nil
 	}
-	fs := flag.NewFlagSet("tg-clipd", flag.ContinueOnError)
+	fs := flag.NewFlagSet("Tailboard Engine", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
 	hubURL := fs.String("hub", "", "hub URL (auto-discovered from tailnet if empty)")

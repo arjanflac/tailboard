@@ -31,7 +31,7 @@ sender -- resumable upload --> disk spool --> receiver
 ## Data flow
 
 1. A client discovers the hub URL from Tailscale metadata unless `--hub` or `TG_CLIPBOARD_HUB` overrides it.
-2. `tg-clipd` waits for a native change event where available. Polling backends check a cheap change sequence before reading the richest available content in this order: `image/png`, `text/html`, then `text/plain`.
+2. `tg-clipd` waits for a native change event where available. Polling backends check a cheap change sequence before selecting `image/png`, then `text/plain`, with `text/html` only as a fallback when plain text is unavailable. This avoids pasting browser markup literally on mobile clients.
 3. `tg-clipd` can optionally apply local privacy rules before upload. Blocked items stay local and can optionally clear the local clipboard.
 4. The client hashes the content and MIME type. If the item is new and not one the client just wrote itself, it sends the item to `tg-clipboard`.
 5. `tg-clipboard` stores the clip, assigns a monotonic `seq`, and broadcasts it to WebSocket subscribers.
