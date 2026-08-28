@@ -52,3 +52,5 @@ Suggested headings:
 - Convert legacy HTML clips to readable plain text in the Android receive path.
 - Shrink the Android adaptive foreground so the full Tailboard mark fits Pixel
   launcher's round icon mask.
+- Respect Pixel system-bar insets and wait for launchd to finish unregistering
+  the old Mac engine before reinstalling it.

@@ -66,14 +66,17 @@ func installLaunchd(name, executable string, args []string) (InstallResult, erro
 	}
 	domain := fmt.Sprintf("gui/%d", os.Getuid())
 	_ = exec.Command("launchctl", "bootout", domain+"/"+label(name)).Run()
+	_ = exec.Command("launchctl", "enable", domain+"/"+label(name)).Run()
 	var bootstrapOutput []byte
 	var bootstrapErr error
-	for attempt := 0; attempt < 5; attempt++ {
+	for attempt := 0; attempt < 10; attempt++ {
 		bootstrapOutput, bootstrapErr = exec.Command("launchctl", "bootstrap", domain, path).CombinedOutput()
 		if bootstrapErr == nil {
 			break
 		}
-		time.Sleep(time.Duration(attempt+1) * 150 * time.Millisecond)
+		if attempt < 9 {
+			time.Sleep(time.Duration(attempt+1) * 200 * time.Millisecond)
+		}
 	}
 	if bootstrapErr != nil {
 		return InstallResult{Path: path, Platform: "launchd"}, fmt.Errorf(

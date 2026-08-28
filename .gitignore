@@ -10,3 +10,4 @@ android/local.properties
 config.local.env
 *.local.md
 .derived-data/
+.derived-data-ios/
