@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -26,12 +27,14 @@ func TestConfiguredRuntimeArgsRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("configuredRuntimeArgs() = %#v, want %#v", got, want)
 	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat engine arguments: %v", err)
-	}
-	if gotMode := info.Mode().Perm(); gotMode != 0o600 {
-		t.Fatalf("engine arguments mode = %#o, want 0600", gotMode)
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat engine arguments: %v", err)
+		}
+		if gotMode := info.Mode().Perm(); gotMode != 0o600 {
+			t.Fatalf("engine arguments mode = %#o, want 0600", gotMode)
+		}
 	}
 }
 
