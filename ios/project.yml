@@ -121,17 +121,27 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: ../macos/TGClipboardMenuBar
+      - path: ../.tailboard-build/macos/Tailboard Engine.app
+        optional: true
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LoginItems
     dependencies:
       - target: TGClipboardKitMac
         embed: true
       - target: TailboardShareMac
         embed: true
+      - sdk: CoreServices.framework
+      - sdk: ServiceManagement.framework
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tgclipboard.menubar
       PRODUCT_NAME: Tailboard
+      MARKETING_VERSION: 1.2
+      CURRENT_PROJECT_VERSION: 3
       INFOPLIST_FILE: ../macos/TGClipboardMenuBar/Info.plist
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-      ENABLE_HARDENED_RUNTIME: false
+      ENABLE_HARDENED_RUNTIME: true
 
   TailboardShareMac:
     type: app-extension
@@ -147,8 +157,10 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tgclipboard.menubar.share
       PRODUCT_NAME: TailboardShare
       PRODUCT_MODULE_NAME: TailboardShare
+      MARKETING_VERSION: 1.2
+      CURRENT_PROJECT_VERSION: 3
       INFOPLIST_FILE: ../macos/TailboardShare/Info.plist
-      ENABLE_HARDENED_RUNTIME: false
+      ENABLE_HARDENED_RUNTIME: true
     entitlements:
       path: ../macos/TailboardShare/TailboardShare.entitlements
       properties:

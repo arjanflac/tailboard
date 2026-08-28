@@ -129,3 +129,37 @@ jobs:
             -destination "platform=iOS Simulator,id=$device_id" \
             CODE_SIGNING_ALLOWED=NO \
             test
+
+  macos-app-ci:
+    name: macOS App Bundle
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build embedded engine
+        run: make tailboard-engine-app
+      - name: Generate project
+        working-directory: ios
+        run: xcodegen generate
+      - name: Build app bundle without signing
+        working-directory: ios
+        run: |
+          xcodebuild \
+            -project TGClipboard.xcodeproj \
+            -scheme TGClipboardMenuBar \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath ../.derived-data-ci-macos \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Verify embedded service layout
+        run: |
+          app='.derived-data-ci-macos/Build/Products/Release/Tailboard.app'
+          test -x "$app/Contents/Library/LoginItems/Tailboard Engine.app/Contents/MacOS/Tailboard Engine"
+          test -f "$app/Contents/Library/LoginItems/Tailboard Engine.app/Contents/Info.plist"
+          plutil -lint "$app/Contents/Library/LoginItems/Tailboard Engine.app/Contents/Info.plist"

@@ -84,6 +84,16 @@ func run(ctx context.Context, args []string) error {
 		slog.Info("service installed", "component", "tg-clipd", "platform", result.Platform, "path", result.Path, "loaded", result.Loaded)
 		return nil
 	}
+	if len(args) > 0 && args[0] == "write-config" {
+		return writeConfiguredRuntimeArgs(args[1:])
+	}
+	if len(args) == 0 {
+		var err error
+		args, err = configuredRuntimeArgs()
+		if err != nil {
+			return err
+		}
+	}
 	fs := flag.NewFlagSet("Tailboard Engine", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 

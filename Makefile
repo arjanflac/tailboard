@@ -6,7 +6,7 @@ RELEASE_MANIFEST ?=
 RELEASE_CHECKSUMS ?=
 RELEASE_ASSET_BASE_URL ?=
 
-.PHONY: all tailboard-hub tailboard-engine tailboard tg-clipboard tg-clipd tg-clip test test-race lint clean release release-verify release-package-managers release-package-managers-verify
+.PHONY: all tailboard-hub tailboard-engine tailboard-engine-app tailboard tg-clipboard tg-clipd tg-clip test test-race lint clean release release-verify release-package-managers release-package-managers-verify
 
 all: tailboard-hub tailboard-engine tailboard
 
@@ -15,6 +15,9 @@ tailboard-hub:
 
 tailboard-engine:
 	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o "bin/Tailboard Engine" ./cmd/tg-clipd
+
+tailboard-engine-app: tailboard-engine
+	./scripts/prepare-macos-engine-bundle.sh
 
 tailboard:
 	go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o bin/tailboard ./cmd/tg-clip
@@ -38,7 +41,7 @@ lint:
 	go vet ./...
 
 clean:
-	rm -rf bin/ dist/
+	rm -rf bin/ dist/ .tailboard-build/
 
 # Deterministic release archives, checksums, notes, and manifest.
 release:

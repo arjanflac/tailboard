@@ -17,6 +17,8 @@ Suggested headings:
 
 ### Added
 
+- Modern macOS background-service registration with the Go engine embedded in
+  `Tailboard.app`, including migration and rollback from the legacy LaunchAgent.
 - Standalone Tailboard repository preserving the upstream tg-clipboard Git
   history and MIT attribution.
 - Android Clipboard, Devices, and Settings tabs with current clip, recent
@@ -32,6 +34,9 @@ Suggested headings:
 
 ### Changed
 
+- macOS now presents the managed background component as Tailboard Engine under
+  Tailboard instead of exposing the signing certificate holder as a standalone
+  background item.
 - Mac transfers now land directly in `~/Downloads`.
 - iOS Control Center actions open Tailboard and complete pasteboard access in
   the foreground app process.

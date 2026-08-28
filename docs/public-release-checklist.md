@@ -40,3 +40,14 @@ public or publish binaries until every blocking item below is resolved.
   tested on a clean user account.
 - [ ] Installation, update, uninstall, data retention, and recovery behavior are
   documented for every supported platform.
+
+## Completed foundation
+
+- [x] Preserve the upstream Git history, MIT notice, and explicit attribution.
+- [x] Embed the Mac engine as a background-only login item in `Tailboard.app`
+  and manage it with `SMAppService`, including legacy LaunchAgent migration and
+  a rollback path.
+- [x] Sign local Mac development builds with hardened runtime and verify nested
+  code before installation.
+- [x] Document the Developer ID and notarization path without committing signing
+  credentials.

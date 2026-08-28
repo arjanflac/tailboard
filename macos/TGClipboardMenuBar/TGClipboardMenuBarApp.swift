@@ -21,7 +21,18 @@ struct TGClipboardMenuBarApp: App {
                 .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                     stageDrop(providers)
                 }
-                .task { viewModel.start() }
+                .task {
+                    do {
+                        try await EngineServiceManager.shared.activate()
+                    } catch {
+                        UserDefaults.standard.set(
+                            error.localizedDescription,
+                            forKey: EngineServiceManager.lastErrorKey
+                        )
+                        viewModel.errorMessage = error.localizedDescription
+                    }
+                    viewModel.start()
+                }
         }
         .menuBarExtraStyle(.window)
     }

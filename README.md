@@ -39,7 +39,7 @@ to complete clipboard access in the foreground.
 - **Tailboard Engine** — Go clipboard agent with an optional embedded hub,
   transfer receiver, and loopback-only desktop API.
 - **macOS menu-bar app and Finder Share extension** — native Swift surfaces
-  over the existing engine.
+  over an engine embedded and managed through Apple's modern service API.
 - **Android app** — current clip and history, device roster, settings, foreground
   sync connection, Quick Settings tile, and share-sheet destination.
 - **iOS app** — current clip and history, devices, transfers, settings, share
@@ -72,7 +72,10 @@ xcodegen generate
 
 Apple contributors must select their own development team and use bundle/app
 group identifiers they control before device signing. See [ios/README.md](ios/README.md)
-and [android/README.md](android/README.md) for platform details.
+and [android/README.md](android/README.md) for platform details. Developer ID
+signing and notarization are only needed when distributing a downloadable Mac
+app; they do not change the MIT license. See
+[docs/macos-distribution.md](docs/macos-distribution.md).
 
 For a local personal deployment, copy the example configuration and keep the
 result ignored:
@@ -112,6 +115,8 @@ release and TestFlight workflows are intentionally disabled until the naming,
 bundle ownership, authentication model, privacy defaults, and distribution
 checklist are resolved. See [docs/public-release-checklist.md](docs/public-release-checklist.md).
 
-## License
+## License and upstream credit
 
-MIT. See [LICENSE](LICENSE).
+MIT. Tailboard uses the same permissive license as its upstream and retains the
+upstream copyright and permission notice. See [LICENSE](LICENSE) and
+[NOTICE.md](NOTICE.md).

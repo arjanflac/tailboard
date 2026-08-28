@@ -69,7 +69,9 @@ A new SwiftUI `MenuBarExtra` app (`ios/` tree gains a macOS target, or a sibling
 
 - **Native notifications** (UNUserNotificationCenter) replace `osascript`: incoming offer notifications get **Accept / Decline action buttons** (mapped to `POST /api/transfers/{id}/accept|decline`) — no more "run tg-clip receive". Completion notification click reveals the file.
 - **Finder Share/Services menu**: "Send with tg-clipboard" quick action → device picker → same send path.
-- **Login item + supervision**: the app installs/starts the tg-clipd launch agent on first run (reusing `internal/service/install.go` semantics), shows "tg-clipboard engine isn't running — Start" when the control port is unreachable.
+- **Login item + supervision**: the app registers its embedded background-only
+  engine bundle with `SMAppService` on first run and shows a recovery action
+  when the control port is unreachable.
 - First run = the onboarding in §6; ships with `--embed-hub` decision made *for* the user (see 6.2).
 
 ### 4.4 Required tg-clipd control-API additions

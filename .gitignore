@@ -11,3 +11,5 @@ config.local.env
 *.local.md
 .derived-data/
 .derived-data-ios/
+.derived-data-ci-macos/
+.tailboard-build/

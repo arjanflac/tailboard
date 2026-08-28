@@ -195,22 +195,23 @@ final class MenuBarViewModel: NSObject {
         }
     }
 
-    /// Starts the tg-clipd launch agent via tg-clip (best effort).
+    /// Starts or repairs the embedded SMAppService login item.
     func startEngine() {
-        Task.detached {
-            let candidates = [
-                "/opt/homebrew/bin/tg-clip", "/usr/local/bin/tg-clip",
-                NSString("~/go/bin/tg-clip").expandingTildeInPath,
-            ]
-            guard let bin = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return }
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: bin)
-            process.arguments = ["service", "install"]
-            try? process.run()
-            process.waitUntilExit()
-        }
         Task {
-            try? await Task.sleep(for: .seconds(2))
+            do {
+                try await EngineServiceManager.shared.activate(forceRestart: true)
+                errorMessage = nil
+            } catch {
+                UserDefaults.standard.set(
+                    error.localizedDescription,
+                    forKey: EngineServiceManager.lastErrorKey
+                )
+                errorMessage = error.localizedDescription
+                if case EngineServiceError.approvalRequired = error {
+                    EngineServiceManager.shared.openLoginItemsSettings()
+                }
+            }
+            try? await Task.sleep(for: .seconds(1))
             await refresh()
         }
     }

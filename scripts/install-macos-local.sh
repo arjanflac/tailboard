@@ -18,19 +18,10 @@ fi
 
 make -C "$PROJECT_DIR" tailboard-engine tailboard
 
-if [ -n "${TAILBOARD_MAC_CODESIGN_IDENTITY:-}" ]; then
-  codesign --force \
-    --sign "$TAILBOARD_MAC_CODESIGN_IDENTITY" \
-    --identifier com.arjanflac.tailboard.engine \
-    --timestamp=none \
-    "$PROJECT_DIR/bin/Tailboard Engine"
-  codesign --verify --strict "$PROJECT_DIR/bin/Tailboard Engine"
-fi
-
-launchctl bootout "gui/$(id -u)/com.arjanflac.tgclipboard.tg-clipd" 2>/dev/null || true
-
-"$PROJECT_DIR/bin/Tailboard Engine" install-service \
+"$PROJECT_DIR/bin/Tailboard Engine" write-config \
   --embed-hub \
   --node "$TAILBOARD_DESKTOP_NAME" \
   --transfers accept \
   --transfer-allow "$TAILBOARD_AUTO_ACCEPT_DEVICE_IDS"
+
+"$PROJECT_DIR/scripts/install-menubar-local.sh"

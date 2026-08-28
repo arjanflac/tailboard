@@ -24,9 +24,9 @@ struct PopoverView: View {
                 if !viewModel.incomingOffers.isEmpty || !viewModel.activeTransfers.isEmpty {
                     activitySection
                 }
-                if let message = viewModel.errorMessage {
-                    errorRow(message)
-                }
+            }
+            if let message = viewModel.errorMessage {
+                errorRow(message)
             }
             footer
         }
@@ -192,7 +192,7 @@ struct PopoverView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Open Tailboard Downloads")
+                .help("Open Downloads")
             }
             Button {
                 NSApp.terminate(nil)
