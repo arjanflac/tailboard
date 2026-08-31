@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
@@ -19,19 +17,66 @@ type Store struct {
 
 // OpenStore opens or creates a SQLite database at path.
 func OpenStore(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := openSQLite(path)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("enable WAL: %w", err)
 	}
 	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return &Store{db: db}, nil
+}
+
+// openSQLite keeps the always-on hub's database footprint deliberately small.
+// A single connection is enough for Tailboard's serialized, low-volume writes,
+// and avoids multiplying SQLite page caches. Incremental auto-vacuum prevents
+// expired clipboard blobs from leaving a permanently large database behind.
+func openSQLite(path string) (*sql.DB, error) {
+	db, err := sql.Open(sqliteDriverName, path)
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	pragmas := []string{
+		"PRAGMA busy_timeout=5000",
+		"PRAGMA temp_store=FILE",
+		"PRAGMA cache_size=-2048",
+		"PRAGMA journal_size_limit=8388608",
+	}
+	for _, pragma := range pragmas {
+		if _, err := db.Exec(pragma); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("configure sqlite: %w", err)
+		}
+	}
+
+	var autoVacuum int
+	if err := db.QueryRow("PRAGMA auto_vacuum").Scan(&autoVacuum); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("inspect sqlite auto-vacuum: %w", err)
+	}
+	if autoVacuum == 0 {
+		if _, err := db.Exec("PRAGMA auto_vacuum=INCREMENTAL"); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("enable sqlite auto-vacuum: %w", err)
+		}
+		if _, err := db.Exec("VACUUM"); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("initialize sqlite auto-vacuum: %w", err)
+		}
+	}
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("enable WAL: %w", err)
+	}
+	if _, err := db.Exec("PRAGMA synchronous=NORMAL"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("configure sqlite durability: %w", err)
+	}
+	return db, nil
 }
 
 func migrate(db *sql.DB) error {
@@ -123,7 +168,7 @@ func (s *Store) Close() error {
 
 // LoadState restores the seq counter and up to maxHistory items from the DB.
 // Items are returned newest-first.
-func (s *Store) LoadState(maxHistory int) (uint64, []protocol.ClipItem, error) {
+func (s *Store) LoadState(maxHistory int, maxBytes ...int) (uint64, []protocol.ClipItem, error) {
 	seq, err := s.loadSeq()
 	if err != nil {
 		return 0, nil, err
@@ -135,13 +180,23 @@ func (s *Store) LoadState(maxHistory int) (uint64, []protocol.ClipItem, error) {
 	}
 	defer rows.Close()
 
+	residentLimit := 0
+	if len(maxBytes) > 0 {
+		residentLimit = maxBytes[0]
+	}
 	var items []protocol.ClipItem
+	residentBytes := 0
 	for rows.Next() {
 		item, err := scanClip(rows)
 		if err != nil {
 			return seq, nil, fmt.Errorf("scan clip: %w", err)
 		}
+		itemBytes := clipPayloadBytes(item)
+		if len(items) > 0 && residentLimit > 0 && residentBytes+itemBytes > residentLimit {
+			continue
+		}
 		items = append(items, item)
+		residentBytes += itemBytes
 	}
 	return seq, items, rows.Err()
 }
@@ -216,6 +271,38 @@ func (s *Store) SaveItem(item protocol.ClipItem) (protocol.ClipItem, error) {
 	return item, err
 }
 
+// TrimHistory bounds durable history by both count and payload bytes. The most
+// recent item is always kept even when a single clipboard payload exceeds the
+// byte budget.
+func (s *Store) TrimHistory(maxItems int, maxBytes int64) (int, error) {
+	if maxItems <= 0 || maxBytes <= 0 {
+		return 0, nil
+	}
+	result, err := s.db.Exec(`
+		DELETE FROM clips
+		WHERE seq IN (
+			SELECT seq
+			FROM (
+				SELECT
+					seq,
+					ROW_NUMBER() OVER (ORDER BY seq DESC) AS item_number,
+					SUM(COALESCE(length(content), 0) + COALESCE(length(data), 0))
+						OVER (ORDER BY seq DESC) AS cumulative_bytes
+				FROM clips
+			)
+			WHERE item_number > ? OR (item_number > 1 AND cumulative_bytes > ?)
+		)
+	`, maxItems, maxBytes)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := result.RowsAffected()
+	if n > 0 {
+		s.reclaimFreePages(256)
+	}
+	return int(n), nil
+}
+
 // DeleteExpired removes clips that have expired before the given time.
 func (s *Store) DeleteExpired(before time.Time) (int, error) {
 	result, err := s.db.Exec("DELETE FROM clips WHERE expires_at < ?", before.Format(time.RFC3339Nano))
@@ -223,14 +310,25 @@ func (s *Store) DeleteExpired(before time.Time) (int, error) {
 		return 0, err
 	}
 	n, _ := result.RowsAffected()
+	if n > 0 {
+		s.reclaimFreePages(256)
+	}
 	return int(n), nil
 }
 
 // DeleteAll removes all persisted clipboard history while preserving the
 // AUTOINCREMENT sequence so future clips remain monotonic.
 func (s *Store) DeleteAll() error {
-	_, err := s.db.Exec("DELETE FROM clips")
-	return err
+	if _, err := s.db.Exec("DELETE FROM clips"); err != nil {
+		return err
+	}
+	s.reclaimFreePages(2048)
+	return nil
+}
+
+func (s *Store) reclaimFreePages(pages int) {
+	_, _ = s.db.Exec(fmt.Sprintf("PRAGMA incremental_vacuum(%d)", pages))
+	_, _ = s.db.Exec("PRAGMA wal_checkpoint(PASSIVE)")
 }
 
 const clipsTableDDL = `
@@ -315,4 +413,8 @@ func scanClip(scanner clipScanner) (protocol.ClipItem, error) {
 	item.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 	item.ExpiresAt, _ = time.Parse(time.RFC3339Nano, expiresAt)
 	return item, nil
+}
+
+func clipPayloadBytes(item protocol.ClipItem) int {
+	return len(item.Content) + len(item.Data)
 }

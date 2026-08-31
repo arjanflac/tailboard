@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ func TestStoreRecoversFromInterruptedLegacyWrite(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "legacy.db")
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := openSQLite(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,6 +167,44 @@ func TestStoreBinaryRoundTrip(t *testing.T) {
 	}
 	if len(items) != 1 || len(items[0].Data) != 4 {
 		t.Fatalf("expected 1 binary item, got %+v", items)
+	}
+}
+
+func TestStoreTrimHistoryByPayloadBytes(t *testing.T) {
+	s, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	now := time.Now()
+	for seq, data := range [][]byte{[]byte("aaaaaa"), []byte("bbbbbb"), []byte("cccccc")} {
+		if _, err := s.SaveItem(protocol.ClipItem{
+			Seq:       uint64(seq + 1),
+			MimeType:  "image/png",
+			Data:      data,
+			Hash:      protocol.HashBytes(data),
+			Source:    "node1",
+			CreatedAt: now,
+			ExpiresAt: now.Add(time.Hour),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	removed, err := s.TrimHistory(10, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != 2 {
+		t.Fatalf("expected 2 trimmed clips, got %d", removed)
+	}
+	_, items, err := s.LoadState(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Seq != 3 {
+		t.Fatalf("expected only newest clip after byte trim, got %+v", items)
 	}
 }
 

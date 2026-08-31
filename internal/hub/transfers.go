@@ -59,7 +59,7 @@ func newTransferStore(dir string, quota, maxSize int64, ttl time.Duration) (*tra
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", filepath.Join(dir, "metadata.db"))
+	db, err := openSQLite(filepath.Join(dir, "metadata.db"))
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +76,10 @@ func newTransferStore(dir string, quota, maxSize int64, ttl time.Duration) (*tra
 	}
 	s := &transferStore{dir: dir, quota: quota, maxSize: maxSize, ttl: ttl, transfers: map[string]protocol.Transfer{}, temporary: temporary, db: db}
 	if err := s.load(); err != nil {
+		_ = db.Close()
+		if temporary {
+			_ = os.RemoveAll(dir)
+		}
 		return nil, err
 	}
 	return s, nil
@@ -419,6 +423,17 @@ func (s *transferStore) load() error {
 			_ = os.Remove(filepath.Join(s.dir, entry.Name(), "metadata.json"))
 		}
 	}
+
+	// Remove abandoned payload directories that no longer have metadata. These
+	// can be left by an interrupted upload or an older Tailboard build.
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, ok := s.transfers[entry.Name()]; !ok {
+			_ = os.RemoveAll(filepath.Join(s.dir, entry.Name()))
+		}
+	}
 	return nil
 }
 
@@ -452,11 +467,7 @@ func (s *transferStore) usedLocked() (int64, error) {
 }
 
 func (s *transferStore) deletePayloadsLocked(id string) error {
-	files, _ := filepath.Glob(filepath.Join(s.transferDir(id), "*.part"))
-	for _, file := range files {
-		_ = os.Remove(file)
-	}
-	return nil
+	return os.RemoveAll(s.transferDir(id))
 }
 
 func (s *transferStore) transferDir(id string) string { return filepath.Join(s.dir, id) }

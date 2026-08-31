@@ -499,13 +499,14 @@ func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 		sub := h.Subscribe(ctx)
 		defer sub.cancel()
 
-		// Catch-up replay: send items missed since the given seq.
+		// Clipboard sync is last-write-wins. On reconnect, send only the latest
+		// state instead of materializing and serializing an entire binary history.
+		// Full history remains available through the explicit history APIs.
 		var replayedUpTo uint64
 		if s := r.URL.Query().Get("since_seq"); s != "" {
 			if sinceSeq, err := strconv.ParseUint(s, 10, 64); err == nil {
-				missed := h.Since(sinceSeq)
-				for _, item := range missed {
-					msg := protocol.WSMessage{Type: "clip_update", Item: &item}
+				if item := h.Get(); item != nil && item.Seq > sinceSeq {
+					msg := protocol.WSMessage{Type: "clip_update", Item: item}
 					if err := wsjson.Write(ctx, conn, msg); err != nil {
 						slog.Debug(
 							"websocket catch-up write failed",
@@ -515,18 +516,14 @@ func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 						)
 						return
 					}
-					if item.Seq > replayedUpTo {
-						replayedUpTo = item.Seq
-					}
-				}
-				if len(missed) > 0 {
-					obs.RecordWSCatchup(len(missed))
+					replayedUpTo = item.Seq
+					obs.RecordWSCatchup(1)
 					slog.Info(
 						"websocket catch-up replay",
 						"component", "hub_stream",
 						"request_id", requestIDFromContext(r.Context()),
 						"since_sequence", sinceSeq,
-						"replayed_items", len(missed),
+						"replayed_items", 1,
 					)
 				}
 			}

@@ -12,10 +12,11 @@ import (
 
 func newTestHub() *Hub {
 	h := &Hub{
-		maxHistory: 5,
-		ttl:        time.Hour,
-		subs:       make(map[*Subscriber]struct{}),
-		startedAt:  time.Now(),
+		maxHistory:              5,
+		maxResidentHistoryBytes: defaultResidentHistoryBytes,
+		ttl:                     time.Hour,
+		subs:                    make(map[*Subscriber]struct{}),
+		startedAt:               time.Now(),
 	}
 	h.publishCond = sync.NewCond(&h.publishMu)
 	return h
@@ -39,7 +40,7 @@ func newBlockingStore() *blockingStore {
 
 func (s *blockingStore) Close() error { return nil }
 
-func (s *blockingStore) LoadState(int) (uint64, []protocol.ClipItem, error) {
+func (s *blockingStore) LoadState(int, ...int) (uint64, []protocol.ClipItem, error) {
 	return 0, nil, nil
 }
 
@@ -55,6 +56,10 @@ func (s *blockingStore) SaveItem(item protocol.ClipItem) (protocol.ClipItem, err
 	s.saveStarted <- item
 	<-s.releaseSave
 	return item, nil
+}
+
+func (s *blockingStore) TrimHistory(int, int64) (int, error) {
+	return 0, nil
 }
 
 func (s *blockingStore) DeleteExpired(time.Time) (int, error) {
@@ -125,6 +130,22 @@ func TestPutBinary(t *testing.T) {
 	}
 	if item.MimeType != "image/png" || len(item.Data) != 4 {
 		t.Fatal("binary data mismatch")
+	}
+}
+
+func TestResidentHistoryIsBoundedByPayloadBytes(t *testing.T) {
+	h := newTestHub()
+	h.maxResidentHistoryBytes = 10
+
+	for _, data := range [][]byte{[]byte("aaaaaa"), []byte("bbbbbb"), []byte("cccccc")} {
+		h.Put(PutInput{MimeType: "image/png", Data: data, Source: "node1"})
+	}
+
+	if len(h.history) != 1 {
+		t.Fatalf("expected only the current binary clip in memory, got %d items", len(h.history))
+	}
+	if h.history[0].Seq != 3 {
+		t.Fatalf("expected current seq 3 to be retained, got %d", h.history[0].Seq)
 	}
 }
 
@@ -403,7 +424,7 @@ func TestConcurrentPutsPreserveSubscriberOrder(t *testing.T) {
 	}
 }
 
-func TestConcurrentSubscribersReceiveOrderedUpdates(t *testing.T) {
+func TestSlowSubscribersReceiveLatestUpdate(t *testing.T) {
 	h := newTestHub()
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
@@ -416,25 +437,22 @@ func TestConcurrentSubscribersReceiveOrderedUpdates(t *testing.T) {
 	h.Put(textInput("first", "node1"))
 	h.Put(textInput("second", "node2"))
 
-	readTwo := func(t *testing.T, sub *Subscriber) []uint64 {
+	readLatest := func(t *testing.T, sub *Subscriber) uint64 {
 		t.Helper()
-		seqs := make([]uint64, 0, 2)
-		for len(seqs) < 2 {
-			select {
-			case item := <-sub.C:
-				seqs = append(seqs, item.Seq)
-			case <-time.After(time.Second):
-				t.Fatal("timeout waiting for subscriber updates")
-			}
+		select {
+		case item := <-sub.C:
+			return item.Seq
+		case <-time.After(time.Second):
+			t.Fatal("timeout waiting for subscriber update")
 		}
-		return seqs
+		return 0
 	}
 
-	if seqs := readTwo(t, sub1); seqs[0] != 1 || seqs[1] != 2 {
-		t.Fatalf("subscriber 1 saw out-of-order seqs %v", seqs)
+	if seq := readLatest(t, sub1); seq != 2 {
+		t.Fatalf("subscriber 1 saw stale seq %d", seq)
 	}
-	if seqs := readTwo(t, sub2); seqs[0] != 1 || seqs[1] != 2 {
-		t.Fatalf("subscriber 2 saw out-of-order seqs %v", seqs)
+	if seq := readLatest(t, sub2); seq != 2 {
+		t.Fatalf("subscriber 2 saw stale seq %d", seq)
 	}
 }
 

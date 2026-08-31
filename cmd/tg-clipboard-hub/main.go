@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -42,7 +43,15 @@ func main() {
 	spoolQuota := flag.Int64("spool-quota", envInt64("TG_CLIPBOARD_SPOOL_QUOTA", 10<<30), "maximum transfer spool bytes")
 	maxTransferSize := flag.Int64("max-transfer-size", envInt64("TG_CLIPBOARD_MAX_TRANSFER_SIZE", 100<<30), "maximum bytes per transfer")
 	transferTTL := flag.Duration("transfer-ttl", envDuration("TG_CLIPBOARD_TRANSFER_TTL", 48*time.Hour), "pending transfer TTL")
+	memoryLimit := flag.Int64("memory-limit", envInt64("TG_CLIPBOARD_MEMORY_LIMIT", 48<<20), "soft Go memory limit in bytes (0 to disable)")
+	gcPercent := flag.Int("gc-percent", envInt("TG_CLIPBOARD_GC_PERCENT", 25), "Go garbage collection target percentage")
 	flag.Parse()
+	if *memoryLimit > 0 {
+		debug.SetMemoryLimit(*memoryLimit)
+	}
+	if *gcPercent > 0 {
+		debug.SetGCPercent(*gcPercent)
+	}
 
 	dbPath := ""
 	spoolDir := ""

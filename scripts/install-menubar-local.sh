@@ -60,6 +60,11 @@ ditto "$PRODUCT" "$STAGED_APP"
 codesign --verify --deep --strict "$STAGED_APP"
 
 pkill -x Tailboard 2>/dev/null || true
+# The modern login item can be restarted through Launch Services during an
+# in-place update, so it may no longer be attached to a printable launchctl
+# job even though SMAppService still owns its registration. Stop that process
+# explicitly before replacing the nested signed bundle.
+pkill -x 'Tailboard Engine' 2>/dev/null || true
 # Unload pre-modern and pre-release engine jobs before the in-place update.
 launchctl bootout "gui/$(id -u)/com.arjanflac.tailboard.engine.agent" 2>/dev/null || true
 launchctl bootout "gui/$(id -u)/com.arjanflac.tailboard.engine" 2>/dev/null || true

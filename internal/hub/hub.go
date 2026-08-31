@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -15,14 +16,23 @@ import (
 
 // Config holds hub configuration.
 type Config struct {
-	MaxHistory      int
-	TTL             time.Duration
-	DBPath          string // Empty = no persistence.
-	SpoolDir        string
-	SpoolQuota      int64
-	MaxTransferSize int64
-	TransferTTL     time.Duration
+	MaxHistory                int
+	MaxResidentHistoryBytes   int
+	MaxPersistentHistoryItems int
+	MaxPersistentHistoryBytes int64
+	TTL                       time.Duration
+	DBPath                    string // Empty = no persistence.
+	SpoolDir                  string
+	SpoolQuota                int64
+	MaxTransferSize           int64
+	TransferTTL               time.Duration
 }
+
+const (
+	defaultResidentHistoryBytes   = 12 << 20
+	defaultPersistentHistoryItems = 200
+	defaultPersistentHistoryBytes = int64(64 << 20)
+)
 
 // Subscriber receives clipboard updates via a channel.
 type Subscriber struct {
@@ -33,14 +43,17 @@ type Subscriber struct {
 
 // Hub is the central clipboard broker.
 type Hub struct {
-	mu         sync.RWMutex
-	current    *protocol.ClipItem
-	history    []protocol.ClipItem
-	maxHistory int
-	seq        uint64
-	ttl        time.Duration
-	startedAt  time.Time
-	store      clipStore // nil if no persistence.
+	mu                        sync.RWMutex
+	current                   *protocol.ClipItem
+	history                   []protocol.ClipItem
+	maxHistory                int
+	maxResidentHistoryBytes   int
+	maxPersistentHistoryItems int
+	maxPersistentHistoryBytes int64
+	seq                       uint64
+	ttl                       time.Duration
+	startedAt                 time.Time
+	store                     clipStore // nil if no persistence.
 
 	// publishMu serializes post-commit side effects in sequence order so
 	// persistence and subscriber delivery stay monotonic after h.mu is released.
@@ -54,14 +67,19 @@ type Hub struct {
 	devicesMu sync.RWMutex
 	devices   map[string]protocol.Device
 	transfers *transferStore
+
+	stop      chan struct{}
+	closeOnce sync.Once
+	closeErr  error
 }
 
 type clipStore interface {
 	Close() error
-	LoadState(maxHistory int) (uint64, []protocol.ClipItem, error)
+	LoadState(maxHistory int, maxBytes ...int) (uint64, []protocol.ClipItem, error)
 	HistoryPage(limit int, beforeSeq uint64) ([]protocol.ClipItem, error)
 	LoadItem(seq uint64) (*protocol.ClipItem, error)
 	SaveItem(item protocol.ClipItem) (protocol.ClipItem, error)
+	TrimHistory(maxItems int, maxBytes int64) (int, error)
 	DeleteExpired(before time.Time) (int, error)
 	DeleteAll() error
 	LoadDevices() ([]protocol.Device, error)
@@ -74,31 +92,49 @@ func New(cfg Config) (*Hub, error) {
 	if cfg.MaxHistory <= 0 {
 		cfg.MaxHistory = 50
 	}
+	if cfg.MaxResidentHistoryBytes <= 0 {
+		cfg.MaxResidentHistoryBytes = defaultResidentHistoryBytes
+	}
+	if cfg.MaxPersistentHistoryItems <= 0 {
+		cfg.MaxPersistentHistoryItems = defaultPersistentHistoryItems
+	}
+	if cfg.MaxPersistentHistoryBytes <= 0 {
+		cfg.MaxPersistentHistoryBytes = defaultPersistentHistoryBytes
+	}
 	if cfg.TTL <= 0 {
 		cfg.TTL = 24 * time.Hour
 	}
 	h := &Hub{
-		maxHistory: cfg.MaxHistory,
-		ttl:        cfg.TTL,
-		subs:       make(map[*Subscriber]struct{}),
-		devices:    make(map[string]protocol.Device),
-		startedAt:  time.Now(),
+		maxHistory:                cfg.MaxHistory,
+		maxResidentHistoryBytes:   cfg.MaxResidentHistoryBytes,
+		maxPersistentHistoryItems: cfg.MaxPersistentHistoryItems,
+		maxPersistentHistoryBytes: cfg.MaxPersistentHistoryBytes,
+		ttl:                       cfg.TTL,
+		subs:                      make(map[*Subscriber]struct{}),
+		devices:                   make(map[string]protocol.Device),
+		startedAt:                 time.Now(),
+		stop:                      make(chan struct{}),
 	}
 	transfers, err := newTransferStore(cfg.SpoolDir, cfg.SpoolQuota, cfg.MaxTransferSize, cfg.TransferTTL)
 	if err != nil {
 		return nil, fmt.Errorf("open transfer spool: %w", err)
 	}
 	h.transfers = transfers
+	if expired, removed := transfers.reapExpired(time.Now()); len(expired) > 0 || removed > 0 {
+		slog.Info("reaped transfers during startup", "component", "hub_transfers", "expired_transfers", len(expired), "removed_metadata", removed)
+	}
 
 	if cfg.DBPath != "" {
 		st, err := OpenStore(cfg.DBPath)
 		if err != nil {
+			_ = transfers.close()
 			return nil, fmt.Errorf("open clip store: %w", err)
 		}
 		h.store = st
-		seq, items, err := st.LoadState(cfg.MaxHistory)
+		seq, items, err := st.LoadState(cfg.MaxHistory, cfg.MaxResidentHistoryBytes)
 		if err != nil {
 			st.Close()
+			_ = transfers.close()
 			return nil, fmt.Errorf("load clip state: %w", err)
 		}
 		h.seq = seq
@@ -109,6 +145,7 @@ func New(cfg Config) (*Hub, error) {
 		devices, err := st.LoadDevices()
 		if err != nil {
 			st.Close()
+			_ = transfers.close()
 			return nil, fmt.Errorf("load devices: %w", err)
 		}
 		for _, device := range devices {
@@ -231,15 +268,18 @@ func (h *Hub) Devices() []protocol.Device {
 
 // Close shuts down the hub's persistent store.
 func (h *Hub) Close() error {
-	if h.transfers != nil {
-		if err := h.transfers.close(); err != nil {
-			return err
+	h.closeOnce.Do(func() {
+		close(h.stop)
+		var transferErr, storeErr error
+		if h.transfers != nil {
+			transferErr = h.transfers.close()
 		}
-	}
-	if h.store != nil {
-		return h.store.Close()
-	}
-	return nil
+		if h.store != nil {
+			storeErr = h.store.Close()
+		}
+		h.closeErr = errors.Join(transferErr, storeErr)
+	})
+	return h.closeErr
 }
 
 // PutInput describes a new clipboard item to store.
@@ -284,9 +324,7 @@ func (h *Hub) Put(in PutInput) (protocol.ClipItem, bool) {
 
 	h.current = &item
 	h.history = append([]protocol.ClipItem{item}, h.history...)
-	if len(h.history) > h.maxHistory {
-		h.history = h.history[:h.maxHistory]
-	}
+	h.trimResidentHistoryLocked()
 	h.mu.Unlock()
 	h.publish(item)
 	return cloneClipItem(item), true
@@ -301,10 +339,19 @@ func (h *Hub) Get() *protocol.ClipItem {
 
 // History returns up to limit items from history.
 func (h *Hub) History(limit int) []protocol.ClipItem {
+	if limit <= 0 || limit > h.maxHistory {
+		limit = h.maxHistory
+	}
+	if h.store != nil {
+		if items, err := h.store.HistoryPage(limit, 0); err == nil {
+			return items
+		}
+	}
+
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	if limit <= 0 || limit > len(h.history) {
+	if limit > len(h.history) {
 		limit = len(h.history)
 	}
 	return cloneClipItems(h.history[:limit])
@@ -400,7 +447,7 @@ func (h *Hub) GetBySeq(seq uint64) (*protocol.ClipItem, error) {
 func (h *Hub) Subscribe(ctx context.Context) *Subscriber {
 	ctx, cancel := context.WithCancel(ctx)
 	sub := &Subscriber{
-		C:         make(chan protocol.ClipItem, 16),
+		C:         make(chan protocol.ClipItem, 1),
 		Transfers: make(chan protocol.Transfer, 16),
 		cancel:    cancel,
 	}
@@ -463,21 +510,41 @@ func (h *Hub) publish(item protocol.ClipItem) {
 	}
 
 	for _, sub := range h.snapshotSubscribers() {
-		select {
-		case sub.C <- cloneClipItem(item):
-		default:
-		}
+		offerLatestClip(sub.C, item)
 	}
 
 	if h.store != nil {
 		if _, err := h.store.SaveItem(item); err != nil {
 			slog.Error("failed to persist clip", "component", "hub_store", "sequence", item.Seq, "error", err)
+		} else if removed, err := h.store.TrimHistory(h.maxPersistentHistoryItems, h.maxPersistentHistoryBytes); err != nil {
+			slog.Error("failed to trim persisted history", "component", "hub_store", "error", err)
+		} else if removed > 0 {
+			slog.Info("trimmed persisted history", "component", "hub_store", "removed_items", removed)
 		}
 	}
 
 	h.publishedSeq = item.Seq
 	h.publishCond.Broadcast()
 	h.publishMu.Unlock()
+}
+
+// offerLatestClip makes each subscriber queue represent clipboard state rather
+// than a backlog. ClipItems are immutable after publication, so sharing the
+// payload slice is safe and avoids one full binary copy per connected device.
+func offerLatestClip(ch chan protocol.ClipItem, item protocol.ClipItem) {
+	select {
+	case ch <- item:
+		return
+	default:
+	}
+	select {
+	case <-ch:
+	default:
+	}
+	select {
+	case ch <- item:
+	default:
+	}
 }
 
 func (h *Hub) snapshotSubscribers() []*Subscriber {
@@ -510,6 +577,30 @@ func cloneClipItems(items []protocol.ClipItem) []protocol.ClipItem {
 func cloneClipItem(item protocol.ClipItem) protocol.ClipItem {
 	item.Data = cloneBytes(item.Data)
 	return item
+}
+
+// trimResidentHistoryLocked keeps metadata/history useful without allowing a
+// run of image clips to turn the always-on broker into a hundreds-of-megabytes
+// cache. The current clipboard item is always retained; older entries share
+// the remaining byte budget.
+func (h *Hub) trimResidentHistoryLocked() {
+	if len(h.history) == 0 {
+		return
+	}
+	kept := h.history[:0]
+	residentBytes := 0
+	for index, item := range h.history {
+		itemBytes := clipPayloadBytes(item)
+		if index > 0 && (len(kept) >= h.maxHistory || residentBytes+itemBytes > h.maxResidentHistoryBytes) {
+			continue
+		}
+		kept = append(kept, item)
+		residentBytes += itemBytes
+	}
+	// The backing array can be larger than the retained slice. Clear discarded
+	// entries so their binary payloads become collectible immediately.
+	clear(h.history[len(kept):])
+	h.history = kept
 }
 
 func (h *Hub) historyPageFromMemory(limit int, beforeSeq uint64) []protocol.ClipItem {
@@ -547,8 +638,13 @@ func cloneBytes(data []byte) []byte {
 func (h *Hub) reapLoop() {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		h.reapExpired()
+	for {
+		select {
+		case <-h.stop:
+			return
+		case <-ticker.C:
+			h.reapExpired()
+		}
 	}
 }
 

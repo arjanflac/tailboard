@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -114,10 +115,18 @@ func run(ctx context.Context, args []string) error {
 	embedSpoolQuota := fs.Int64("embed-spool-quota", envInt64("TG_CLIPBOARD_EMBED_SPOOL_QUOTA", 10<<30), "embedded hub transfer spool quota")
 	embedMaxTransfer := fs.Int64("embed-max-transfer-size", envInt64("TG_CLIPBOARD_EMBED_MAX_TRANSFER_SIZE", 100<<30), "embedded hub maximum transfer size")
 	embedTransferTTL := fs.Duration("embed-transfer-ttl", envDuration("TG_CLIPBOARD_EMBED_TRANSFER_TTL", 48*time.Hour), "embedded hub pending transfer TTL")
+	memoryLimit := fs.Int64("memory-limit", envInt64("TG_CLIPBOARD_MEMORY_LIMIT", 48<<20), "soft Go memory limit in bytes (0 to disable)")
+	gcPercent := fs.Int("gc-percent", envInt("TG_CLIPBOARD_GC_PERCENT", 25), "Go garbage collection target percentage")
 	controlAddr := fs.String("control-addr", envString("TG_CLIPBOARD_CONTROL_ADDR", "127.0.0.1:9438"), "loopback address for the desktop control surface (off to disable)")
 	openControl := fs.Bool("tray", envBool("TG_CLIPBOARD_TRAY", false), "open the desktop device and transfer companion")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *memoryLimit > 0 {
+		debug.SetMemoryLimit(*memoryLimit)
+	}
+	if *gcPercent > 0 {
+		debug.SetGCPercent(*gcPercent)
 	}
 	if strings.EqualFold(*controlAddr, "off") {
 		*controlAddr = ""
@@ -263,6 +272,18 @@ func envInt64(key string, fallback int64) int64 {
 		}
 	}
 	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {
