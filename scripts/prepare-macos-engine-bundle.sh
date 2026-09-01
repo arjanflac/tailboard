@@ -30,8 +30,8 @@ plutil -insert CFBundleIdentifier -string com.arjanflac.tailboard.engine.backgro
 plutil -insert CFBundleInfoDictionaryVersion -string '6.0' "$INFO_PLIST"
 plutil -insert CFBundleName -string 'Tailboard Engine' "$INFO_PLIST"
 plutil -insert CFBundlePackageType -string APPL "$INFO_PLIST"
-plutil -insert CFBundleShortVersionString -string 1.2 "$INFO_PLIST"
-plutil -insert CFBundleVersion -string 3 "$INFO_PLIST"
+plutil -insert CFBundleShortVersionString -string 1.5 "$INFO_PLIST"
+plutil -insert CFBundleVersion -string 6 "$INFO_PLIST"
 plutil -insert LSBackgroundOnly -bool true "$INFO_PLIST"
 plutil -insert LSMinimumSystemVersion -string 14.0 "$INFO_PLIST"
 

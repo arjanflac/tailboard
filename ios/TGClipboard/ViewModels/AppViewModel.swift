@@ -2,9 +2,6 @@ import Foundation
 import Observation
 import TGClipboardKit
 import UIKit
-import UniformTypeIdentifiers
-import ActivityKit
-import WidgetKit
 
 /// Top-level tabs. Clipboard first: that is the app's purpose.
 enum AppTab: Hashable {
@@ -34,10 +31,6 @@ final class AppViewModel {
     var selectedTab: AppTab = .clipboard
     /// True while the reconfiguration sheet (onboarding with Cancel) is up.
     var isReconfiguring = false
-    /// Transient confirmation shown when a copy came from the widget deep link.
-    var copiedBannerVisible = false
-    private var copiedBannerTask: Task<Void, Never>?
-
     init() {
         let arguments = ProcessInfo.processInfo.arguments
         let shouldWipe = arguments.contains("--privacy-wipe")
@@ -79,13 +72,6 @@ final class AppViewModel {
         store.clearClipboardCache()
         cache.clear()
         UIPasteboard.general.items = []
-        WidgetCenter.shared.reloadAllTimelines()
-        if #available(iOS 18.0, *) {
-            ControlCenter.shared.reloadAllControls()
-        }
-        for activity in Activity<TGClipboardActivityAttributes>.activities {
-            await activity.end(nil, dismissalPolicy: .immediate)
-        }
         privacyWipeRequested = false
     }
 
@@ -123,52 +109,6 @@ final class AppViewModel {
         isReconfiguring = true
     }
 
-    // MARK: - Deep links
-
-    func handleDeepLink(_ url: URL) {
-        guard url.host == "copy-current" else { return }
-        selectedTab = .clipboard
-        // Only confirm when a pasteboard write actually happened; otherwise
-        // copyToPasteboard has already surfaced a clear error.
-        if copyCurrentToPasteboard() {
-            showCopiedBanner()
-        }
-    }
-
-    @MainActor
-    func handlePendingControlAction() async {
-        guard let action = store.takePendingControlAction() else { return }
-        selectedTab = .clipboard
-        switch action {
-        case "send":
-            let succeeded = await pushPasteboardToHub()
-            store.recordControlDiagnostic(
-                action: "Send",
-                status: succeeded ? "Succeeded" : "Failed",
-                detail: succeeded ? "Clipboard sent" : (errorMessage ?? "Clipboard could not be sent")
-            )
-        case "receive":
-            let succeeded = await receiveLatestClipboard()
-            store.recordControlDiagnostic(
-                action: "Receive",
-                status: succeeded ? "Succeeded" : "Failed",
-                detail: succeeded ? "Clipboard copied on iPhone" : (errorMessage ?? "Clipboard could not be received")
-            )
-        default:
-            break
-        }
-    }
-
-    private func showCopiedBanner() {
-        copiedBannerTask?.cancel()
-        copiedBannerVisible = true
-        copiedBannerTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2.5))
-            guard !Task.isCancelled else { return }
-            self.copiedBannerVisible = false
-        }
-    }
-
     // MARK: - Data
 
     func refresh() async {
@@ -191,25 +131,14 @@ final class AppViewModel {
             errorMessage = nil
 
             cacheCurrentClip(clip)
-            store.cachedRecentClips = hist
             cache.save(hist)
         } catch {
             errorMessage = UserFacingError.message(error)
         }
     }
 
-    /// Keeps the app-group cache (read by widget/keyboard) fresh and asks
-    /// WidgetCenter to reload widget timelines so the home screen never
-    /// shows a stale clip. Reloads are coalesced: a WebSocket burst triggers
-    /// at most one timeline reload per minute.
-    private var lastWidgetReload: Date = .distantPast
-
     private func cacheCurrentClip(_ clip: ClipItem?) {
         store.cachedCurrentClip = clip
-        let now = Date()
-        guard now.timeIntervalSince(lastWidgetReload) >= 60 else { return }
-        lastWidgetReload = now
-        WidgetCenter.shared.reloadTimelines(ofKind: "CurrentClipWidget")
     }
 
     /// Removes a device from the roster (offline strays, retired hardware).
@@ -222,9 +151,9 @@ final class AppViewModel {
         }
     }
 
-    func sendToHub(content: String, mimeType: String = "text/plain") async {
+    func sendToHub(content: String) async {
         do {
-            let item = try await client.postClip(content: content, mimeType: mimeType)
+            let item = try await client.postClip(content: content)
             currentClip = item
             errorMessage = nil
         } catch {
@@ -232,14 +161,12 @@ final class AppViewModel {
         }
     }
 
-    /// Pushes the iPhone pasteboard (image preferred, then text) to the hub.
+    /// Pushes plain text from the iPhone pasteboard to the hub.
     /// Returns true on success so callers can confirm causally.
     @discardableResult
     func pushPasteboardToHub() async -> Bool {
         do {
-            if let image = UIPasteboard.general.image, let data = image.pngData() {
-                currentClip = try await client.postClip(data: data, mimeType: "image/png")
-            } else if let text = UIPasteboard.general.string, !text.isEmpty {
+            if let text = UIPasteboard.general.string, !text.isEmpty {
                 currentClip = try await client.postClip(content: text)
             } else {
                 errorMessage = "iPhone clipboard is empty."
@@ -247,24 +174,6 @@ final class AppViewModel {
             }
             errorMessage = nil
             cacheCurrentClip(currentClip)
-            return true
-        } catch {
-            errorMessage = UserFacingError.message(error)
-            return false
-        }
-    }
-
-    @MainActor
-    private func receiveLatestClipboard() async -> Bool {
-        do {
-            guard let clip = try await client.getCurrentClip() else {
-                errorMessage = "The shared clipboard is empty."
-                return false
-            }
-            currentClip = clip
-            cacheCurrentClip(clip)
-            guard copyToPasteboard(clip) else { return false }
-            showCopiedBanner()
             return true
         } catch {
             errorMessage = UserFacingError.message(error)
@@ -283,36 +192,11 @@ final class AppViewModel {
 
     // MARK: - Pasteboard
 
-    /// Writes the clip to the general pasteboard. Returns true only when a
-    /// pasteboard write actually happened; unsupported binary clips surface a
-    /// clear error and return false so callers never confirm a no-op.
+    /// Writes the text clip to the general pasteboard.
     @discardableResult
     func copyToPasteboard(_ item: ClipItem) -> Bool {
-        if item.isText, let content = item.content {
-            UIPasteboard.general.string = content
-            return true
-        }
-        if item.mimeType == "image/png", let data = item.data {
-            UIPasteboard.general.setData(data, forPasteboardType: UTType.png.identifier)
-            return true
-        }
-        errorMessage = "Only text and PNG image clips can be copied on iPhone."
-        return false
-    }
-
-    @discardableResult
-    func copyCurrentToPasteboard() -> Bool {
-        guard let clip = currentClip else { return false }
-        return copyToPasteboard(clip)
-    }
-
-    /// Live Activities never kept Tailboard connected in the background and
-    /// could display a stale clip as if sync were still running. End any one
-    /// created by older builds during the migration away from that UI.
-    func endLegacyLiveActivities() async {
-        for activity in Activity<TGClipboardActivityAttributes>.activities {
-            await activity.end(nil, dismissalPolicy: .immediate)
-        }
+        UIPasteboard.general.string = item.content
+        return true
     }
 
     // MARK: - WebSocket
@@ -333,7 +217,6 @@ final class AppViewModel {
                     self.history.insert(item, at: 0)
                 }
                 self.cacheCurrentClip(item)
-                self.store.cachedRecentClips = self.history
             }
         }
         wsManager.start()

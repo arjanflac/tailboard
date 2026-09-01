@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -27,7 +25,6 @@ type Config struct {
 	Clipboard       clipboard.Clipboard // Clipboard backend (nil = system default).
 	Privacy         privacy.Config      // Optional privacy policy for outbound clips.
 	ContextProvider contextProvider     // Optional active app/process detector.
-	ControlAddr     string              // Loopback address for the desktop control surface; empty disables it.
 }
 
 // Agent is the local clipboard sync agent.
@@ -38,12 +35,10 @@ type Agent struct {
 	pollInterval time.Duration
 	monitor      *ClipboardMonitor
 	client       *hubclient.Client
-	paused       atomic.Bool
 	bootstrapped atomic.Bool
 	privacy      privacy.Config
 	ctxProvider  contextProvider
 	warnedCtx    atomic.Bool
-	controlAddr  string
 }
 
 // ClipboardInitError reports a failure to initialize the default clipboard backend.
@@ -101,7 +96,6 @@ func New(cfg Config) (*Agent, error) {
 		client:       client,
 		privacy:      cfg.Privacy,
 		ctxProvider:  resolveContextProvider(cfg),
-		controlAddr:  cfg.ControlAddr,
 	}, nil
 }
 
@@ -110,15 +104,6 @@ func (a *Agent) Run(ctx context.Context) error {
 	if a.client == nil {
 		return fmt.Errorf("hub client is not configured")
 	}
-	if a.controlAddr != "" {
-		controlServer, err := a.startControlServer(ctx)
-		if err != nil {
-			return err
-		}
-		defer controlServer.Shutdown(context.Background())
-		slog.Info("desktop control surface active", "component", "tg-clipd", "url", controlServer.URL)
-	}
-
 	ws := &WSClient{
 		URL: a.client.StreamURLForDevice(a.deviceID),
 		OnConnected: func() {
@@ -181,9 +166,6 @@ func (a *Agent) Run(ctx context.Context) error {
 }
 
 func (a *Agent) pollClipboard(ctx context.Context) {
-	if a.isPaused() {
-		return
-	}
 	if !a.bootstrapped.Load() {
 		return
 	}
@@ -241,15 +223,12 @@ func (a *Agent) tryBootstrap(ctx context.Context) bool {
 	}
 
 	a.applyRemote(*item)
-	slog.Info("bootstrap applied hub clip", "component", "tg-clipd_bootstrap", "sequence", item.Seq, "source", item.Source, "mime_type", item.MimeType)
+	slog.Info("bootstrap applied hub clip", "component", "tg-clipd_bootstrap", "sequence", item.Seq, "source", item.Source)
 	a.bootstrapped.Store(true)
 	return true
 }
 
 func (a *Agent) applyRemote(item protocol.ClipItem) {
-	if a.isPaused() {
-		return
-	}
 	if item.Source == a.nodeName {
 		slog.Debug("ignoring own update", "component", "tg-clipd", "sequence", item.Seq)
 		return
@@ -259,27 +238,18 @@ func (a *Agent) applyRemote(item protocol.ClipItem) {
 	if err := a.monitor.ApplyRemote(ct); err != nil {
 		slog.Error("failed to apply remote clip", "component", "tg-clipd", "error", err)
 	} else {
-		slog.Info("applied remote clip", "component", "tg-clipd", "sequence", item.Seq, "source", item.Source, "mime_type", item.MimeType)
+		slog.Info("applied remote clip", "component", "tg-clipd", "sequence", item.Seq, "source", item.Source)
 	}
-}
-
-func (a *Agent) isPaused() bool {
-	return a.paused.Load() || a.isPausedByFile()
 }
 
 func (a *Agent) sendToHub(ctx context.Context, ct clipboard.Content) error {
-	payload := hubclient.PutRequest{MimeType: ct.MimeType, Source: a.nodeName, DeviceID: a.deviceID}
-	if ct.IsText() {
-		payload.Content = ct.Text()
-	} else {
-		payload.Data = ct.Data
-	}
+	payload := hubclient.PutRequest{Content: ct.Text, Source: a.nodeName, DeviceID: a.deviceID}
 
 	if _, err := a.client.Put(ctx, payload); err != nil {
 		return err
 	}
 
-	slog.Info("sent clip to hub", "component", "tg-clipd", "mime_type", ct.MimeType, "payload_bytes", len(ct.Data))
+	slog.Info("sent clip to hub", "component", "tg-clipd", "payload_bytes", len(ct.Text))
 	return nil
 }
 
@@ -314,24 +284,12 @@ func (a *Agent) handlePrivacy(ct clipboard.Content) bool {
 		a.monitor.MarkHandled()
 	}
 
-	slog.Info("blocked local clipboard from sync", "rule", decision.Rule, "matched", decision.Matched, "mime", ct.MimeType)
+	slog.Info("blocked local clipboard from sync", "rule", decision.Rule, "matched", decision.Matched)
 	return true
 }
 
-func (a *Agent) isPausedByFile() bool {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return false
-	}
-	_, err = os.Stat(filepath.Join(home, ".config", "tg-clipboard", "paused"))
-	return err == nil
-}
-
 func itemToContent(item protocol.ClipItem) clipboard.Content {
-	if item.IsText() {
-		return clipboard.Content{MimeType: item.MimeType, Data: []byte(item.Content)}
-	}
-	return clipboard.Content{MimeType: item.MimeType, Data: item.Data}
+	return clipboard.Content{Text: item.Content}
 }
 
 func resolveContextProvider(cfg Config) contextProvider {

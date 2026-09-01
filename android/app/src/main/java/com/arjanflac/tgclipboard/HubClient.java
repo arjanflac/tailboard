@@ -46,7 +46,6 @@ final class HubClient {
 
     static final class Clip {
         final long sequence;
-        final String mimeType;
         final String content;
         final String source;
         final String deviceID;
@@ -54,14 +53,12 @@ final class HubClient {
 
         Clip(
                 long sequence,
-                String mimeType,
                 String content,
                 String source,
                 String deviceID,
                 String createdAt
         ) {
             this.sequence = sequence;
-            this.mimeType = mimeType;
             this.content = content;
             this.source = source;
             this.deviceID = deviceID;
@@ -71,8 +68,7 @@ final class HubClient {
         static Clip fromJSON(JSONObject json) {
             return new Clip(
                     json.optLong("seq", 0L),
-                    json.optString("mime_type", "text/plain"),
-                    json.isNull("content") ? null : json.optString("content", null),
+                    json.optString("content", ""),
                     json.optString("source", "another device"),
                     json.optString("device_id", ""),
                     json.optString("created_at", "")
@@ -151,7 +147,6 @@ final class HubClient {
         try {
             JSONObject body = new JSONObject();
             body.put("content", text);
-            body.put("mime_type", "text/plain");
             body.put("device_id", HubConfig.deviceID(context));
             execute(jsonRequest(context, "/api/clip", body), callback);
         } catch (JSONException error) {

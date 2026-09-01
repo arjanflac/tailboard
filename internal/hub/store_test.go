@@ -110,7 +110,6 @@ func TestStoreRoundTrip(t *testing.T) {
 	now := time.Now()
 	item := protocol.ClipItem{
 		Seq:       42,
-		MimeType:  "text/plain",
 		Content:   "hello",
 		Hash:      protocol.HashContent("hello"),
 		Source:    "node1",
@@ -134,7 +133,7 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 }
 
-func TestStoreBinaryRoundTrip(t *testing.T) {
+func TestStoreAutoAssignsSequence(t *testing.T) {
 	dir := t.TempDir()
 	s, err := OpenStore(filepath.Join(dir, "test.db"))
 	if err != nil {
@@ -143,11 +142,9 @@ func TestStoreBinaryRoundTrip(t *testing.T) {
 	defer s.Close()
 
 	now := time.Now()
-	data := []byte{0x89, 0x50, 0x4e, 0x47}
 	item := protocol.ClipItem{
-		MimeType:  "image/png",
-		Data:      data,
-		Hash:      protocol.HashBytes(data),
+		Content:   "hello",
+		Hash:      protocol.HashContent("hello"),
 		Source:    "node1",
 		CreatedAt: now,
 		ExpiresAt: now.Add(time.Hour),
@@ -165,8 +162,8 @@ func TestStoreBinaryRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 1 || len(items[0].Data) != 4 {
-		t.Fatalf("expected 1 binary item, got %+v", items)
+	if len(items) != 1 || items[0].Content != "hello" {
+		t.Fatalf("expected stored text item, got %+v", items)
 	}
 }
 
@@ -178,12 +175,11 @@ func TestStoreTrimHistoryByPayloadBytes(t *testing.T) {
 	defer s.Close()
 
 	now := time.Now()
-	for seq, data := range [][]byte{[]byte("aaaaaa"), []byte("bbbbbb"), []byte("cccccc")} {
+	for seq, content := range []string{"aaaaaa", "bbbbbb", "cccccc"} {
 		if _, err := s.SaveItem(protocol.ClipItem{
 			Seq:       uint64(seq + 1),
-			MimeType:  "image/png",
-			Data:      data,
-			Hash:      protocol.HashBytes(data),
+			Content:   content,
+			Hash:      protocol.HashContent(content),
 			Source:    "node1",
 			CreatedAt: now,
 			ExpiresAt: now.Add(time.Hour),
@@ -218,13 +214,13 @@ func TestStoreDeleteExpired(t *testing.T) {
 
 	now := time.Now()
 	if _, err := s.SaveItem(protocol.ClipItem{
-		Seq: 1, MimeType: "text/plain", Content: "expired", Hash: "a",
+		Seq: 1, Content: "expired", Hash: "a",
 		Source: "n", CreatedAt: now, ExpiresAt: now.Add(-time.Hour),
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SaveItem(protocol.ClipItem{
-		Seq: 2, MimeType: "text/plain", Content: "alive", Hash: "b",
+		Seq: 2, Content: "alive", Hash: "b",
 		Source: "n", CreatedAt: now, ExpiresAt: now.Add(time.Hour),
 	}); err != nil {
 		t.Fatal(err)
@@ -254,7 +250,6 @@ func TestStoreDeleteAll(t *testing.T) {
 
 	now := time.Now()
 	if _, err := s.SaveItem(protocol.ClipItem{
-		MimeType:  "text/plain",
 		Content:   "persisted",
 		Hash:      protocol.HashContent("persisted"),
 		Source:    "node1",
@@ -286,7 +281,7 @@ func TestStorePersistsAcrossReopen(t *testing.T) {
 
 	s, _ := OpenStore(dbPath)
 	if _, err := s.SaveItem(protocol.ClipItem{
-		Seq: 10, MimeType: "text/plain", Content: "persisted", Hash: "x",
+		Seq: 10, Content: "persisted", Hash: "x",
 		Source: "n", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
 	}); err != nil {
 		t.Fatal(err)
@@ -316,7 +311,6 @@ func TestStoreSequenceSurvivesHistoryDeletionAcrossReopen(t *testing.T) {
 
 	now := time.Now().UTC()
 	first, err := s.SaveItem(protocol.ClipItem{
-		MimeType:  "text/plain",
 		Content:   "first",
 		Hash:      protocol.HashContent("first"),
 		Source:    "node1",
@@ -359,7 +353,6 @@ func TestStoreSequenceSurvivesHistoryDeletionAcrossReopen(t *testing.T) {
 	}
 
 	second, err := s2.SaveItem(protocol.ClipItem{
-		MimeType:  "text/plain",
 		Content:   "second",
 		Hash:      protocol.HashContent("second"),
 		Source:    "node1",
@@ -409,7 +402,7 @@ func TestHubWithPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.Put(PutInput{MimeType: "text/plain", Content: "survive restart", Source: "n"})
+	h.Put(PutInput{Content: "survive restart", Source: "n"})
 	h.Close()
 
 	// "Restart" the hub.

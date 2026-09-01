@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,12 +32,9 @@ func Register(mux *http.ServeMux, h *Hub, identFn IdentityFunc, observers ...*Ob
 	}
 
 	handle("POST /api/clip", "/api/clip", postClipHandler(h, identFn, obs))
-	handle("POST /api/clip/blob", "/api/clip/blob", postBlobHandler(h, identFn, obs))
 	handle("GET /api/clip", "/api/clip", getClipHandler(h))
-	handle("GET /api/clip/blob", "/api/clip/blob", getBlobHandler(h))
 	handle("DELETE /api/clip", "/api/clip", clearClipHandler(h))
 	handle("GET /api/clip/history", "/api/clip/history", historyHandler(h))
-	handle("GET /api/clip/history/page", "/api/clip/history/page", historyPageHandler(h))
 	handle("GET /api/clip/stream", "/api/clip/stream", streamHandler(h, obs))
 	handle("GET /api/capabilities", "/api/capabilities", capabilitiesHandler(h))
 	handle("POST /api/devices/register", "/api/devices/register", registerDeviceHandler(h))
@@ -52,8 +48,6 @@ func Register(mux *http.ServeMux, h *Hub, identFn IdentityFunc, observers ...*Ob
 
 type postClipRequest struct {
 	Content  string `json:"content,omitempty"`
-	Data     []byte `json:"data,omitempty"`
-	MimeType string `json:"mime_type,omitempty"`
 	DeviceID string `json:"device_id,omitempty"`
 }
 
@@ -71,26 +65,14 @@ func postClipHandler(h *Hub, identFn IdentityFunc, obs *Observer) http.HandlerFu
 			return
 		}
 
-		// Default to text/plain for backward compatibility.
-		if req.MimeType == "" {
-			req.MimeType = "text/plain"
-		}
-
-		if strings.HasPrefix(req.MimeType, "text/") {
-			if req.Content == "" {
-				writeAPIError(w, http.StatusBadRequest, "empty_content", "content cannot be empty for text payloads", map[string]string{"field": "content"})
-				return
-			}
-		} else if len(req.Data) == 0 {
-			writeAPIError(w, http.StatusBadRequest, "empty_data", "data cannot be empty for binary payloads", map[string]string{"field": "data"})
+		if req.Content == "" {
+			writeAPIError(w, http.StatusBadRequest, "empty_content", "content cannot be empty", map[string]string{"field": "content"})
 			return
 		}
 
 		source := identFn(r)
 		item, isNew := h.Put(PutInput{
-			MimeType: req.MimeType,
 			Content:  req.Content,
-			Data:     req.Data,
 			Source:   source,
 			DeviceID: firstNonEmpty(req.DeviceID, r.Header.Get("X-Clip-Device-ID")),
 		})
@@ -109,54 +91,7 @@ func postClipHandler(h *Hub, identFn IdentityFunc, obs *Observer) http.HandlerFu
 				"request_id", requestIDFromContext(r.Context()),
 				"sequence", item.Seq,
 				"source", source,
-				"mime_type", item.MimeType,
-				"payload_bytes", len(item.RawBytes()),
-			)
-		}
-	}
-}
-
-func postBlobHandler(h *Hub, identFn IdentityFunc, obs *Observer) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := readLimitedBody(r)
-		if err != nil {
-			writeBodyReadError(w, err)
-			return
-		}
-		if len(body) == 0 {
-			writeAPIError(w, http.StatusBadRequest, "empty_data", "request body cannot be empty", nil)
-			return
-		}
-
-		mimeType := normalizeMimeType(r.Header.Get("Content-Type"))
-		input := PutInput{
-			MimeType: mimeType,
-			Source:   identFn(r),
-			DeviceID: r.Header.Get("X-Clip-Device-ID"),
-		}
-		if strings.HasPrefix(mimeType, "text/") {
-			input.Content = string(body)
-		} else {
-			input.Data = body
-		}
-
-		item, isNew := h.Put(input)
-		if isNew {
-			obs.RecordClipStored()
-		} else {
-			obs.RecordClipDeduplicated()
-		}
-		writeJSON(w, statusForNewItem(isNew), protocol.SummarizeClip(item))
-
-		if isNew {
-			slog.Info(
-				"clip stored via blob endpoint",
-				"component", "hub_api",
-				"request_id", requestIDFromContext(r.Context()),
-				"sequence", item.Seq,
-				"source", input.Source,
-				"mime_type", item.MimeType,
-				"payload_bytes", len(item.RawBytes()),
+				"payload_bytes", len(item.Content),
 			)
 		}
 	}
@@ -231,46 +166,6 @@ func getClipHandler(h *Hub) http.HandlerFunc {
 	}
 }
 
-func getBlobHandler(h *Hub) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		seq, ok := parseOptionalUintQuery(w, r, "seq")
-		if !ok {
-			return
-		}
-
-		var (
-			item *protocol.ClipItem
-			err  error
-		)
-		if seq == 0 {
-			item = h.Get()
-			if item == nil {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-		} else {
-			item, err = h.GetBySeq(seq)
-			if err != nil {
-				writeAPIError(w, http.StatusInternalServerError, "history_lookup_failed", "failed to load clip from history", nil)
-				return
-			}
-			if item == nil {
-				writeAPIError(w, http.StatusNotFound, "clip_not_found", "no clip exists for the requested sequence", map[string]string{"seq": strconv.FormatUint(seq, 10)})
-				return
-			}
-		}
-
-		w.Header().Set("Content-Type", item.MimeType)
-		w.Header().Set("Content-Length", strconv.Itoa(len(item.RawBytes())))
-		w.Header().Set("X-Clip-Seq", strconv.FormatUint(item.Seq, 10))
-		w.Header().Set("X-Clip-Hash", item.Hash)
-		w.Header().Set("X-Clip-Source", item.Source)
-		if _, err := w.Write(item.RawBytes()); err != nil {
-			slog.Debug("blob write failed", "err", err)
-		}
-	}
-}
-
 func clearClipHandler(h *Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := h.Clear(); err != nil {
@@ -288,35 +183,6 @@ func historyHandler(h *Hub) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, h.History(limit))
-	}
-}
-
-func historyPageHandler(h *Hub) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		limit, ok := parseLimitQuery(w, r, protocol.DefaultHistoryLimit, protocol.MaxHistoryPageLimit)
-		if !ok {
-			return
-		}
-		cursor, ok := parseOptionalUintQuery(w, r, "cursor")
-		if !ok {
-			return
-		}
-
-		items, nextCursor, hasMore, err := h.HistoryPage(limit, cursor)
-		if err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "history_page_failed", "failed to load paged history", nil)
-			return
-		}
-
-		page := protocol.HistoryPage{
-			Items:   make([]protocol.ClipSummary, 0, len(items)),
-			HasMore: hasMore,
-		}
-		for _, item := range items {
-			page.Items = append(page.Items, protocol.SummarizeClip(item))
-		}
-		page.NextCursor = nextCursor
-		writeJSON(w, http.StatusOK, page)
 	}
 }
 
@@ -371,7 +237,7 @@ func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 		peerClosed := conn.CloseRead(ctx)
 
 		// Clipboard sync is last-write-wins. On reconnect, send only the latest
-		// state instead of materializing and serializing an entire binary history.
+		// state instead of serializing the full history.
 		// Full history remains available through the explicit history APIs.
 		var replayedUpTo uint64
 		if s := r.URL.Query().Get("since_seq"); s != "" {
@@ -482,17 +348,6 @@ func readLimitedBody(r *http.Request) ([]byte, error) {
 	return body, nil
 }
 
-func normalizeMimeType(headerValue string) string {
-	if headerValue == "" {
-		return "application/octet-stream"
-	}
-	mimeType, _, err := mime.ParseMediaType(headerValue)
-	if err != nil || mimeType == "" {
-		return "application/octet-stream"
-	}
-	return mimeType
-}
-
 func parseLimitQuery(w http.ResponseWriter, r *http.Request, fallback int, max int) (int, bool) {
 	limit := fallback
 	if raw := r.URL.Query().Get("limit"); raw != "" {
@@ -507,19 +362,6 @@ func parseLimitQuery(w http.ResponseWriter, r *http.Request, fallback int, max i
 		limit = max
 	}
 	return limit, true
-}
-
-func parseOptionalUintQuery(w http.ResponseWriter, r *http.Request, key string) (uint64, bool) {
-	raw := r.URL.Query().Get(key)
-	if raw == "" {
-		return 0, true
-	}
-	value, err := strconv.ParseUint(raw, 10, 64)
-	if err != nil || value == 0 {
-		writeAPIError(w, http.StatusBadRequest, "invalid_"+key, key+" must be a positive integer", map[string]string{key: raw})
-		return 0, false
-	}
-	return value, true
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, value any) {

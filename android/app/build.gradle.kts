@@ -10,8 +10,8 @@ android {
         applicationId = "com.arjanflac.tgclipboard"
         minSdk = 29
         targetSdk = 37
-        versionCode = 14
-        versionName = "0.7.0"
+        versionCode = 15
+        versionName = "0.8.0"
     }
 
     compileOptions {

@@ -188,11 +188,7 @@ func (c Config) Decide(ctx Context, ct clipboard.Content) Decision {
 		}
 	}
 
-	if !ct.IsText() {
-		return Decision{}
-	}
-
-	text := strings.TrimSpace(ct.Text())
+	text := strings.TrimSpace(ct.Text)
 	if text == "" {
 		return Decision{}
 	}

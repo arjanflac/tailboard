@@ -13,7 +13,7 @@ Tailboard-specific work includes:
 - the Android application, foreground sync service, Quick Settings action,
   adaptive launcher assets, and text share-sheet flow;
 - the embedded personal Mac hub/engine workflow;
-- Tailboard product branding and the expanded mobile/desktop UX;
+- Tailboard product branding and the personal Mac/Pixel/iPhone workflow;
 - local deployment and configuration scripts.
 
 Subsequent upstream and Tailboard development may overlap. This notice is an

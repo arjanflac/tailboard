@@ -21,7 +21,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.Html;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
@@ -423,27 +422,17 @@ public final class MainActivity extends Activity {
     }
 
     private void copyClip(HubClient.Clip clip) {
-        String value = plainText(clip);
-        if (value == null) {
-            Toast.makeText(this, "Only text is supported for now", Toast.LENGTH_LONG).show();
-            return;
-        }
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-        clipboard.setPrimaryClip(ClipData.newPlainText("Tailboard", value));
+        clipboard.setPrimaryClip(ClipData.newPlainText("Tailboard", clip.content));
         Toast.makeText(this, "Copied from " + friendlySource(clip.source), Toast.LENGTH_SHORT).show();
     }
 
     static String plainText(HubClient.Clip clip) {
-        if (clip.content == null || !clip.mimeType.startsWith("text/")) return null;
-        if (clip.mimeType.toLowerCase(Locale.ROOT).startsWith("text/html")) {
-            return Html.fromHtml(clip.content, Html.FROM_HTML_MODE_LEGACY).toString();
-        }
         return clip.content;
     }
 
     private static String clipPreview(HubClient.Clip clip) {
         String value = plainText(clip);
-        if (value == null) return clip.mimeType.startsWith("image/") ? "Image" : "Shared item";
         value = value.trim().replaceAll("\\s+", " ");
         if (value.isEmpty()) return "Empty text";
         return value.length() > 240 ? value.substring(0, 240) + "…" : value;

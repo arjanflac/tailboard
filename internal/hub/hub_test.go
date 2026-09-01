@@ -23,7 +23,7 @@ func newTestHub() *Hub {
 }
 
 func textInput(content, source string) PutInput {
-	return PutInput{MimeType: "text/plain", Content: content, Source: source}
+	return PutInput{Content: content, Source: source}
 }
 
 type blockingStore struct {
@@ -45,10 +45,6 @@ func (s *blockingStore) LoadState(int, ...int) (uint64, []protocol.ClipItem, err
 }
 
 func (s *blockingStore) HistoryPage(int, uint64) ([]protocol.ClipItem, error) {
-	return nil, nil
-}
-
-func (s *blockingStore) LoadItem(uint64) (*protocol.ClipItem, error) {
 	return nil, nil
 }
 
@@ -96,7 +92,7 @@ func TestPutAndGet(t *testing.T) {
 	if item.Seq != 1 {
 		t.Fatalf("expected seq 1, got %d", item.Seq)
 	}
-	if item.Content != "hello" || item.MimeType != "text/plain" {
+	if item.Content != "hello" {
 		t.Fatal("content mismatch")
 	}
 
@@ -117,90 +113,19 @@ func TestMergeStringsKeepsCapabilitiesWithoutDuplicates(t *testing.T) {
 	}
 }
 
-func TestPutBinary(t *testing.T) {
-	h := newTestHub()
-
-	item, isNew := h.Put(PutInput{
-		MimeType: "image/png",
-		Data:     []byte{0x89, 0x50, 0x4e, 0x47},
-		Source:   "node1",
-	})
-	if !isNew {
-		t.Fatal("first put should be new")
-	}
-	if item.MimeType != "image/png" || len(item.Data) != 4 {
-		t.Fatal("binary data mismatch")
-	}
-}
-
 func TestResidentHistoryIsBoundedByPayloadBytes(t *testing.T) {
 	h := newTestHub()
 	h.maxResidentHistoryBytes = 10
 
-	for _, data := range [][]byte{[]byte("aaaaaa"), []byte("bbbbbb"), []byte("cccccc")} {
-		h.Put(PutInput{MimeType: "image/png", Data: data, Source: "node1"})
+	for _, content := range []string{"aaaaaa", "bbbbbb", "cccccc"} {
+		h.Put(PutInput{Content: content, Source: "node1"})
 	}
 
 	if len(h.history) != 1 {
-		t.Fatalf("expected only the current binary clip in memory, got %d items", len(h.history))
+		t.Fatalf("expected only the current large clip in memory, got %d items", len(h.history))
 	}
 	if h.history[0].Seq != 3 {
 		t.Fatalf("expected current seq 3 to be retained, got %d", h.history[0].Seq)
-	}
-}
-
-func TestGetReturnsDeepCopy(t *testing.T) {
-	h := newTestHub()
-
-	original := []byte{1, 2, 3, 4}
-	h.Put(PutInput{
-		MimeType: "image/png",
-		Data:     original,
-		Source:   "node1",
-	})
-
-	got := h.Get()
-	if got == nil {
-		t.Fatal("Get should return current item")
-	}
-
-	got.Data[0] = 9
-	original[1] = 8
-
-	again := h.Get()
-	if again == nil {
-		t.Fatal("Get should still return current item")
-	}
-	if again.Data[0] != 1 {
-		t.Fatalf("Get should not expose internal data slice, got %#v", again.Data)
-	}
-	if again.Data[1] != 2 {
-		t.Fatalf("Put should not retain caller-owned binary slice, got %#v", again.Data)
-	}
-}
-
-func TestHistoryAndSinceReturnDeepCopies(t *testing.T) {
-	h := newTestHub()
-
-	h.Put(PutInput{MimeType: "image/png", Data: []byte{1, 2, 3}, Source: "node1"})
-	h.Put(PutInput{MimeType: "image/png", Data: []byte{4, 5, 6}, Source: "node2"})
-
-	hist := h.History(2)
-	since := h.Since(1)
-	if len(hist) != 2 || len(since) != 1 {
-		t.Fatalf("unexpected history=%d since=%d", len(hist), len(since))
-	}
-
-	hist[0].Data[0] = 9
-	since[0].Data[0] = 8
-
-	againHist := h.History(2)
-	againSince := h.Since(1)
-	if againHist[0].Data[0] != 4 {
-		t.Fatalf("History should not expose internal data slice, got %#v", againHist[0].Data)
-	}
-	if againSince[0].Data[0] != 4 {
-		t.Fatalf("Since should not expose internal data slice, got %#v", againSince[0].Data)
 	}
 }
 
@@ -214,17 +139,6 @@ func TestDedup(t *testing.T) {
 	}
 	if h.Seq() != 1 {
 		t.Fatal("seq should not increment on dedup")
-	}
-}
-
-func TestDedupBinary(t *testing.T) {
-	h := newTestHub()
-
-	data := []byte{1, 2, 3}
-	h.Put(PutInput{MimeType: "image/png", Data: data, Source: "a"})
-	_, isNew := h.Put(PutInput{MimeType: "image/png", Data: data, Source: "b"})
-	if isNew {
-		t.Fatal("duplicate binary should not be new")
 	}
 }
 

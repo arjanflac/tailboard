@@ -39,7 +39,7 @@ xcodegen generate --spec "$PROJECT_DIR/ios/project.yml" \
   --project "$PROJECT_DIR/ios"
 xcodebuild -quiet \
   -project "$PROJECT_DIR/ios/TGClipboard.xcodeproj" \
-  -scheme TGClipboardMenuBar \
+  -scheme TailboardMacHost \
   -configuration Release \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath "$DERIVED_DATA" \
@@ -64,10 +64,9 @@ pkill -x Tailboard 2>/dev/null || true
 # in-place update, so it may no longer be attached to a printable launchctl
 # job even though SMAppService still owns its registration. Stop that process
 # explicitly before replacing the nested signed bundle.
-pkill -x 'Tailboard Engine' 2>/dev/null || true
-# Unload pre-modern and pre-release engine jobs before the in-place update.
-launchctl bootout "gui/$(id -u)/com.arjanflac.tailboard.engine.agent" 2>/dev/null || true
-launchctl bootout "gui/$(id -u)/com.arjanflac.tailboard.engine" 2>/dev/null || true
+# macOS 27 may expose an SMAppService login item under its bundle identifier
+# rather than its executable name.
+pkill -f '^com\.arjanflac\.tailboard\.engine\.background$' 2>/dev/null || true
 sleep 1
 if [ -d "$DESTINATION" ]; then
   # Keep the application URL continuously present. macOS 27 betas can lose an
@@ -82,7 +81,4 @@ LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 "$LSREGISTER" -f "$DESTINATION"
 "$LSREGISTER" -f "$DESTINATION/Contents/Library/LoginItems/Tailboard Engine.app"
 
-# Remove the old AppleScript-created Open at Login entry. Tailboard now owns
-# both main-app and engine registration through SMAppService.
-osascript -e 'tell application "System Events" to if exists login item "Tailboard" then delete login item "Tailboard"' 2>/dev/null || true
 open "$DESTINATION"

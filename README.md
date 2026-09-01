@@ -1,83 +1,50 @@
 # Tailboard
 
-Tailboard is a self-hosted clipboard bridge for macOS, Android, and iPhone over
-a private Tailscale tailnet. One Mac carries the hub, lightweight clipboard
-engine, and menu-bar app. Tailscale's native Taildrop owns photo and file
-delivery.
+Tailboard is Arjan's private clipboard bridge between one Mac, one Pixel, and
+an optional iPhone client over an existing Tailscale tailnet. It is deliberately
+not a public product, package, or upstream contribution.
 
-> [!IMPORTANT]
-> Tailboard is pre-release source code. There are no signed public binaries or
-> supported package feeds yet. The display name also needs a final naming and
-> trademark review before this repository is made public.
+## What owns each job
 
-## Why it exists
+| Job | Owner |
+| --- | --- |
+| Mac → Pixel text | Tailboard, automatic |
+| Pixel → Mac text | Tailboard's **Send Clipboard** Quick Settings tile |
+| Mac ↔ iPhone text | Apple Universal Clipboard |
+| Pixel ↔ iPhone text | Tailboard iOS app when a direct bridge is needed |
+| Photos and files | Tailscale Taildrop |
 
-- Copy ordinary text on a Mac and receive clean text on Android or iPhone.
-- Send the Android clipboard from a Quick Settings tile.
-- Share selected text or links to Tailboard from the Android or iOS share sheet.
-- Send photos and files with the Tailscale share target already available on
-  macOS, Android, and iOS.
-- Keep the transport private to devices already trusted on a Tailscale tailnet.
+Android 10 and later do not let an ordinary background app read the clipboard.
+The Pixel tile briefly brings Tailboard into the foreground, reads the current
+text, sends it, and disappears. Replacing Gboard, adding an accessibility
+service, or running a privileged Shizuku process would automate that direction
+at the cost of a heavier and more fragile system; Tailboard intentionally does
+none of those things.
 
-## Platform behavior
+## Runtime
 
-| Direction | Tailboard clipboard | Photos and files |
-| --- | --- | --- |
-| Mac → Android | Automatic | Tailscale/Taildrop |
-| Android → Mac | Quick Settings, app action, or text share | Tailscale/Taildrop |
-| iPhone → Mac | Foreground app, keyboard, Shortcut, control, or text share | Tailscale/Taildrop |
-| Mac → iPhone | Foreground app/keyboard workflow | Tailscale/Taildrop |
-| iPhone ↔ Android | Shared clipboard while iOS is active | Tailscale/Taildrop |
+The Mac install has two bundles but one persistent process:
 
-iOS does not permit continuous clipboard observation. Tailboard keeps iPhone
-clipboard reads user initiated. Its iOS 18 Control Center buttons open the app
-to complete clipboard access in the foreground.
+- `Tailboard.app` is a signed, one-shot service host. Opening it registers or
+  updates the nested login item and exits.
+- `Tailboard Engine` is the only always-on Mac process. It watches the native
+  pasteboard, carries the small embedded hub, and has no menu, window, Dock
+  icon, control server, or pause-file polling.
+- The Android foreground service keeps one WebSocket open so inbound text is
+  applied immediately.
+- The iOS app is optional and foreground-only, with no keyboard, share, widget,
+  Shortcut, Control Center, or Live Activity extensions. It may remain closed
+  when Apple Universal Clipboard is enough.
 
-## Components
+No standalone hub, `tsnet` node, file-transfer protocol, public release
+pipeline, Linux build, or Windows build is part of this repository.
+The clipboard protocol itself is text-only; there are no binary payload or
+blob endpoints hiding behind the UI.
 
-- **Tailboard Engine** — Go clipboard agent with an optional embedded hub and
-  loopback-only desktop API.
-- **macOS menu-bar app** — a native Swift surface over an engine embedded and
-  managed through Apple's modern service API.
-- **Android app** — current clip and history, device roster, settings, foreground
-  sync connection, Quick Settings tile, and text/link share target.
-- **iOS app** — current clip and history, devices, settings, text/link share
-  extension, keyboard, widget, Shortcuts, and Control Center controls.
-- **CLI** — scriptable clipboard, history, device, status, pause, and clear
-  commands inherited from and extended around tg-clipboard.
+## Local setup
 
-## Build from source
-
-Prerequisites are Go 1.26+, Tailscale, Xcode/XcodeGen for Apple targets, and
-JDK 17 plus an Android SDK for Android.
-
-```sh
-git clone https://github.com/arjanflac/tailboard.git
-cd tailboard
-
-# Go engine, embedded hub, and CLI
-make all
-go test ./...
-go vet ./...
-
-# Android
-cd android
-./gradlew test lint assembleDebug
-
-# iOS and macOS project
-cd ../ios
-xcodegen generate
-```
-
-Apple contributors must select their own development team and use bundle/app
-group identifiers they control before device signing. See [ios/README.md](ios/README.md)
-and [android/README.md](android/README.md) for platform details. Developer ID
-signing and notarization are only needed when distributing a downloadable Mac
-app; they do not change the MIT license. See
-[docs/macos-distribution.md](docs/macos-distribution.md).
-
-For a local personal deployment, copy the example configuration and keep the
-result ignored:
+Prerequisites are Go 1.26+, Tailscale, stable Xcode plus XcodeGen, JDK 17, and
+an Android SDK.
 
 ```sh
 cp config.example.env config.local.env
@@ -85,36 +52,34 @@ cp config.example.env config.local.env
 ./scripts/configure-local-devices.sh
 ```
 
-## Security and privacy boundary
+The local Mac installer uses the signing identity from `config.local.env` and
+stable `/Applications/Xcode.app`. An Apple Development signature is sufficient
+for this personal install. It is not the same as a notarized Developer ID build;
+notarization is only useful if the app is packaged for distribution to other
+Macs.
 
-Tailboard relies on Tailscale membership and OS disk encryption. Clipboard
-history is stored locally by the hub and mobile previews are cached locally.
-Privacy filters are available but opt-in. Do not sync secrets unless every
-participating device is trusted for them. Files sent through Taildrop use
-Tailscale's encrypted peer-to-peer transport and are outside Tailboard's data
-plane.
+Validation:
 
-See [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md) for the
-full threat model and reporting process.
+```sh
+go test ./...
+go vet ./...
+go test -race ./...
 
-## Relationship to tg-clipboard
+cd android
+./gradlew test lint assembleDebug
+```
+
+## Privacy
+
+Tailboard trusts the devices already admitted to the tailnet. The Mac hub keeps
+bounded clipboard history in a local SQLite database, and mobile clients keep
+small local caches. Clipboard text is not end-to-end encrypted above Tailscale
+and may also be retained by system clipboard managers. See
+[docs/security.md](docs/security.md).
+
+## Provenance
 
 Tailboard is derived from the MIT-licensed
 [`thalysguimaraes/tg-clipboard`](https://github.com/thalysguimaraes/tg-clipboard)
-project and preserves its Git history and copyright notice. Tailboard adds the
-Android client, embedded personal Mac workflow, modern Apple service management,
-Tailboard branding, reliability fixes, and product-specific UX. See
-[NOTICE.md](NOTICE.md) for the precise provenance statement.
-
-## Release status
-
-CI covers Go on macOS, Linux, and Windows, plus Android and iOS builds. Public
-release and TestFlight workflows are intentionally disabled until the naming,
-bundle ownership, authentication model, privacy defaults, and distribution
-checklist are resolved. See [docs/public-release-checklist.md](docs/public-release-checklist.md).
-
-## License and upstream credit
-
-MIT. Tailboard uses the same permissive license as its upstream and retains the
-upstream copyright and permission notice. See [LICENSE](LICENSE) and
-[NOTICE.md](NOTICE.md).
+project. Its Git history, license, and attribution are retained even though this
+fork remains private. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).

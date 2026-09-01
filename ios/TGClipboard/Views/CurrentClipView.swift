@@ -15,11 +15,6 @@ struct CurrentClipView: View {
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
-                    if viewModel.copiedBannerVisible {
-                        CopiedPill()
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    }
-
                     if let clip = viewModel.currentClip {
                         clipCard(clip)
                     } else {
@@ -31,7 +26,6 @@ struct CurrentClipView: View {
                     }
                 }
                 .padding()
-                .animation(reduceMotion ? .none : .tgSpring, value: viewModel.copiedBannerVisible)
                 .animation(reduceMotion ? .none : .tgSpring, value: viewModel.connectionState)
             }
             .background(Color(.systemGroupedBackground))
@@ -137,30 +131,11 @@ struct CurrentClipView: View {
 
     @ViewBuilder
     private func heroContent(_ clip: ClipItem) -> some View {
-        if clip.isText, let content = clip.content {
-            Text(content)
-                .font(content.count <= 80 ? .title3.weight(.medium) : .body)
-                .lineLimit(8)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else if clip.mimeType == "image/png", let data = clip.data,
-                  let uiImage = UIImage(data: data) {
-            Image(uiImage: uiImage)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxHeight: 260)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .accessibilityLabel("Image clip from \(clip.source)")
-        } else {
-            HStack(spacing: 10) {
-                Image(systemName: "doc.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-                Text(clip.displaySummary)
-                    .font(.title3.weight(.medium))
-            }
+        Text(clip.content)
+            .font(clip.content.count <= 80 ? .title3.weight(.medium) : .body)
+            .lineLimit(8)
+            .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 
     /// Compact circular secondary action with a transient ✓ confirmation.
@@ -177,25 +152,11 @@ struct CurrentClipView: View {
 
     @ViewBuilder
     private func shareCircle(_ clip: ClipItem) -> some View {
-        Group {
-            if clip.isText, let content = clip.content {
-                ShareLink(item: content) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                }
-            } else if clip.mimeType == "image/png", let data = clip.data,
-                      let uiImage = UIImage(data: data) {
-                ShareLink(
-                    item: Image(uiImage: uiImage),
-                    preview: SharePreview("Image from \(clip.source)", image: Image(uiImage: uiImage))
-                ) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                }
+        ShareLink(item: clip.content) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.body.weight(.semibold))
+                .frame(width: 44, height: 44)
             }
-        }
         .buttonStyle(.bordered)
         .clipShape(Circle())
         .accessibilityLabel("Share")

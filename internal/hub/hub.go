@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -74,7 +72,6 @@ type clipStore interface {
 	Close() error
 	LoadState(maxHistory int, maxBytes ...int) (uint64, []protocol.ClipItem, error)
 	HistoryPage(limit int, beforeSeq uint64) ([]protocol.ClipItem, error)
-	LoadItem(seq uint64) (*protocol.ClipItem, error)
 	SaveItem(item protocol.ClipItem) (protocol.ClipItem, error)
 	TrimHistory(maxItems int, maxBytes int64) (int, error)
 	DeleteExpired(before time.Time) (int, error)
@@ -297,9 +294,7 @@ func (h *Hub) Close() error {
 
 // PutInput describes a new clipboard item to store.
 type PutInput struct {
-	MimeType string
-	Content  string // For text/* types.
-	Data     []byte // For binary types.
+	Content  string
 	Source   string
 	DeviceID string
 }
@@ -307,15 +302,10 @@ type PutInput struct {
 // Put stores a new clipboard item. Returns the item and true if it was new,
 // or the existing current item and false if it was a duplicate.
 func (h *Hub) Put(in PutInput) (protocol.ClipItem, bool) {
-	var hash string
-	if strings.HasPrefix(in.MimeType, "text/") {
-		hash = protocol.HashContent(in.Content)
-	} else {
-		hash = protocol.HashBytes(in.Data)
-	}
+	hash := protocol.HashContent(in.Content)
 
 	h.mu.Lock()
-	if h.current != nil && h.current.Hash == hash && h.current.MimeType == in.MimeType {
+	if h.current != nil && h.current.Hash == hash {
 		item := cloneClipItem(*h.current)
 		h.mu.Unlock()
 		return item, false
@@ -325,9 +315,7 @@ func (h *Hub) Put(in PutInput) (protocol.ClipItem, bool) {
 	now := time.Now()
 	item := protocol.ClipItem{
 		Seq:       h.seq,
-		MimeType:  in.MimeType,
 		Content:   in.Content,
-		Data:      cloneBytes(in.Data),
 		Hash:      hash,
 		Source:    in.Source,
 		DeviceID:  in.DeviceID,
@@ -370,38 +358,6 @@ func (h *Hub) History(limit int) []protocol.ClipItem {
 	return cloneClipItems(h.history[:limit])
 }
 
-// HistoryPage returns a cursor-addressable page of history items, newest-first.
-// When a persistent store is available, paging can extend beyond the in-memory history window.
-func (h *Hub) HistoryPage(limit int, beforeSeq uint64) ([]protocol.ClipItem, string, bool, error) {
-	if limit <= 0 {
-		limit = protocol.DefaultHistoryLimit
-	}
-
-	pageLimit := limit + 1
-	var items []protocol.ClipItem
-	var err error
-
-	if h.store != nil {
-		items, err = h.store.HistoryPage(pageLimit, beforeSeq)
-		if err != nil {
-			return nil, "", false, err
-		}
-	} else {
-		items = h.historyPageFromMemory(pageLimit, beforeSeq)
-	}
-
-	hasMore := len(items) > limit
-	if hasMore {
-		items = items[:limit]
-	}
-
-	nextCursor := ""
-	if hasMore && len(items) > 0 {
-		nextCursor = strconv.FormatUint(items[len(items)-1].Seq, 10)
-	}
-	return cloneClipItems(items), nextCursor, hasMore, nil
-}
-
 // Clear removes the current clip and persisted history while preserving the
 // sequence counter for future writes.
 func (h *Hub) Clear() error {
@@ -431,29 +387,6 @@ func (h *Hub) Since(afterSeq uint64) []protocol.ClipItem {
 		}
 	}
 	return out
-}
-
-// GetBySeq returns a historical clip by sequence number, or nil when not found.
-func (h *Hub) GetBySeq(seq uint64) (*protocol.ClipItem, error) {
-	h.mu.RLock()
-	if h.current != nil && h.current.Seq == seq {
-		item := cloneClipItem(*h.current)
-		h.mu.RUnlock()
-		return &item, nil
-	}
-	for _, item := range h.history {
-		if item.Seq == seq {
-			cloned := cloneClipItem(item)
-			h.mu.RUnlock()
-			return &cloned, nil
-		}
-	}
-	h.mu.RUnlock()
-
-	if h.store == nil {
-		return nil, nil
-	}
-	return h.store.LoadItem(seq)
 }
 
 // Subscribe creates a new subscriber. Cancel the context to unsubscribe.
@@ -532,8 +465,7 @@ func (h *Hub) publish(item protocol.ClipItem) {
 }
 
 // offerLatestClip makes each subscriber queue represent clipboard state rather
-// than a backlog. ClipItems are immutable after publication, so sharing the
-// payload slice is safe and avoids one full binary copy per connected device.
+// than a backlog. ClipItems are immutable after publication and safe to share.
 func offerLatestClip(ch chan protocol.ClipItem, item protocol.ClipItem) {
 	select {
 	case ch <- item:
@@ -578,12 +510,11 @@ func cloneClipItems(items []protocol.ClipItem) []protocol.ClipItem {
 }
 
 func cloneClipItem(item protocol.ClipItem) protocol.ClipItem {
-	item.Data = cloneBytes(item.Data)
 	return item
 }
 
 // trimResidentHistoryLocked keeps metadata/history useful without allowing a
-// run of image clips to turn the always-on broker into a hundreds-of-megabytes
+// run of very large text clips to turn the always-on broker into a large
 // cache. The current clipboard item is always retained; older entries share
 // the remaining byte budget.
 func (h *Hub) trimResidentHistoryLocked() {
@@ -601,41 +532,9 @@ func (h *Hub) trimResidentHistoryLocked() {
 		residentBytes += itemBytes
 	}
 	// The backing array can be larger than the retained slice. Clear discarded
-	// entries so their binary payloads become collectible immediately.
+	// entries so their text payloads become collectible immediately.
 	clear(h.history[len(kept):])
 	h.history = kept
-}
-
-func (h *Hub) historyPageFromMemory(limit int, beforeSeq uint64) []protocol.ClipItem {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	start := 0
-	if beforeSeq > 0 {
-		start = len(h.history)
-		for i, item := range h.history {
-			if item.Seq < beforeSeq {
-				start = i
-				break
-			}
-		}
-	}
-	if start >= len(h.history) {
-		return nil
-	}
-
-	end := start + limit
-	if end > len(h.history) {
-		end = len(h.history)
-	}
-	return cloneClipItems(h.history[start:end])
-}
-
-func cloneBytes(data []byte) []byte {
-	if len(data) == 0 {
-		return nil
-	}
-	return append([]byte(nil), data...)
 }
 
 func (h *Hub) reapLoop() {

@@ -2,30 +2,17 @@
 
 package clipboard
 
-import (
-	"bytes"
-	"encoding/base64"
-	"fmt"
-	"os"
-	"os/exec"
-	"strconv"
-	"strings"
-	"sync"
-)
+/*
+#cgo LDFLAGS: -framework AppKit -framework Foundation
+#include <stdlib.h>
+#include "clipboard_darwin.h"
+*/
+import "C"
 
-// UTI to MIME mappings.
-var (
-	utiToMIME = map[string]string{
-		"public.html":             "text/html",
-		"public.utf8-plain-text":  "text/plain",
-		"public.utf16-plain-text": "text/plain",
-		"public.png":              "image/png",
-	}
-	mimeToUTI = map[string]string{
-		"text/html":  "public.html",
-		"text/plain": "public.utf8-plain-text",
-		"image/png":  "public.png",
-	}
+import (
+	"fmt"
+	"sync"
+	"unsafe"
 )
 
 type darwinClipboard struct {
@@ -33,24 +20,17 @@ type darwinClipboard struct {
 	changeCount int64
 }
 
-// New returns a Clipboard for macOS.
+// New returns a plain-text Clipboard for macOS.
 func New() (Clipboard, error) {
 	return &darwinClipboard{changeCount: -1}, nil
 }
 
 func (c *darwinClipboard) Changed() (bool, error) {
-	out, err := exec.Command("osascript", "-e", `
-use framework "AppKit"
-set pb to current application's NSPasteboard's generalPasteboard()
-return (pb's changeCount()) as text
-`).Output()
-	if err != nil {
-		return false, err
+	count := int64(C.tailboard_pasteboard_change_count())
+	if count < 0 {
+		return false, fmt.Errorf("read pasteboard change count")
 	}
-	count, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-	if err != nil {
-		return false, fmt.Errorf("parse pasteboard change count: %w", err)
-	}
+
 	c.changeMu.Lock()
 	defer c.changeMu.Unlock()
 	if count == c.changeCount {
@@ -61,186 +41,26 @@ return (pb's changeCount()) as text
 }
 
 func (c *darwinClipboard) ReadBest() (Content, error) {
-	types, err := c.listTypes()
-	if err != nil {
-		return c.readPlainText()
+	raw := C.tailboard_pasteboard_copy_text()
+	if raw == nil {
+		return Content{}, fmt.Errorf("no plain text on clipboard")
 	}
-
-	best := bestType(types)
-	if best == "" {
-		return c.readPlainText()
-	}
-
-	return c.readType(best)
+	defer C.free(unsafe.Pointer(raw))
+	return Content{Text: C.GoString(raw)}, nil
 }
 
-func (c *darwinClipboard) Write(ct Content) error {
-	uti, ok := mimeToUTI[ct.MimeType]
-	if !ok {
-		return fmt.Errorf("unsupported MIME type for macOS clipboard: %s", ct.MimeType)
+func (c *darwinClipboard) Write(content Content) error {
+	text := C.CString(content.Text)
+	defer C.free(unsafe.Pointer(text))
+	if C.tailboard_pasteboard_set_text(text) == 0 {
+		return fmt.Errorf("write plain text to pasteboard")
 	}
-	if ct.MimeType == "text/plain" {
-		cmd := exec.Command("/usr/bin/pbcopy")
-		cmd.Stdin = bytes.NewReader(ct.Data)
-		cmd.Env = append(os.Environ(), "LANG=en_US.UTF-8", "LC_CTYPE=en_US.UTF-8")
-		return cmd.Run()
-	}
-
-	// Write raw bytes to a temp file, then load via NSData to bypass
-	// text coercion for rich or binary clipboard formats.
-	tmp, err := os.CreateTemp("", "tg-clipboard-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-
-	if _, err := tmp.Write(ct.Data); err != nil {
-		tmp.Close()
-		return err
-	}
-	tmp.Close()
-
-	script := fmt.Sprintf(`
-use framework "AppKit"
-use framework "Foundation"
-set fileData to (current application's NSData's dataWithContentsOfFile:"%s")
-set pb to current application's NSPasteboard's generalPasteboard()
-pb's clearContents()
-pb's setData:fileData forType:"%s"
-`, tmp.Name(), uti)
-
-	return exec.Command("osascript", "-e", script).Run()
+	return nil
 }
 
 func (c *darwinClipboard) Clear() error {
-	script := `
-use framework "AppKit"
-set pb to current application's NSPasteboard's generalPasteboard()
-pb's clearContents()
-`
-	return exec.Command("osascript", "-e", script).Run()
-}
-
-func (c *darwinClipboard) listTypes() ([]string, error) {
-	script := `
-use framework "AppKit"
-set pb to current application's NSPasteboard's generalPasteboard()
-set types to pb's types() as list
-set output to ""
-repeat with t in types
-	set output to output & (t as text) & linefeed
-end repeat
-return output
-`
-	out, err := exec.Command("osascript", "-e", script).Output()
-	if err != nil {
-		return nil, err
+	if C.tailboard_pasteboard_clear() == 0 {
+		return fmt.Errorf("clear pasteboard")
 	}
-
-	var mimeTypes []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		line = strings.TrimSpace(line)
-		if mime, ok := utiToMIME[line]; ok {
-			mimeTypes = append(mimeTypes, mime)
-		}
-	}
-	return mimeTypes, nil
-}
-
-func (c *darwinClipboard) readType(mimeType string) (Content, error) {
-	if mimeType == "text/plain" {
-		return c.readPlainText()
-	}
-
-	uti, ok := mimeToUTI[mimeType]
-	if !ok {
-		return Content{}, fmt.Errorf("unsupported MIME type: %s", mimeType)
-	}
-
-	if mimeType == "text/html" {
-		return c.readHTML(uti)
-	}
-	return c.readBinary(uti, mimeType)
-}
-
-// readPlainText reads text from NSPasteboard as raw UTF-8 bytes via base64,
-// bypassing both pbpaste (locale-dependent encoding) and osascript's text
-// coercion (macOS Roman). Base64 is ASCII-safe so the encoding survives stdout.
-func (c *darwinClipboard) readPlainText() (Content, error) {
-	script := `
-use framework "AppKit"
-use framework "Foundation"
-set pb to current application's NSPasteboard's generalPasteboard()
-set textData to pb's dataForType:"public.utf8-plain-text"
-if textData is not missing value then
-	return (textData's base64EncodedStringWithOptions:0) as text
-end if
-return ""
-`
-	out, err := exec.Command("osascript", "-e", script).Output()
-	if err != nil {
-		return Content{}, err
-	}
-	b64 := strings.TrimSpace(string(out))
-	if b64 == "" {
-		return Content{}, fmt.Errorf("no text data on clipboard")
-	}
-	data, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return Content{}, fmt.Errorf("decode clipboard text: %w", err)
-	}
-	return Content{MimeType: "text/plain", Data: data}, nil
-}
-
-func (c *darwinClipboard) readHTML(uti string) (Content, error) {
-	script := fmt.Sprintf(`
-use framework "AppKit"
-use framework "Foundation"
-set pb to current application's NSPasteboard's generalPasteboard()
-set htmlData to pb's dataForType:"%s"
-if htmlData is not missing value then
-	return (htmlData's base64EncodedStringWithOptions:0) as text
-end if
-return ""
-`, uti)
-	out, err := exec.Command("osascript", "-e", script).Output()
-	if err != nil {
-		return Content{}, err
-	}
-	b64 := strings.TrimSpace(string(out))
-	if b64 == "" {
-		return Content{}, fmt.Errorf("no HTML data on clipboard")
-	}
-	data, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return Content{}, fmt.Errorf("decode clipboard html: %w", err)
-	}
-	return Content{MimeType: "text/html", Data: data}, nil
-}
-
-func (c *darwinClipboard) readBinary(uti, mimeType string) (Content, error) {
-	// Read binary data as base64 via osascript.
-	script := fmt.Sprintf(`
-use framework "AppKit"
-use framework "Foundation"
-set pb to current application's NSPasteboard's generalPasteboard()
-set imgData to pb's dataForType:"%s"
-if imgData is not missing value then
-	return (imgData's base64EncodedStringWithOptions:0) as text
-end if
-return ""
-`, uti)
-	out, err := exec.Command("osascript", "-e", script).Output()
-	if err != nil {
-		return Content{}, err
-	}
-	b64 := strings.TrimSpace(string(out))
-	if b64 == "" {
-		return Content{}, fmt.Errorf("no %s data on clipboard", mimeType)
-	}
-	data, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return Content{}, fmt.Errorf("decode base64: %w", err)
-	}
-	return Content{MimeType: mimeType, Data: data}, nil
+	return nil
 }

@@ -6,8 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -202,9 +200,8 @@ func TestBootstrapPreventsStaleOverwrite(t *testing.T) {
 
 	// Pre-populate hub with a clip from another node.
 	h.Put(hub.PutInput{
-		MimeType: "text/plain",
-		Content:  "hub-content",
-		Source:   "other-node",
+		Content: "hub-content",
+		Source:  "other-node",
 	})
 
 	// Local clipboard has stale content.
@@ -237,209 +234,14 @@ func TestBootstrapPreventsStaleOverwrite(t *testing.T) {
 
 	// The local clipboard should have been updated to "hub-content".
 	local := clip.Content()
-	if local.Text() != "hub-content" {
-		t.Fatalf("expected local clipboard to be 'hub-content', got %q", local.Text())
+	if local.Text != "hub-content" {
+		t.Fatalf("expected local clipboard to be 'hub-content', got %q", local.Text)
 	}
-}
-
-func TestMIMETypeChangeDetected(t *testing.T) {
-	h, _ := hub.New(hub.Config{MaxHistory: 10, TTL: time.Hour})
-	mux := http.NewServeMux()
-	hub.Register(mux, h, func(r *http.Request) string {
-		return r.Header.Get("X-Clip-Source")
-	})
-	srv := httptest.NewServer(handler(mux))
-	defer srv.Close()
-
-	clip := &fakeClipboard{content: clipboard.Content{
-		MimeType: "text/plain",
-		Data:     []byte("hello"),
-	}}
-	a, err := New(Config{
-		HubURL:       srv.URL,
-		NodeName:     "test",
-		PollInterval: 50 * time.Millisecond,
-		Clipboard:    clip,
-	})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-	a.bootstrapped.Store(true)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go a.Run(ctx)
-
-	time.Sleep(200 * time.Millisecond)
-
-	item := h.Get()
-	if item == nil || item.MimeType != "text/plain" {
-		t.Fatal("expected text/plain item")
-	}
-	seq1 := h.Seq()
-
-	// Same bytes, different MIME type.
-	clip.SetContent(clipboard.Content{
-		MimeType: "text/html",
-		Data:     []byte("hello"),
-	})
-	time.Sleep(200 * time.Millisecond)
-
-	if h.Seq() <= seq1 {
-		t.Fatal("MIME type change should produce a new item")
-	}
-	item = h.Get()
-	if item.MimeType != "text/html" {
-		t.Fatalf("expected text/html, got %s", item.MimeType)
-	}
-}
-
-func handler(mux *http.ServeMux) http.Handler {
-	return mux
 }
 
 func init() {
 	// Suppress noisy logs during tests.
 	_ = json.Unmarshal
-}
-
-func TestPauseSourcesBlockRemoteApplyUntilResumed(t *testing.T) {
-	tests := []struct {
-		name  string
-		pause func(t *testing.T, a *Agent) func()
-	}{
-		{
-			name: "in-memory pause",
-			pause: func(t *testing.T, a *Agent) func() {
-				a.paused.Store(true)
-				return func() { a.paused.Store(false) }
-			},
-		},
-		{
-			name: "pause file",
-			pause: func(t *testing.T, a *Agent) func() {
-				home := t.TempDir()
-				setTestHomeDir(t, home)
-				pausedPath := filepath.Join(home, ".config", "tg-clipboard", "paused")
-				if err := os.MkdirAll(filepath.Dir(pausedPath), 0o755); err != nil {
-					t.Fatalf("mkdir pause dir: %v", err)
-				}
-				if err := os.WriteFile(pausedPath, []byte("paused\n"), 0o644); err != nil {
-					t.Fatalf("write pause file: %v", err)
-				}
-				return func() {
-					if err := os.Remove(pausedPath); err != nil && !os.IsNotExist(err) {
-						t.Fatalf("remove pause file: %v", err)
-					}
-				}
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			clip := &fakeClipboard{content: clipboard.Content{}}
-			a, err := New(Config{NodeName: "test", Clipboard: clip})
-			if err != nil {
-				t.Fatalf("New() error = %v", err)
-			}
-
-			resume := tc.pause(t, a)
-			a.applyRemote(protocol.ClipItem{
-				MimeType: "text/plain",
-				Content:  "blocked-remote",
-				Source:   "other-node",
-			})
-			if got := clip.Content().Text(); got != "" {
-				t.Fatalf("expected paused remote apply to be blocked, got %q", got)
-			}
-
-			resume()
-			a.applyRemote(protocol.ClipItem{
-				MimeType: "text/plain",
-				Content:  "after-resume",
-				Source:   "other-node",
-			})
-			if got := clip.Content().Text(); got != "after-resume" {
-				t.Fatalf("expected remote apply after resume, got %q", got)
-			}
-		})
-	}
-}
-
-func TestPauseSourcesBlockLocalCaptureUntilResumed(t *testing.T) {
-	tests := []struct {
-		name  string
-		pause func(t *testing.T, a *Agent) func()
-	}{
-		{
-			name: "in-memory pause",
-			pause: func(t *testing.T, a *Agent) func() {
-				a.paused.Store(true)
-				return func() { a.paused.Store(false) }
-			},
-		},
-		{
-			name: "pause file",
-			pause: func(t *testing.T, a *Agent) func() {
-				home := t.TempDir()
-				setTestHomeDir(t, home)
-				pausedPath := filepath.Join(home, ".config", "tg-clipboard", "paused")
-				if err := os.MkdirAll(filepath.Dir(pausedPath), 0o755); err != nil {
-					t.Fatalf("mkdir pause dir: %v", err)
-				}
-				if err := os.WriteFile(pausedPath, []byte("paused\n"), 0o644); err != nil {
-					t.Fatalf("write pause file: %v", err)
-				}
-				return func() {
-					if err := os.Remove(pausedPath); err != nil && !os.IsNotExist(err) {
-						t.Fatalf("remove pause file: %v", err)
-					}
-				}
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			h, _ := hub.New(hub.Config{MaxHistory: 10, TTL: time.Hour})
-			mux := http.NewServeMux()
-			hub.Register(mux, h, func(r *http.Request) string {
-				return r.Header.Get("X-Clip-Source")
-			})
-			srv := httptest.NewServer(mux)
-			defer srv.Close()
-
-			clip := &fakeClipboard{content: textContent("local-while-paused")}
-			a, err := New(Config{
-				HubURL:       srv.URL,
-				NodeName:     "test",
-				PollInterval: 20 * time.Millisecond,
-				Clipboard:    clip,
-			})
-			if err != nil {
-				t.Fatalf("New() error = %v", err)
-			}
-			a.bootstrapped.Store(true)
-
-			resume := tc.pause(t, a)
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			go a.Run(ctx)
-
-			time.Sleep(120 * time.Millisecond)
-			if item := h.Get(); item != nil {
-				t.Fatalf("expected no local capture while paused, got %q", item.Content)
-			}
-
-			resume()
-			waitFor(t, 500*time.Millisecond, func() bool {
-				item := h.Get()
-				return item != nil && item.Content == "local-while-paused"
-			})
-		})
-	}
 }
 
 type staticContextProvider struct {
@@ -484,7 +286,7 @@ func TestPrivacyIgnoreListKeepsClipboardLocal(t *testing.T) {
 	if item := h.Get(); item != nil {
 		t.Fatalf("expected ignore list to block sync, got %+v", item)
 	}
-	if got := clip.Content().Text(); got != "keep local" {
+	if got := clip.Content().Text; got != "keep local" {
 		t.Fatalf("expected local clipboard to remain untouched, got %q", got)
 	}
 }
@@ -524,7 +326,7 @@ func TestPrivacyFilterCanClearLocalClipboard(t *testing.T) {
 	if item := h.Get(); item != nil {
 		t.Fatalf("expected otp filter to block sync, got %+v", item)
 	}
-	if got := clip.Content().Text(); got != "" {
+	if got := clip.Content().Text; got != "" {
 		t.Fatalf("expected local clipboard to be cleared, got %q", got)
 	}
 }
@@ -541,15 +343,4 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
 	}
 
 	t.Fatal("condition not satisfied before timeout")
-}
-
-func setTestHomeDir(t *testing.T, home string) {
-	t.Helper()
-
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	if volume := filepath.VolumeName(home); volume != "" {
-		t.Setenv("HOMEDRIVE", volume)
-		t.Setenv("HOMEPATH", home[len(volume):])
-	}
 }

@@ -1,13 +1,10 @@
 import SwiftUI
-import UIKit
 import TGClipboardKit
 
 struct SettingsView: View {
     @Environment(AppViewModel.self) private var viewModel
-    @Environment(\.openURL) private var openURL
     private let store = AppGroupStore()
     @State private var deviceName = AppGroupStore().sourceName
-    @State private var controlDiagnostic = AppGroupStore().lastControlDiagnostic
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -34,48 +31,6 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Keyboard Extension") {
-                    Text("Enable Tailboard Paste in Settings → General → Keyboard → Keyboards → Add New Keyboard → Tailboard Paste.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    Button("Open Settings") {
-                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                        openURL(url)
-                    }
-                }
-
-                Section("Control Center") {
-                    Text("These controls open Tailboard to complete clipboard access in the foreground. iOS does not allow continuous background clipboard sync.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    LabeledContent("Configured Controls") {
-                        Text("\(store.configuredControlKinds.count)")
-                    }
-                    if let diagnostic = controlDiagnostic {
-                        LabeledContent("Last Action", value: diagnostic.action)
-                        LabeledContent("Result", value: diagnostic.status)
-                        if !diagnostic.detail.isEmpty {
-                            Text(diagnostic.detail)
-                                .font(.footnote)
-                                .foregroundStyle(
-                                    diagnostic.status == "Failed" ? Color.red : Color.secondary
-                                )
-                        }
-                        Text(diagnostic.updatedAt.formatted(date: .omitted, time: .standard))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("No Control Center action has run yet.")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button("Refresh Control Diagnostics") {
-                        controlDiagnostic = store.lastControlDiagnostic
-                    }
-                }
-
                 // The only place plumbing is visible (spec §3): the sync
                 // server is an implementation detail kept here for
                 // debugging, not part of the user's mental model.
@@ -99,10 +54,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .onAppear {
-                controlDiagnostic = store.lastControlDiagnostic
-                Task { await viewModel.refresh() }
-            }
+            .onAppear { Task { await viewModel.refresh() } }
         }
     }
 

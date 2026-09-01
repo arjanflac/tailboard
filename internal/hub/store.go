@@ -31,7 +31,7 @@ func OpenStore(path string) (*Store, error) {
 // openSQLite keeps the always-on hub's database footprint deliberately small.
 // A single connection is enough for Tailboard's serialized, low-volume writes,
 // and avoids multiplying SQLite page caches. Incremental auto-vacuum prevents
-// expired clipboard blobs from leaving a permanently large database behind.
+// expired clipboard history from leaving a permanently large database behind.
 func openSQLite(path string) (*sql.DB, error) {
 	db, err := sql.Open(sqliteDriverName, path)
 	if err != nil {
@@ -93,12 +93,16 @@ func migrate(db *sql.DB) error {
 		if _, err := tx.Exec(clipsTableDDL); err != nil {
 			return fmt.Errorf("create clips table: %w", err)
 		}
+		schema = clipsTableDDL
 	case err != nil:
 		return fmt.Errorf("inspect clips schema: %w", err)
-	case !strings.Contains(strings.ToUpper(schema), "AUTOINCREMENT"):
-		if err := migrateLegacyClipsTable(tx); err != nil {
+	case !strings.Contains(strings.ToUpper(schema), "AUTOINCREMENT") ||
+		strings.Contains(strings.ToLower(schema), "mime_type") ||
+		strings.Contains(strings.ToLower(schema), " data "):
+		if err := migrateLegacyClipsTable(tx, strings.Contains(strings.ToLower(schema), "device_id")); err != nil {
 			return err
 		}
+		schema = clipsTableDDL
 	}
 
 	if _, err := tx.Exec("DROP TABLE IF EXISTS meta"); err != nil {
@@ -230,26 +234,12 @@ func (s *Store) HistoryPage(limit int, beforeSeq uint64) ([]protocol.ClipItem, e
 	return items, rows.Err()
 }
 
-// LoadItem fetches a single clip by sequence number.
-func (s *Store) LoadItem(seq uint64) (*protocol.ClipItem, error) {
-	row := s.db.QueryRow(selectClipColumns+" WHERE seq = ?", seq)
-
-	item, err := scanClip(row)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("load clip %d: %w", seq, err)
-	}
-	return &item, nil
-}
-
 // SaveItem persists a clip item and returns it with seq assigned.
 func (s *Store) SaveItem(item protocol.ClipItem) (protocol.ClipItem, error) {
 	if item.Seq == 0 {
 		result, err := s.db.Exec(
-			"INSERT INTO clips (mime_type, content, data, hash, source, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			item.MimeType, item.Content, item.Data, item.Hash, item.Source, item.DeviceID,
+			"INSERT INTO clips (content, hash, source, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+			item.Content, item.Hash, item.Source, item.DeviceID,
 			item.CreatedAt.Format(time.RFC3339Nano), item.ExpiresAt.Format(time.RFC3339Nano),
 		)
 		if err != nil {
@@ -264,8 +254,8 @@ func (s *Store) SaveItem(item protocol.ClipItem) (protocol.ClipItem, error) {
 	}
 
 	_, err := s.db.Exec(
-		"INSERT OR REPLACE INTO clips (seq, mime_type, content, data, hash, source, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		item.Seq, item.MimeType, item.Content, item.Data, item.Hash, item.Source, item.DeviceID,
+		"INSERT OR REPLACE INTO clips (seq, content, hash, source, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		item.Seq, item.Content, item.Hash, item.Source, item.DeviceID,
 		item.CreatedAt.Format(time.RFC3339Nano), item.ExpiresAt.Format(time.RFC3339Nano),
 	)
 	return item, err
@@ -286,7 +276,7 @@ func (s *Store) TrimHistory(maxItems int, maxBytes int64) (int, error) {
 				SELECT
 					seq,
 					ROW_NUMBER() OVER (ORDER BY seq DESC) AS item_number,
-					SUM(COALESCE(length(content), 0) + COALESCE(length(data), 0))
+					SUM(length(content))
 						OVER (ORDER BY seq DESC) AS cumulative_bytes
 				FROM clips
 			)
@@ -334,9 +324,7 @@ func (s *Store) reclaimFreePages(pages int) {
 const clipsTableDDL = `
 	CREATE TABLE clips (
 		seq        INTEGER PRIMARY KEY AUTOINCREMENT,
-		mime_type  TEXT    NOT NULL,
-		content    TEXT,
-		data       BLOB,
+		content    TEXT    NOT NULL,
 		hash       TEXT    NOT NULL,
 		source     TEXT    NOT NULL,
 		device_id  TEXT    NOT NULL DEFAULT '',
@@ -355,19 +343,25 @@ const devicesTableDDL = `
 	);
 `
 
-func migrateLegacyClipsTable(tx *sql.Tx) error {
+func migrateLegacyClipsTable(tx *sql.Tx, hasDeviceID bool) error {
 	if _, err := tx.Exec("ALTER TABLE clips RENAME TO clips_legacy"); err != nil {
 		return fmt.Errorf("rename legacy clips table: %w", err)
 	}
 	if _, err := tx.Exec(clipsTableDDL); err != nil {
 		return fmt.Errorf("create migrated clips table: %w", err)
 	}
-	if _, err := tx.Exec(`
-		INSERT INTO clips (seq, mime_type, content, data, hash, source, device_id, created_at, expires_at)
-		SELECT seq, mime_type, content, data, hash, source, '', created_at, expires_at
+	deviceID := "''"
+	if hasDeviceID {
+		deviceID = "device_id"
+	}
+	query := `
+		INSERT INTO clips (seq, content, hash, source, device_id, created_at, expires_at)
+		SELECT seq, content, hash, source, ` + deviceID + `, created_at, expires_at
 		FROM clips_legacy
+		WHERE content IS NOT NULL AND content <> ''
 		ORDER BY seq
-	`); err != nil {
+	`
+	if _, err := tx.Exec(query); err != nil {
 		return fmt.Errorf("copy legacy clips rows: %w", err)
 	}
 	if _, err := tx.Exec("DROP TABLE clips_legacy"); err != nil {
@@ -392,7 +386,7 @@ func (s *Store) loadSeq() (uint64, error) {
 	return seq, nil
 }
 
-const selectClipColumns = "SELECT seq, mime_type, content, data, hash, source, device_id, created_at, expires_at FROM clips"
+const selectClipColumns = "SELECT seq, content, hash, source, device_id, created_at, expires_at FROM clips"
 
 type clipScanner interface {
 	Scan(dest ...any) error
@@ -400,20 +394,16 @@ type clipScanner interface {
 
 func scanClip(scanner clipScanner) (protocol.ClipItem, error) {
 	var item protocol.ClipItem
-	var content sql.NullString
-	var data []byte
 	var createdAt, expiresAt string
 
-	if err := scanner.Scan(&item.Seq, &item.MimeType, &content, &data, &item.Hash, &item.Source, &item.DeviceID, &createdAt, &expiresAt); err != nil {
+	if err := scanner.Scan(&item.Seq, &item.Content, &item.Hash, &item.Source, &item.DeviceID, &createdAt, &expiresAt); err != nil {
 		return protocol.ClipItem{}, err
 	}
-	item.Content = content.String
-	item.Data = data
 	item.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 	item.ExpiresAt, _ = time.Parse(time.RFC3339Nano, expiresAt)
 	return item, nil
 }
 
 func clipPayloadBytes(item protocol.ClipItem) int {
-	return len(item.Content) + len(item.Data)
+	return len(item.Content)
 }

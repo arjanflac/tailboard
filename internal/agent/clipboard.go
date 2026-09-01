@@ -11,11 +11,8 @@ import (
 type ClipboardMonitor struct {
 	mu              sync.Mutex
 	lastWrittenHash string // Hash of the last item we wrote (from remote).
-	lastWrittenMime string // MIME type of the last item we wrote.
 	lastSeenHash    string // Hash of the last item we read from clipboard.
-	lastSeenMime    string // MIME type of the last item we read.
 	pendingHash     string // Hash of content returned by Poll but not yet sent.
-	pendingMime     string // MIME type of content returned by Poll but not yet sent.
 	clip            clipboard.Clipboard
 }
 
@@ -57,16 +54,15 @@ func (m *ClipboardMonitor) Poll() (PollResult, clipboard.Content) {
 		return PollNoChange, clipboard.Content{}
 	}
 
-	hash := protocol.HashBytes(ct.Data)
+	hash := protocol.HashContent(ct.Text)
 
-	if hash == m.lastSeenHash && ct.MimeType == m.lastSeenMime {
+	if hash == m.lastSeenHash {
 		return PollNoChange, clipboard.Content{}
 	}
 
-	if hash == m.lastWrittenHash && ct.MimeType == m.lastWrittenMime {
+	if hash == m.lastWrittenHash {
 		// Our own write echoing back. Commit as seen.
 		m.lastSeenHash = hash
-		m.lastSeenMime = ct.MimeType
 		return PollOwnWrite, clipboard.Content{}
 	}
 
@@ -74,7 +70,6 @@ func (m *ClipboardMonitor) Poll() (PollResult, clipboard.Content) {
 	// must call MarkSent() after successful transmission so that a
 	// failed send doesn't silently drop the item.
 	m.pendingHash = hash
-	m.pendingMime = ct.MimeType
 	return PollNewContent, ct
 }
 
@@ -85,7 +80,6 @@ func (m *ClipboardMonitor) MarkHandled() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lastSeenHash = m.pendingHash
-	m.lastSeenMime = m.pendingMime
 }
 
 // MarkSent preserves the existing name for successful hub sends.
@@ -97,11 +91,10 @@ func (m *ClipboardMonitor) MarkSent() {
 // After writing, it reads back the clipboard to capture any format conversion
 // the platform may have done, ensuring the next poll won't see a false change.
 func (m *ClipboardMonitor) ApplyRemote(ct clipboard.Content) error {
-	hash := protocol.HashBytes(ct.Data)
+	hash := protocol.HashContent(ct.Text)
 
 	m.mu.Lock()
 	m.lastWrittenHash = hash
-	m.lastWrittenMime = ct.MimeType
 	m.mu.Unlock()
 
 	if err := m.clip.Write(ct); err != nil {
@@ -113,17 +106,14 @@ func (m *ClipboardMonitor) ApplyRemote(ct clipboard.Content) error {
 	// to match the read-back so the next poll doesn't see a false new content.
 	readBack, err := m.clip.ReadBest()
 	if err == nil && !readBack.Empty() {
-		readBackHash := protocol.HashBytes(readBack.Data)
+		readBackHash := protocol.HashContent(readBack.Text)
 		m.mu.Lock()
 		m.lastSeenHash = readBackHash
-		m.lastSeenMime = readBack.MimeType
 		m.lastWrittenHash = readBackHash
-		m.lastWrittenMime = readBack.MimeType
 		m.mu.Unlock()
 	} else {
 		m.mu.Lock()
 		m.lastSeenHash = hash
-		m.lastSeenMime = ct.MimeType
 		m.mu.Unlock()
 	}
 
@@ -140,10 +130,7 @@ func (m *ClipboardMonitor) ClearLocal() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lastWrittenHash = ""
-	m.lastWrittenMime = ""
 	m.lastSeenHash = ""
-	m.lastSeenMime = ""
 	m.pendingHash = ""
-	m.pendingMime = ""
 	return nil
 }

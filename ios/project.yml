@@ -25,12 +25,6 @@ targets:
       - TGClipboard
     dependencies:
       - target: TGClipboardKit
-      - target: TGPasteKeyboard
-        embed: true
-      - target: TGClipboardShare
-        embed: true
-      - target: TGClipboardWidget
-        embed: true
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tgclipboard
       INFOPLIST_FILE: TGClipboard/Resources/Info.plist
@@ -43,84 +37,12 @@ targets:
         keychain-access-groups:
           - $(AppIdentifierPrefix)group.com.arjanflac.tgclipboard
 
-  TGPasteKeyboard:
-    type: app-extension
-    platform: iOS
-    sources:
-      - TGPasteKeyboard
-      - path: SharedAssets/ExtensionAssets.xcassets
-    dependencies:
-      - target: TGClipboardKit
-    settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tgclipboard.keyboard
-      INFOPLIST_FILE: TGPasteKeyboard/Info.plist
-    entitlements:
-      path: TGPasteKeyboard/TGPasteKeyboard.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.com.arjanflac.tgclipboard
-        keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.arjanflac.tgclipboard
-
-  TGClipboardShare:
-    type: app-extension
-    platform: iOS
-    sources:
-      - TGClipboardShare
-      - path: SharedAssets/ExtensionAssets.xcassets
-    dependencies:
-      - target: TGClipboardKit
-    settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tgclipboard.share
-      INFOPLIST_FILE: TGClipboardShare/Info.plist
-    entitlements:
-      path: TGClipboardShare/TGClipboardShare.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.com.arjanflac.tgclipboard
-        keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.arjanflac.tgclipboard
-
-  TGClipboardWidget:
-    type: app-extension
-    platform: iOS
-    sources:
-      - TGClipboardWidget
-      - path: SharedAssets/ExtensionAssets.xcassets
-    dependencies:
-      - target: TGClipboardKit
-    settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tgclipboard.widget
-      INFOPLIST_FILE: TGClipboardWidget/Info.plist
-      APPLICATION_EXTENSION_API_ONLY: true
-    entitlements:
-      path: TGClipboardWidget/TGClipboardWidget.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.com.arjanflac.tgclipboard
-        keychain-access-groups:
-          - $(AppIdentifierPrefix)group.com.arjanflac.tgclipboard
-
-  TGClipboardKitMac:
-    type: framework
-    platform: macOS
-    deploymentTarget: "14.0"
-    sources:
-      - path: TGClipboardKit
-        excludes:
-          - "Models/TGClipboardActivityAttributes.swift"
-    settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tgclipboard.kit.mac
-      PRODUCT_NAME: TGClipboardKit
-      PRODUCT_MODULE_NAME: TGClipboardKit
-      INFOPLIST_FILE: TGClipboardKit/Info.plist
-
-  TGClipboardMenuBar:
+  TailboardMacHost:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: ../macos/TGClipboardMenuBar
+      - path: ../macos/TailboardMacHost
       - path: ../.tailboard-build/macos/Tailboard Engine.app
         optional: true
         buildPhase:
@@ -128,16 +50,14 @@ targets:
             destination: wrapper
             subpath: Contents/Library/LoginItems
     dependencies:
-      - target: TGClipboardKitMac
-        embed: true
       - sdk: CoreServices.framework
       - sdk: ServiceManagement.framework
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tgclipboard.menubar
+      PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tailboard.host
       PRODUCT_NAME: Tailboard
-      MARKETING_VERSION: 1.4
-      CURRENT_PROJECT_VERSION: 5
-      INFOPLIST_FILE: ../macos/TGClipboardMenuBar/Info.plist
+      MARKETING_VERSION: 1.7
+      CURRENT_PROJECT_VERSION: 8
+      INFOPLIST_FILE: ../macos/TailboardMacHost/Info.plist
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ENABLE_HARDENED_RUNTIME: true
 
@@ -161,7 +81,7 @@ schemes:
     test:
       targets:
         - TGClipboardTests
-  TGClipboardMenuBar:
+  TailboardMacHost:
     build:
       targets:
-        TGClipboardMenuBar: all
+        TailboardMacHost: all

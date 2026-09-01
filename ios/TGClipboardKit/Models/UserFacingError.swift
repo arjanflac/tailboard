@@ -2,8 +2,8 @@ import Foundation
 
 /// Maps any error thrown by the client layers to plain, actionable copy.
 /// Principle 4 of the interface spec: raw `error.localizedDescription`
-/// never reaches a label. Kept in TGClipboardKit so the app, keyboard, share
-/// extension, and future macOS app share one voice.
+/// never reaches a label. Kept in TGClipboardKit so every app surface shares
+/// one voice.
 public enum UserFacingError {
     public static func message(_ error: Error) -> String {
         if let clipError = error as? TGClipboardError {
@@ -12,10 +12,6 @@ public enum UserFacingError {
                 return "Open Tailboard once to finish setup, then try again."
             case .hubUnreachable(let underlying):
                 return connectivityMessage(underlying)
-            case .emptyClipboard:
-                return "Nothing to send — copy something first."
-            case .unsupportedClipboardType:
-                return "This clipboard format can't be copied on iPhone yet."
             case .httpError(let code, _):
                 switch code {
                 case 401, 403:
@@ -27,15 +23,10 @@ public enum UserFacingError {
                 default:
                     return "The sync server returned an error (\(code)). Try again."
                 }
-            case .decodingError:
-                return "The sync server sent an unexpected response. Update Tailboard and try again."
             }
         }
         if error is URLError {
             return connectivityMessage(error)
-        }
-        if let cocoaError = error as? CocoaError, cocoaError.code == .fileWriteFileExists {
-            return "A file with that name already exists."
         }
         return "Something went wrong. Try again."
     }

@@ -23,8 +23,7 @@ struct HistoryView: View {
                 )
             }
         }
-        // Row copy failures (unsupported binary clips) surface here, since
-        // the confirmation is deliberately gated on the copy succeeding.
+        // Keep row copy failures visible on this pushed screen.
         .overlay(alignment: .top) {
             if let message = viewModel.errorMessage {
                 ErrorBanner(message: message) { viewModel.errorMessage = nil }

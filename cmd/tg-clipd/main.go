@@ -25,7 +25,6 @@ import (
 	"github.com/arjanflac/tailboard/internal/embeddedhub"
 	"github.com/arjanflac/tailboard/internal/hubclient"
 	"github.com/arjanflac/tailboard/internal/privacy"
-	"github.com/arjanflac/tailboard/internal/service"
 )
 
 // version is injected via ldflags in reproducible release builds.
@@ -54,19 +53,12 @@ func defaultNodeName(ctx context.Context, resolver *discover.Resolver) string {
 	return h
 }
 
-// prettyHostname returns the user-facing machine name where the OS has
-// one (macOS ComputerName, Linux PRETTY_HOSTNAME), or "".
+// prettyHostname returns the user-facing macOS ComputerName, or "".
 func prettyHostname() string {
 	switch runtime.GOOS {
 	case "darwin":
 		// Absolute path: launchd agents often run without /usr/sbin on PATH.
 		out, err := exec.Command("/usr/sbin/scutil", "--get", "ComputerName").Output()
-		if err != nil {
-			return ""
-		}
-		return strings.TrimSpace(string(out))
-	case "linux":
-		out, err := exec.Command("hostnamectl", "--pretty").Output()
 		if err != nil {
 			return ""
 		}
@@ -77,14 +69,6 @@ func prettyHostname() string {
 }
 
 func run(ctx context.Context, args []string) error {
-	if len(args) > 0 && args[0] == "install-service" {
-		result, err := service.Install("engine", args[1:])
-		if err != nil {
-			return err
-		}
-		slog.Info("service installed", "component", "tg-clipd", "platform", result.Platform, "path", result.Path, "loaded", result.Loaded)
-		return nil
-	}
 	if len(args) > 0 && args[0] == "write-config" {
 		return writeConfiguredRuntimeArgs(args[1:])
 	}
@@ -111,7 +95,6 @@ func run(ctx context.Context, args []string) error {
 	embedHubAddr := fs.String("embed-hub-addr", envString("TG_CLIPBOARD_EMBED_HUB_ADDR", embeddedhub.DefaultAddress), "listen address for the embedded hub role")
 	memoryLimit := fs.Int64("memory-limit", envInt64("TG_CLIPBOARD_MEMORY_LIMIT", 48<<20), "soft Go memory limit in bytes (0 to disable)")
 	gcPercent := fs.Int("gc-percent", envInt("TG_CLIPBOARD_GC_PERCENT", 25), "Go garbage collection target percentage")
-	controlAddr := fs.String("control-addr", envString("TG_CLIPBOARD_CONTROL_ADDR", "127.0.0.1:9438"), "loopback address for the desktop control surface (off to disable)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -121,10 +104,6 @@ func run(ctx context.Context, args []string) error {
 	if *gcPercent > 0 {
 		debug.SetGCPercent(*gcPercent)
 	}
-	if strings.EqualFold(*controlAddr, "off") {
-		*controlAddr = ""
-	}
-
 	if *hubURL == "" {
 		*hubURL = os.Getenv("TG_CLIPBOARD_HUB")
 	}
@@ -199,7 +178,6 @@ func run(ctx context.Context, args []string) error {
 		DeviceID:     stableDeviceID,
 		PollInterval: time.Duration(*pollMs) * time.Millisecond,
 		Privacy:      privacyConfig,
-		ControlAddr:  *controlAddr,
 	})
 	if err != nil {
 		return err

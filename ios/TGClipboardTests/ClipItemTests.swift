@@ -2,92 +2,53 @@ import XCTest
 @testable import TGClipboardKit
 
 final class ClipItemTests: XCTestCase {
+    private let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .tgSpringISO8601
+        return decoder
+    }()
 
-    /// Verify JSON round-trip matches the Go hub's format exactly.
-    func testJSONRoundTrip() throws {
+    func testJSONMatchesTextOnlyHubProtocol() throws {
         let json = """
         {
             "seq": 42,
-            "mime_type": "text/plain",
             "content": "hello world",
-            "hash": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
-            "source": "omarchy",
-            "created_at": "2026-03-16T12:00:00Z",
-            "expires_at": "2026-03-17T12:00:00Z"
-        }
-        """.data(using: .utf8)!
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .tgSpringISO8601
-
-        let item = try decoder.decode(ClipItem.self, from: json)
-        XCTAssertEqual(item.seq, 42)
-        XCTAssertEqual(item.mimeType, "text/plain")
-        XCTAssertEqual(item.content, "hello world")
-        XCTAssertNil(item.data)
-        XCTAssertEqual(item.source, "omarchy")
-        XCTAssertTrue(item.isText)
-        XCTAssertEqual(item.preview, "hello world")
-    }
-
-    func testBinaryItem() throws {
-        // Go encodes []byte as base64 in JSON.
-        let json = """
-        {
-            "seq": 1,
-            "mime_type": "image/png",
-            "data": "iVBORw0KGgo=",
-            "hash": "abc123",
+            "hash": "abc",
             "source": "mac",
             "created_at": "2026-03-16T12:00:00Z",
             "expires_at": "2026-03-17T12:00:00Z"
         }
-        """.data(using: .utf8)!
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .tgSpringISO8601
-
-        let item = try decoder.decode(ClipItem.self, from: json)
-        XCTAssertEqual(item.mimeType, "image/png")
-        XCTAssertFalse(item.isText)
-        XCTAssertNotNil(item.data)
-        XCTAssertNil(item.content)
-        // Binary previews are humanized ("Image · 8 bytes"), never raw
-        // "[mime, N bytes]" jargon.
-        XCTAssertEqual(item.preview, item.displaySummary)
-        XCTAssertTrue(item.preview.hasPrefix("Image · "))
-        XCTAssertFalse(item.preview.contains("image/png"))
+        """
+        let item = try decoder.decode(ClipItem.self, from: Data(json.utf8))
+        XCTAssertEqual(item.seq, 42)
+        XCTAssertEqual(item.content, "hello world")
+        XCTAssertEqual(item.preview, "hello world")
+        XCTAssertEqual(item.displaySummary, "Text")
     }
 
     func testSHA256MatchesGo() {
-        // Go's protocol.HashContent("hello") produces this hash.
-        let expected = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-        let got = ClipHash.sha256Hex("hello")
-        XCTAssertEqual(got, expected)
+        XCTAssertEqual(
+            ClipHash.sha256Hex("hello"),
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        )
     }
 
-    func testWSMessageDecode() throws {
+    func testWebSocketMessageDecode() throws {
         let json = """
         {
             "type": "clip_update",
             "item": {
                 "seq": 5,
-                "mime_type": "text/plain",
                 "content": "test",
                 "hash": "abc",
-                "source": "node1",
+                "source": "pixel",
                 "created_at": "2026-03-16T12:00:00Z",
                 "expires_at": "2026-03-17T12:00:00Z"
             }
         }
-        """.data(using: .utf8)!
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .tgSpringISO8601
-
-        let msg = try decoder.decode(WSMessage.self, from: json)
-        XCTAssertEqual(msg.type, "clip_update")
-        XCTAssertEqual(msg.item?.seq, 5)
-        XCTAssertEqual(msg.item?.content, "test")
+        """
+        let message = try decoder.decode(WSMessage.self, from: Data(json.utf8))
+        XCTAssertEqual(message.type, "clip_update")
+        XCTAssertEqual(message.item?.content, "test")
     }
 }

@@ -88,7 +88,7 @@ func TestDecisionIsOptIn(t *testing.T) {
 }
 
 func textContent(value string) clipboard.Content {
-	return clipboard.Content{MimeType: "text/plain", Data: []byte(value)}
+	return clipboard.Content{Text: value}
 }
 
 func mustClasses(t *testing.T, raw string) map[SensitiveClass]struct{} {

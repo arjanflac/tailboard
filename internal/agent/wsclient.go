@@ -12,10 +12,8 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
-// Binary clipboard data is base64-encoded inside the WebSocket JSON envelope,
-// so its wire representation can be roughly one third larger than the raw
-// payload accepted by the HTTP API.
-const wsReadLimit = protocol.MaxContentSize*4/3 + 1*1024*1024
+// Leave room for the text payload plus its JSON envelope.
+const wsReadLimit = protocol.MaxContentSize + 64*1024
 
 // WSClient connects to the hub's WebSocket stream and delivers updates.
 type WSClient struct {

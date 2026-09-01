@@ -4,18 +4,12 @@ public enum TGClipboardError: Error, LocalizedError {
     case noHubURL
     case hubUnreachable(underlying: Error)
     case httpError(statusCode: Int, body: String)
-    case emptyClipboard
-    case unsupportedClipboardType(String)
-    case decodingError(Error)
 
     public var errorDescription: String? {
         switch self {
         case .noHubURL: return "Hub URL not configured"
         case .hubUnreachable(let e): return "Hub unreachable: \(e.localizedDescription)"
         case .httpError(let code, let body): return "HTTP \(code): \(body)"
-        case .emptyClipboard: return "Clipboard is empty on the hub"
-        case .unsupportedClipboardType(let type): return "Clipboard type \(type) is not supported on iPhone"
-        case .decodingError(let e): return "Decode error: \(e.localizedDescription)"
         }
     }
 }
@@ -60,26 +54,9 @@ public actor TGClipboardClient {
 
     // MARK: - POST /api/clip (text)
 
-    public func postClip(content: String, mimeType: String = "text/plain") async throws -> ClipItem {
-        let body: [String: Any] = ["content": content, "mime_type": mimeType]
+    public func postClip(content: String) async throws -> ClipItem {
+        let body: [String: Any] = ["content": content]
         return try await post("/api/clip", json: body)
-    }
-
-    // MARK: - POST /api/clip (binary)
-
-    public func postClip(data: Data, mimeType: String) async throws -> ClipItem {
-        let url = try resolveURL("/api/clip/blob")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
-        request.setValue(sourceName, forHTTPHeaderField: "X-Clip-Source")
-        request.httpBody = data
-        let (responseData, response) = try await perform(request)
-        try validate(response, body: responseData)
-        guard let item = try await getCurrentClip() else {
-            throw TGClipboardError.emptyClipboard
-        }
-        return item
     }
 
     // MARK: - GET /api/status

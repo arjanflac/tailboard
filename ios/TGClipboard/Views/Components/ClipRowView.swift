@@ -7,8 +7,7 @@ import TGClipboardKit
 /// section and the pushed History screen.
 struct ClipRowView: View {
     let item: ClipItem
-    /// Returns true when the clip was actually written to the pasteboard;
-    /// the confirmation only fires then (no false success on binary clips).
+    /// Returns true when the clip was written to the pasteboard.
     let copy: (ClipItem) -> Bool
 
     @State private var confirmed = false
@@ -69,18 +68,8 @@ struct ClipRowView: View {
         Button(action: performCopy) {
             Label("Copy", systemImage: "doc.on.doc")
         }
-        if item.isText, let content = item.content {
-            ShareLink(item: content) {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-        } else if item.mimeType == "image/png", let data = item.data,
-                  let uiImage = UIImage(data: data) {
-            ShareLink(
-                item: Image(uiImage: uiImage),
-                preview: SharePreview("Image from \(item.source)", image: Image(uiImage: uiImage))
-            ) {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
+        ShareLink(item: item.content) {
+            Label("Share", systemImage: "square.and.arrow.up")
         }
     }
 

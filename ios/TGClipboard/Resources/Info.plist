@@ -15,9 +15,9 @@
 	<key>CFBundleDisplayName</key>
 	<string>Tailboard</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.10</string>
+	<string>1.12</string>
 	<key>CFBundleVersion</key>
-	<string>12</string>
+	<string>14</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -25,12 +25,12 @@
 	</dict>
 	<key>UILaunchScreen</key>
 	<dict/>
-	<key>CFBundleURLTypes</key>
+	<key>UISupportedInterfaceOrientations</key>
 	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array><string>tg-clipboard</string></array>
-		</dict>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>

@@ -19,6 +19,7 @@ make -C "$PROJECT_DIR" tailboard-engine tailboard
 
 "$PROJECT_DIR/bin/Tailboard Engine" write-config \
   --embed-hub \
+  --poll 100 \
   --node "$TAILBOARD_DESKTOP_NAME"
 
-"$PROJECT_DIR/scripts/install-menubar-local.sh"
+"$PROJECT_DIR/scripts/install-macos-host-local.sh"

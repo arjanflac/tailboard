@@ -119,17 +119,8 @@ public final class ClipboardSyncService extends Service {
                     if (thisGeneration != generation.get()) return;
                     HubConfig.setLastSequence(ClipboardSyncService.this, clip.sequence);
                     if (HubConfig.deviceID(ClipboardSyncService.this).equals(clip.deviceID)) return;
-                    if (!clip.mimeType.startsWith("text/") || clip.content == null) {
-                        updateStatus("Received unsupported " + clip.mimeType);
-                        return;
-                    }
                     handler.post(() -> {
-                        String plainText = MainActivity.plainText(clip);
-                        if (plainText == null) {
-                            updateStatus("Received unsupported " + clip.mimeType);
-                            return;
-                        }
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Tailboard", plainText));
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Tailboard", clip.content));
                         broadcastStatus("Received clipboard from " + clip.source);
                     });
                 }
