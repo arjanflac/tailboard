@@ -10,6 +10,8 @@ device.
 - Mobile clients may cache recent text locally.
 - Privacy filters can block configured apps, processes, or sensitive classes,
   but they are best-effort and disabled by the default personal configuration.
+- macOS pasteboard entries explicitly marked concealed or transient are not
+  synchronized or retained.
 - System clipboard managers may independently retain synchronized text.
 - Taildrop, not Tailboard, owns file transport and its security boundary.
 

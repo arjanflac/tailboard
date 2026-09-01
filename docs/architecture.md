@@ -20,6 +20,10 @@ The engine reads `NSPasteboard.changeCount` every 100 ms through a direct AppKit
 bridge. It only reads the pasteboard's native string representation when the
 count changes and posts that plain text to its embedded hub. This avoids both
 literal HTML payloads and the old `osascript` subprocess on every poll.
+Pasteboard entries marked with macOS's `org.nspasteboard.ConcealedType` or
+`org.nspasteboard.TransientType` conventions are ignored. This keeps temporary
+paste-helper payloads (including Wispr Flow's paste-and-restore sequence) and
+password-manager secrets out of Tailboard without delaying ordinary copies.
 
 The embedded hub listens only on the Mac's Tailscale address, stores bounded
 history in SQLite, assigns monotonic sequences, and broadcasts updates over

@@ -41,6 +41,10 @@ func (c *darwinClipboard) Changed() (bool, error) {
 }
 
 func (c *darwinClipboard) ReadBest() (Content, error) {
+	if C.tailboard_pasteboard_should_ignore() != 0 {
+		return Content{}, nil
+	}
+
 	raw := C.tailboard_pasteboard_copy_text()
 	if raw == nil {
 		return Content{}, fmt.Errorf("no plain text on clipboard")
