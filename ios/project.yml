@@ -135,8 +135,8 @@ targets:
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tgclipboard.menubar
       PRODUCT_NAME: Tailboard
-      MARKETING_VERSION: 1.3
-      CURRENT_PROJECT_VERSION: 4
+      MARKETING_VERSION: 1.4
+      CURRENT_PROJECT_VERSION: 5
       INFOPLIST_FILE: ../macos/TGClipboardMenuBar/Info.plist
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ENABLE_HARDENED_RUNTIME: true

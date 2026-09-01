@@ -32,7 +32,7 @@ func TestRegisterDeviceCanReplaceStaleCapabilities(t *testing.T) {
 	h := newDeviceTestHub()
 	h.RegisterDevice(protocol.RegisterDeviceRequest{
 		DeviceID: "d1", Name: "Phone", Platform: "android",
-		Capabilities: []string{"clipboard", "transfers"},
+		Capabilities: []string{"clipboard", "stale-capability"},
 	})
 	device := h.RegisterDevice(protocol.RegisterDeviceRequest{
 		DeviceID: "d1", Name: "Phone", Platform: "android",

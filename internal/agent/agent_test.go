@@ -45,24 +45,6 @@ func TestNewReturnsClipboardInitError(t *testing.T) {
 	}
 }
 
-func TestNewDefaultsTransfersToDownloads(t *testing.T) {
-	home := t.TempDir()
-	setTestHomeDir(t, home)
-
-	a, err := New(Config{
-		HubURL:    "http://example.com",
-		NodeName:  "test",
-		Clipboard: &fakeClipboard{},
-	})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-	want := filepath.Join(home, "Downloads")
-	if a.downloadDir != want {
-		t.Fatalf("downloadDir = %q, want %q", a.downloadDir, want)
-	}
-}
-
 // TestFailedSendRetry is a regression test for the exact failed-send replay
 // path. It verifies that when the hub is unreachable during POST /api/clip,
 // the agent retries the same clipboard content on subsequent poll ticks

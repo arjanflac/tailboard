@@ -109,9 +109,9 @@ func TestPutAndGet(t *testing.T) {
 func TestMergeStringsKeepsCapabilitiesWithoutDuplicates(t *testing.T) {
 	got := mergeStrings(
 		[]string{"clipboard", "privacy-detector:x11-ewmh"},
-		[]string{"clipboard", "transfers"},
+		[]string{"clipboard", "privacy-detector:x11-ewmh"},
 	)
-	want := []string{"clipboard", "privacy-detector:x11-ewmh", "transfers"}
+	want := []string{"clipboard", "privacy-detector:x11-ewmh"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}

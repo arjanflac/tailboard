@@ -16,9 +16,5 @@ Tailboard-specific work includes:
 - Tailboard product branding and the expanded mobile/desktop UX;
 - local deployment and configuration scripts.
 
-The repository still contains the earlier transfer engine for compatibility and
-historical attribution, but current Tailboard apps delegate photos and files to
-Tailscale's Taildrop instead of exposing a parallel transfer interface.
-
 Subsequent upstream and Tailboard development may overlap. This notice is an
 attribution record, not a claim that every modified line is unique to Tailboard.

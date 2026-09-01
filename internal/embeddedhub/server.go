@@ -17,13 +17,10 @@ import (
 const DefaultAddress = ":9437"
 
 type Config struct {
-	Address         string
-	StateDir        string
-	MaxHistory      int
-	TTL             time.Duration
-	SpoolQuota      int64
-	MaxTransferSize int64
-	TransferTTL     time.Duration
+	Address    string
+	StateDir   string
+	MaxHistory int
+	TTL        time.Duration
 }
 
 // Server is an in-process hub carried by a tg-clipd instance.
@@ -50,13 +47,9 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 	}
 
 	h, err := hub.New(hub.Config{
-		MaxHistory:      cfg.MaxHistory,
-		TTL:             cfg.TTL,
-		DBPath:          filepath.Join(cfg.StateDir, "clips.db"),
-		SpoolDir:        filepath.Join(cfg.StateDir, "spool"),
-		SpoolQuota:      cfg.SpoolQuota,
-		MaxTransferSize: cfg.MaxTransferSize,
-		TransferTTL:     cfg.TransferTTL,
+		MaxHistory: cfg.MaxHistory,
+		TTL:        cfg.TTL,
+		DBPath:     filepath.Join(cfg.StateDir, "clips.db"),
 	})
 	if err != nil {
 		return nil, err

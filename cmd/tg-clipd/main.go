@@ -107,18 +107,11 @@ func run(ctx context.Context, args []string) error {
 	clearOnBlock := fs.Bool("clear-on-block", envBool("TG_CLIPBOARD_CLEAR_ON_BLOCK", false), "clear the local clipboard when a privacy rule blocks sync")
 	privacyPreset := fs.String("privacy-preset", envString("TG_CLIPBOARD_PRIVACY_PRESET", "off"), "privacy bundle: strict, balanced, or off")
 	stateDir := fs.String("state-dir", defaultStateDir(), "directory for persistent agent state")
-	transferPolicy := fs.String("transfers", envString("TG_CLIPBOARD_TRANSFERS", "ask"), "incoming transfer policy: ask, accept, or off")
-	transferAllow := fs.String("transfer-allow", envString("TG_CLIPBOARD_TRANSFER_ALLOW", ""), "comma-separated device IDs allowed for auto-accept")
-	downloadDir := fs.String("download-dir", envString("TG_CLIPBOARD_DOWNLOAD_DIR", ""), "incoming transfer destination (default: ~/Downloads)")
 	embedHub := fs.Bool("embed-hub", envBool("TG_CLIPBOARD_EMBED_HUB", false), "carry the persistent hub role in this tg-clipd process")
 	embedHubAddr := fs.String("embed-hub-addr", envString("TG_CLIPBOARD_EMBED_HUB_ADDR", embeddedhub.DefaultAddress), "listen address for the embedded hub role")
-	embedSpoolQuota := fs.Int64("embed-spool-quota", envInt64("TG_CLIPBOARD_EMBED_SPOOL_QUOTA", 10<<30), "embedded hub transfer spool quota")
-	embedMaxTransfer := fs.Int64("embed-max-transfer-size", envInt64("TG_CLIPBOARD_EMBED_MAX_TRANSFER_SIZE", 100<<30), "embedded hub maximum transfer size")
-	embedTransferTTL := fs.Duration("embed-transfer-ttl", envDuration("TG_CLIPBOARD_EMBED_TRANSFER_TTL", 48*time.Hour), "embedded hub pending transfer TTL")
 	memoryLimit := fs.Int64("memory-limit", envInt64("TG_CLIPBOARD_MEMORY_LIMIT", 48<<20), "soft Go memory limit in bytes (0 to disable)")
 	gcPercent := fs.Int("gc-percent", envInt("TG_CLIPBOARD_GC_PERCENT", 25), "Go garbage collection target percentage")
 	controlAddr := fs.String("control-addr", envString("TG_CLIPBOARD_CONTROL_ADDR", "127.0.0.1:9438"), "loopback address for the desktop control surface (off to disable)")
-	openControl := fs.Bool("tray", envBool("TG_CLIPBOARD_TRAY", false), "open the desktop device and transfer companion")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -148,11 +141,8 @@ func run(ctx context.Context, args []string) error {
 		}
 		var err error
 		carriedHub, err = embeddedhub.Start(ctx, embeddedhub.Config{
-			Address:         listenAddress,
-			StateDir:        filepath.Join(*stateDir, "embedded-hub"),
-			SpoolQuota:      *embedSpoolQuota,
-			MaxTransferSize: *embedMaxTransfer,
-			TransferTTL:     *embedTransferTTL,
+			Address:  listenAddress,
+			StateDir: filepath.Join(*stateDir, "embedded-hub"),
 		})
 		if err != nil {
 			return err
@@ -203,17 +193,13 @@ func run(ctx context.Context, args []string) error {
 	))
 
 	a, err := newAgent(agent.Config{
-		HubURL:         *hubURL,
-		Client:         client,
-		NodeName:       *nodeName,
-		DeviceID:       stableDeviceID,
-		PollInterval:   time.Duration(*pollMs) * time.Millisecond,
-		Privacy:        privacyConfig,
-		TransferPolicy: *transferPolicy,
-		TransferAllow:  privacy.ParseCSV(*transferAllow),
-		DownloadDir:    *downloadDir,
-		ControlAddr:    *controlAddr,
-		OpenControl:    *openControl,
+		HubURL:       *hubURL,
+		Client:       client,
+		NodeName:     *nodeName,
+		DeviceID:     stableDeviceID,
+		PollInterval: time.Duration(*pollMs) * time.Millisecond,
+		Privacy:      privacyConfig,
+		ControlAddr:  *controlAddr,
 	})
 	if err != nil {
 		return err
@@ -284,13 +270,4 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return parsed
-}
-
-func envDuration(key string, fallback time.Duration) time.Duration {
-	if value, ok := os.LookupEnv(key); ok {
-		if parsed, err := time.ParseDuration(value); err == nil {
-			return parsed
-		}
-	}
-	return fallback
 }

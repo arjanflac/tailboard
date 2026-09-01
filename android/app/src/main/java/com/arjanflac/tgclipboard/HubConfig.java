@@ -59,8 +59,4 @@ final class HubConfig {
                 .putString(KEY_DEVICE_NAME, deviceName.trim())
                 .apply();
     }
-
-    static void removeLegacyTransferSettings(Context context) {
-        preferences(context).edit().remove("default_transfer_device").apply();
-    }
 }

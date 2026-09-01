@@ -10,10 +10,7 @@ import (
 // MaxContentSize is the maximum allowed clipboard content size (10MB).
 const MaxContentSize = 10 << 20
 
-const (
-	ProtocolVersion        = 2
-	DefaultMaxTransferSize = int64(100 << 30)
-)
+const ProtocolVersion = 2
 
 // ClipItem is the canonical representation of a clipboard entry.
 type ClipItem struct {
@@ -43,9 +40,8 @@ func (c *ClipItem) RawBytes() []byte {
 
 // WSMessage wraps messages sent over the WebSocket connection.
 type WSMessage struct {
-	Type     string    `json:"type"`
-	Item     *ClipItem `json:"item,omitempty"`
-	Transfer *Transfer `json:"transfer,omitempty"`
+	Type string    `json:"type"`
+	Item *ClipItem `json:"item,omitempty"`
 }
 
 type Capabilities struct {
@@ -56,8 +52,7 @@ type Capabilities struct {
 }
 
 type CapabilityLimits struct {
-	MaxClipSize     int   `json:"max_clip_size"`
-	MaxTransferSize int64 `json:"max_transfer_size"`
+	MaxClipSize int `json:"max_clip_size"`
 }
 
 // HashBytes computes the SHA-256 hex digest of data.

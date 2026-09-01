@@ -21,7 +21,6 @@ const wsReadLimit = protocol.MaxContentSize*4/3 + 1*1024*1024
 type WSClient struct {
 	URL         string
 	OnUpdate    func(protocol.ClipItem)
-	OnTransfer  func(protocol.Transfer)
 	OnConnected func() // Called after each successful connect.
 	lastSeq     uint64 // Tracks last seq received for reconnect catch-up.
 }
@@ -84,9 +83,6 @@ func (c *WSClient) connect(ctx context.Context) error {
 		if msg.Type == "clip_update" && msg.Item != nil {
 			c.lastSeq = msg.Item.Seq
 			c.OnUpdate(*msg.Item)
-		}
-		if (msg.Type == "transfer_offer" || msg.Type == "transfer_state") && msg.Transfer != nil && c.OnTransfer != nil {
-			c.OnTransfer(*msg.Transfer)
 		}
 	}
 }

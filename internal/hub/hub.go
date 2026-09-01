@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -22,10 +21,6 @@ type Config struct {
 	MaxPersistentHistoryBytes int64
 	TTL                       time.Duration
 	DBPath                    string // Empty = no persistence.
-	SpoolDir                  string
-	SpoolQuota                int64
-	MaxTransferSize           int64
-	TransferTTL               time.Duration
 }
 
 const (
@@ -36,9 +31,8 @@ const (
 
 // Subscriber receives clipboard updates via a channel.
 type Subscriber struct {
-	C         chan protocol.ClipItem
-	Transfers chan protocol.Transfer
-	cancel    context.CancelFunc
+	C      chan protocol.ClipItem
+	cancel context.CancelFunc
 }
 
 // Hub is the central clipboard broker.
@@ -70,7 +64,6 @@ type Hub struct {
 	// can briefly overlap an old and a new mobile connection; a close from the
 	// old socket must not mark the replacement offline.
 	deviceConnections map[string]int
-	transfers         *transferStore
 
 	stop      chan struct{}
 	closeOnce sync.Once
@@ -120,26 +113,15 @@ func New(cfg Config) (*Hub, error) {
 		startedAt:                 time.Now(),
 		stop:                      make(chan struct{}),
 	}
-	transfers, err := newTransferStore(cfg.SpoolDir, cfg.SpoolQuota, cfg.MaxTransferSize, cfg.TransferTTL)
-	if err != nil {
-		return nil, fmt.Errorf("open transfer spool: %w", err)
-	}
-	h.transfers = transfers
-	if expired, removed := transfers.reapExpired(time.Now()); len(expired) > 0 || removed > 0 {
-		slog.Info("reaped transfers during startup", "component", "hub_transfers", "expired_transfers", len(expired), "removed_metadata", removed)
-	}
-
 	if cfg.DBPath != "" {
 		st, err := OpenStore(cfg.DBPath)
 		if err != nil {
-			_ = transfers.close()
 			return nil, fmt.Errorf("open clip store: %w", err)
 		}
 		h.store = st
 		seq, items, err := st.LoadState(cfg.MaxHistory, cfg.MaxResidentHistoryBytes)
 		if err != nil {
 			st.Close()
-			_ = transfers.close()
 			return nil, fmt.Errorf("load clip state: %w", err)
 		}
 		h.seq = seq
@@ -150,7 +132,6 @@ func New(cfg Config) (*Hub, error) {
 		devices, err := st.LoadDevices()
 		if err != nil {
 			st.Close()
-			_ = transfers.close()
 			return nil, fmt.Errorf("load devices: %w", err)
 		}
 		for _, device := range devices {
@@ -179,7 +160,6 @@ func (h *Hub) RegisterDevice(req protocol.RegisterDeviceRequest) protocol.Device
 	} else {
 		device.Capabilities = mergeStrings(device.Capabilities, req.Capabilities)
 	}
-	device.PublicKey = req.PublicKey
 	device.LastSeen = time.Now()
 	h.devices[req.DeviceID] = device
 	if h.store != nil {
@@ -308,14 +288,9 @@ func (h *Hub) Devices() []protocol.Device {
 func (h *Hub) Close() error {
 	h.closeOnce.Do(func() {
 		close(h.stop)
-		var transferErr, storeErr error
-		if h.transfers != nil {
-			transferErr = h.transfers.close()
-		}
 		if h.store != nil {
-			storeErr = h.store.Close()
+			h.closeErr = h.store.Close()
 		}
-		h.closeErr = errors.Join(transferErr, storeErr)
 	})
 	return h.closeErr
 }
@@ -485,9 +460,8 @@ func (h *Hub) GetBySeq(seq uint64) (*protocol.ClipItem, error) {
 func (h *Hub) Subscribe(ctx context.Context) *Subscriber {
 	ctx, cancel := context.WithCancel(ctx)
 	sub := &Subscriber{
-		C:         make(chan protocol.ClipItem, 1),
-		Transfers: make(chan protocol.Transfer, 16),
-		cancel:    cancel,
+		C:      make(chan protocol.ClipItem, 1),
+		cancel: cancel,
 	}
 
 	h.subsMu.Lock()
@@ -500,15 +474,6 @@ func (h *Hub) Subscribe(ctx context.Context) *Subscriber {
 	}()
 
 	return sub
-}
-
-func (h *Hub) publishTransfer(transfer protocol.Transfer) {
-	for _, sub := range h.snapshotSubscribers() {
-		select {
-		case sub.Transfers <- transfer:
-		default:
-		}
-	}
 }
 
 func (h *Hub) unsubscribe(sub *Subscriber) {
@@ -689,15 +654,6 @@ func (h *Hub) reapLoop() {
 func (h *Hub) reapExpired() {
 	now := time.Now()
 	h.reapStaleDevices(now)
-	if h.transfers != nil {
-		expired, removed := h.transfers.reapExpired(now)
-		for _, transfer := range expired {
-			h.publishTransfer(transfer)
-		}
-		if len(expired) > 0 || removed > 0 {
-			slog.Info("reaped expired transfers", "component", "hub_transfers", "expired_transfers", len(expired), "removed_metadata", removed)
-		}
-	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

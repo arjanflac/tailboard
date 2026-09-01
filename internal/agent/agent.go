@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -28,34 +27,23 @@ type Config struct {
 	Clipboard       clipboard.Clipboard // Clipboard backend (nil = system default).
 	Privacy         privacy.Config      // Optional privacy policy for outbound clips.
 	ContextProvider contextProvider     // Optional active app/process detector.
-	TransferPolicy  string              // ask, accept, or off.
-	TransferAllow   []string            // Device IDs permitted for auto-accept.
-	DownloadDir     string              // Destination for accepted transfers.
 	ControlAddr     string              // Loopback address for the desktop control surface; empty disables it.
-	OpenControl     bool                // Open the desktop control surface in the default browser.
 }
 
 // Agent is the local clipboard sync agent.
 type Agent struct {
-	hubURL         string
-	nodeName       string
-	deviceID       string
-	pollInterval   time.Duration
-	monitor        *ClipboardMonitor
-	client         *hubclient.Client
-	paused         atomic.Bool
-	bootstrapped   atomic.Bool
-	privacy        privacy.Config
-	ctxProvider    contextProvider
-	warnedCtx      atomic.Bool
-	transferPolicy string
-	transferAllow  map[string]struct{}
-	transferMu     sync.Mutex
-	receiving      map[string]struct{}
-	downloadMu     sync.Mutex
-	downloadDir    string
-	controlAddr    string
-	openControl    bool
+	hubURL       string
+	nodeName     string
+	deviceID     string
+	pollInterval time.Duration
+	monitor      *ClipboardMonitor
+	client       *hubclient.Client
+	paused       atomic.Bool
+	bootstrapped atomic.Bool
+	privacy      privacy.Config
+	ctxProvider  contextProvider
+	warnedCtx    atomic.Bool
+	controlAddr  string
 }
 
 // ClipboardInitError reports a failure to initialize the default clipboard backend.
@@ -92,23 +80,6 @@ func New(cfg Config) (*Agent, error) {
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 500 * time.Millisecond
 	}
-	if cfg.TransferPolicy == "" {
-		cfg.TransferPolicy = "ask"
-	}
-	if cfg.TransferPolicy != "ask" && cfg.TransferPolicy != "accept" && cfg.TransferPolicy != "off" {
-		return nil, fmt.Errorf("invalid transfer policy %q", cfg.TransferPolicy)
-	}
-	if cfg.DownloadDir == "" {
-		home, _ := os.UserHomeDir()
-		cfg.DownloadDir = filepath.Join(home, "Downloads")
-	}
-	allow := make(map[string]struct{}, len(cfg.TransferAllow))
-	for _, id := range cfg.TransferAllow {
-		if id != "" {
-			allow[id] = struct{}{}
-		}
-	}
-
 	client := cfg.Client
 	if client == nil && cfg.HubURL != "" {
 		var err error
@@ -122,20 +93,15 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	return &Agent{
-		hubURL:         cfg.HubURL,
-		nodeName:       cfg.NodeName,
-		deviceID:       cfg.DeviceID,
-		pollInterval:   cfg.PollInterval,
-		monitor:        NewClipboardMonitor(clip),
-		client:         client,
-		privacy:        cfg.Privacy,
-		ctxProvider:    resolveContextProvider(cfg),
-		transferPolicy: cfg.TransferPolicy,
-		transferAllow:  allow,
-		receiving:      make(map[string]struct{}),
-		downloadDir:    cfg.DownloadDir,
-		controlAddr:    cfg.ControlAddr,
-		openControl:    cfg.OpenControl,
+		hubURL:       cfg.HubURL,
+		nodeName:     cfg.NodeName,
+		deviceID:     cfg.DeviceID,
+		pollInterval: cfg.PollInterval,
+		monitor:      NewClipboardMonitor(clip),
+		client:       client,
+		privacy:      cfg.Privacy,
+		ctxProvider:  resolveContextProvider(cfg),
+		controlAddr:  cfg.ControlAddr,
 	}, nil
 }
 
@@ -151,9 +117,6 @@ func (a *Agent) Run(ctx context.Context) error {
 		}
 		defer controlServer.Shutdown(context.Background())
 		slog.Info("desktop control surface active", "component", "tg-clipd", "url", controlServer.URL)
-		if a.openControl {
-			go openBrowser(controlServer.URL)
-		}
 	}
 
 	ws := &WSClient{
@@ -161,9 +124,6 @@ func (a *Agent) Run(ctx context.Context) error {
 		OnConnected: func() {
 			if a.deviceID != "" {
 				capabilities := []string{"clipboard"}
-				if a.transferPolicy != "off" {
-					capabilities = append(capabilities, "transfers", "direct-fetch")
-				}
 				if reporter, ok := a.ctxProvider.(contextProviderReporter); ok {
 					capabilities = append(capabilities, "privacy-detector:"+reporter.Layer())
 				}
@@ -177,26 +137,9 @@ func (a *Agent) Run(ctx context.Context) error {
 			if !a.bootstrapped.Load() {
 				a.bootstrap(ctx)
 			}
-			if a.transferPolicy != "off" {
-				go a.recoverIncomingTransfers(ctx)
-			}
 		},
 		OnUpdate: func(item protocol.ClipItem) {
 			a.applyRemote(item)
-		},
-		OnTransfer: func(transfer protocol.Transfer) {
-			if a.transferPolicy == "off" {
-				return
-			}
-			if transfer.ToDevice != a.deviceID {
-				return
-			}
-			switch transfer.State {
-			case "offered":
-				go a.handleTransferOffer(ctx, transfer)
-			case "accepted", "transferring":
-				go a.receiveTransferOnce(ctx, transfer)
-			}
 		},
 	}
 

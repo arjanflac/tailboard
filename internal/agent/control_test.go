@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,7 +13,7 @@ import (
 	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
-func TestControlServerStatePauseAndDropSend(t *testing.T) {
+func TestControlServerStateAndPause(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	broker, err := hub.New(hub.Config{})
 	if err != nil {
@@ -77,39 +76,6 @@ func TestControlServerStatePauseAndDropSend(t *testing.T) {
 	resp.Body.Close()
 	if !agent.paused.Load() {
 		t.Fatal("pause endpoint did not pause the agent")
-	}
-
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	file, err := writer.CreateFormFile("files", "hello.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = file.Write([]byte("hello control surface"))
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/api/send?to=receiver", &body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("Content-Type", writer.FormDataContentType())
-	resp, err = http.DefaultClient.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		var payload map[string]any
-		_ = json.NewDecoder(resp.Body).Decode(&payload)
-		t.Fatalf("send returned %d: %v", resp.StatusCode, payload)
-	}
-	var transfer protocol.Transfer
-	if err := json.NewDecoder(resp.Body).Decode(&transfer); err != nil {
-		t.Fatal(err)
-	}
-	if transfer.State != "offered" || len(transfer.Files) != 1 || transfer.Files[0].Name != "hello.txt" {
-		t.Fatalf("unexpected transfer: %+v", transfer)
 	}
 }
 

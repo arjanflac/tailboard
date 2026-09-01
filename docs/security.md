@@ -42,21 +42,6 @@ Foreground detection is best-effort and platform-specific:
 
 `tg-clip status` and `tg-clipd` logs report the selected detector layer. These controls reduce exposure, but they are not end-to-end secrecy or centrally enforced policy.
 
-## Legacy file-transfer compatibility
-
-Current Tailboard apps do not advertise or expose this transfer subsystem.
-Photos and files are delegated to Tailscale's Taildrop. The following notes
-describe the retained Go compatibility implementation for operators who invoke
-it explicitly; it is not part of the supported Tailboard app experience.
-
-- Transfers are targeted and default to receiver consent (`ask`). Desktop agents may auto-accept only from an explicit device-ID allowlist.
-- The hub spools transfer bytes and can read them. Transfer metadata is persisted in SQLite; file bodies remain in the spool directory and expire after the transfer TTL.
-- Sender-declared SHA-256 is verified after upload and again after download.
-- Receivers sanitize filenames, reject traversal/separators, and do not overwrite existing files unless explicitly forced.
-- Spool quota and maximum transfer size are enforced by the hub and advertised by `/api/capabilities`.
-- Direct fetch binds only the sender's Tailscale address, uses a random 256-bit bearer token scoped to one transfer, supports range reads, and remains subject to receiver SHA-256 verification. The hub carries the URL/token metadata but never fetches the bytes.
-- The device registry reserves a public-key field for the accepted transfers-first E2EE design. Encryption is not implemented today; the threat model, wire proposal, downgrade rule, and prerequisites are recorded in [Transfer E2EE Decision](e2ee-transfers.md).
-
 ## What tg-clipboard protects well
 
 - It avoids adding another cloud account system or third-party sync service.
@@ -67,8 +52,8 @@ it explicitly; it is not part of the supported Tailboard app experience.
 
 - A compromised or untrusted hub operator. The hub can read synced content.
 - A compromised client device. Any synced clipboard is available to that device once applied locally.
-- Clipboard broadcast remains non-selective. The retained legacy file-transfer
-  protocol is targeted, but it is not a general authorization system.
+- Clipboard broadcast remains non-selective; there is no per-device send or
+  application authorization layer.
 - End-to-end encryption from source device to destination device.
 - At-rest encryption managed by tg-clipboard itself. Use OS or disk encryption if you need stronger local storage protections.
 - Reliable retroactive wipe semantics after content was already synced.

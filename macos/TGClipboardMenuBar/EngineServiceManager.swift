@@ -38,7 +38,7 @@ final class EngineServiceManager {
     private static let legacyServiceLabel = "com.arjanflac.tailboard.engine"
     private static let registeredHashKey = "TailboardRegisteredEngineBackgroundSHA256"
     static let lastErrorKey = "TailboardLastEngineServiceError"
-    private static let defaultArguments = ["--embed-hub", "--transfers", "off"]
+    private static let defaultArguments = ["--embed-hub"]
 
     private let service = SMAppService.loginItem(identifier: engineBundleIdentifier)
     private let loginItem = SMAppService.mainApp
@@ -205,7 +205,7 @@ final class EngineServiceManager {
         } else {
             sourceArguments = Self.defaultArguments
         }
-        let arguments = Self.disablingLegacyTransfers(in: sourceArguments)
+        let arguments = sourceArguments
         if existing == arguments { return }
 
         try fileManager.createDirectory(
@@ -218,43 +218,6 @@ final class EngineServiceManager {
             [.posixPermissions: 0o600],
             ofItemAtPath: argumentsFileURL.path
         )
-    }
-
-    /// Taildrop owns file delivery. Rewrite prior app-managed arguments so an
-    /// upgrade stops advertising or receiving Tailboard's legacy transfers.
-    private static func disablingLegacyTransfers(in arguments: [String]) -> [String] {
-        var result: [String] = []
-        var index = 0
-        var foundPolicy = false
-        while index < arguments.count {
-            let argument = arguments[index]
-            if argument == "--transfers" {
-                result.append(contentsOf: ["--transfers", "off"])
-                foundPolicy = true
-                index += min(2, arguments.count - index)
-                continue
-            }
-            if argument.hasPrefix("--transfers=") {
-                result.append("--transfers=off")
-                foundPolicy = true
-                index += 1
-                continue
-            }
-            if argument == "--transfer-allow" {
-                index += min(2, arguments.count - index)
-                continue
-            }
-            if argument.hasPrefix("--transfer-allow=") {
-                index += 1
-                continue
-            }
-            result.append(argument)
-            index += 1
-        }
-        if !foundPolicy {
-            result.append(contentsOf: ["--transfers", "off"])
-        }
-        return result
     }
 
     private func legacyProgramArguments(at url: URL) throws -> [String]? {

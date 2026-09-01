@@ -25,7 +25,7 @@ public or publish binaries until every blocking item below is resolved.
 
 - [ ] Re-run secret scanning across the full Git history and current tree.
 - [ ] Confirm `config.local.env`, device IDs, hostnames, signing identities,
-  screenshots, APKs/IPAs, databases, logs, and transfer spools are untracked.
+  screenshots, APKs/IPAs, databases, and logs are untracked.
 - [ ] Review `SECURITY.md`, `CODE_OF_CONDUCT.md`, and maintainer contact paths.
 - [ ] Confirm the upstream MIT license and `NOTICE.md` remain intact.
 - [ ] Add screenshots that contain no personal device names or clipboard data.

@@ -1,112 +1,66 @@
 # Architecture
 
-See also: [Security & Privacy](security.md), [Transfer E2EE Decision](e2ee-transfers.md), [Known Limitations](limitations.md), [Platform Support](platform-support.md), [Roadmap](roadmap.md), [README](../README.md)
+See also: [Security & Privacy](security.md), [Known Limitations](limitations.md),
+[Platform Support](platform-support.md), and [README](../README.md).
 
-Tailboard's supported apps are built around a single tailnet clipboard broker.
-The role may run as standalone `tg-clipboard` or inside a normal desktop agent
-via `tg-clipd --embed-hub`; a dedicated hub machine is optional. The inherited
-Go transfer protocol remains available to legacy CLI users, but Taildrop is the
-supported photo/file path and native apps do not advertise transfer capability.
-
-## System layout
+Tailboard is a clipboard-only system with one small broker and platform-native
+clients.
 
 ```text
-local clipboard <-> tg-clipd ----------------------+
-                                                |
-tg-clip ------------------------------------+  |
-                                             |  v
-iOS app / text share / keyboard -----> tg-clipboard --> SQLite history + device registry
-                                             ^
-                                             |
-                               WebSocket stream + REST API
-
-photos/files ------------------------> Tailscale Taildrop
+Mac clipboard <-> Tailboard Engine <-> embedded hub <-> Android app
+                                      |
+                                      +-------------> iPhone app/extensions
 ```
 
-## Core components
+All cross-device traffic uses addresses reachable through the user's existing
+Tailscale connection.
+
+## Components
 
 | Component | Responsibility |
 | --- | --- |
-| `tg-clipboard` | Central broker. Stores clipboard history and device metadata. Legacy transfer endpoints remain for compatibility. |
-| `tg-clipd` | Desktop agent. Watches clipboard changes, enforces local privacy policy, applies remote updates, and serves a loopback-only desktop control surface. |
-| `tg-clip` | Scriptable client for clipboard operations and device discovery; inherited transfer commands are compatibility-only. |
-| iOS app and extensions | Clipboard/history surfaces, keyboard, text/link share extension, widget, App Intents, and foreground-only controls. |
-| Android app | Foreground clipboard connection, history/devices UI, text share target, and Quick Settings action. |
+| `tg-clipboard` | Standalone HTTP/WebSocket clipboard broker for users who want an independently managed hub. |
+| `tg-clipd` / Tailboard Engine | Watches a desktop clipboard, applies remote clips, and can carry the embedded broker role. |
+| `tg-clip` | Scriptable clipboard, history, device, status, pause, and clear commands. |
+| macOS app | Menu-bar status and controls; embeds and registers Tailboard Engine with `SMAppService`. |
+| Android app | Foreground WebSocket client, clipboard UI, text share target, and Quick Settings action. |
+| iOS app and extensions | Foreground clipboard UI, keyboard, text/link share target, widget, Shortcuts, and Control Center controls. |
 
-## Data flow
+## Clipboard flow
 
-1. A client discovers the hub URL from Tailscale metadata unless `--hub` or `TG_CLIPBOARD_HUB` overrides it.
-2. `tg-clipd` waits for a native change event where available. Polling backends check a cheap change sequence before selecting `image/png`, then `text/plain`, with `text/html` only as a fallback when plain text is unavailable. This avoids pasting browser markup literally on mobile clients.
-3. `tg-clipd` can optionally apply local privacy rules before upload. Blocked items stay local and can optionally clear the local clipboard.
-4. The client hashes the content and MIME type. If the item is new and not one the client just wrote itself, it sends the item to `tg-clipboard`.
-5. `tg-clipboard` stores the clip, assigns a monotonic `seq`, and broadcasts it to WebSocket subscribers.
-6. Other clients receive the update, apply it locally, read back what the OS actually stored, and mark that result as self-written so the next poll does not loop the same item back to the hub.
-7. Reconnecting clients can resume from `since_seq` to catch up on missed items.
+1. A client reads a local clipboard item after an OS event or user action.
+2. The client posts the item with its MIME type, source, and stable device ID.
+3. The hub assigns a monotonic sequence, deduplicates identical content, stores
+   bounded history in SQLite, and publishes the latest item over WebSocket.
+4. Connected clients apply the item locally and ignore their own echo.
+5. Reconnecting clients request the latest sequence they missed.
 
-## Legacy transfer flow
+Clipboard state is last-write-wins. The hub supports plain text, HTML, and PNG
+with a 10 MiB item limit.
 
-This protocol is retained for compatibility and is not exposed by Tailboard's
-native apps. Tailscale/Taildrop is the supported product path for photos/files.
+## Embedded hub
 
-1. Clients register stable device IDs and capabilities; online state comes from live WebSocket connections.
-2. A sender creates a transfer manifest naming one target device and declaring each file's size, MIME type, and SHA-256.
-3. The sender uploads files in resumable chunks. Directories are represented as deterministic per-file manifests.
-4. The hub verifies each completed file. Only a fully uploaded transfer becomes `offered`.
-5. The target receives a WebSocket offer and accepts, declines, or follows its local allowlist policy.
-6. Downloads support byte ranges. The receiver verifies SHA-256, writes through safe temporary paths, then acknowledges completion.
-7. Completion, cancellation, or expiry removes spool data. Metadata is not a permanent transfer archive.
+The normal personal deployment runs the broker inside Tailboard Engine on the
+Mac. It listens on the Mac's Tailscale address and persists state under the
+engine's application-support directory. This removes the need for a separate
+always-on server while keeping a single source of ordering and history.
 
-For two online desktop endpoints, `tg-clip send --direct` starts a bearer-scoped, range-capable file server on the sender's Tailscale IP and places only the offer metadata on the hub. A receiver advertising `direct-fetch` downloads from that endpoint and still verifies SHA-256 before completion. If the target is offline, lacks the capability, the sender cannot bind its tailnet address, or the hub rejects direct metadata, the command transparently uses the durable spool path.
+The standalone `tg-clipboard` binary remains useful for Linux, Windows, or a
+dedicated host. It can join a tailnet through `tsnet`.
 
-## Desktop companion
+## Local control API
 
-`tg-clipd` serves a loopback-only control surface at `127.0.0.1:9438` by default. `tg-clipd --tray` opens it in the default browser. The native Tailboard menu-bar app uses the same state endpoint for clipboard/device status:
-
-- clipboard pause/resume changes the live agent state.
-
-The listener rejects non-loopback configuration and cross-origin browser requests. Set `--control-addr off` for a strictly headless agent.
+The Mac app talks to Tailboard Engine through a loopback-only HTTP endpoint.
+That API exposes sync state, the device roster, current clip metadata, and the
+pause switch. It is not reachable from the tailnet.
 
 ## Persistence and retention
 
-- The hub persists clipboard history in SQLite.
-- Device and transfer metadata are also stored in SQLite; transfer bodies are files under the configured spool directory.
-- In the default tailnet mode, the database lives at `~/.config/tg-clipboard/tsnet/clips.db`.
-- Retention defaults to a 24 hour TTL and a history depth of 50 items, both configurable on the hub.
-- Transfer TTL defaults to 48 hours and is separately bounded by spool quota and per-transfer limits.
-- The hub stores both hashes and raw clipboard content because it needs to replay clipboard data, not just detect duplicates.
+- SQLite stores bounded clipboard history and device metadata.
+- Raw clipboard data is retained for up to 24 hours by default.
+- In-memory and persistent byte budgets prevent large clipboard images from
+  growing the always-on process without bound.
+- Stale offline device records expire after 30 days.
 
-## Transport modes
-
-### Embedded hub role
-
-- `tg-clipd --embed-hub` serves the full broker API on port 9437 of that machine's Tailscale address and stores broker state beneath the agent state directory.
-- Other clients prefer the historic named hub, then discover any peer advertising `hub_role` through `/api/capabilities`.
-- The role does not float automatically. When its carrier is offline, sync and asynchronous transfer delivery pause.
-
-### Normal mode
-
-- `tg-clipboard` runs as a `tsnet` node inside your tailnet.
-- When Tailscale HTTPS is enabled, the hub serves HTTPS on its MagicDNS hostname.
-- If HTTPS is not enabled, the hub falls back to plain HTTP on the tailnet.
-
-### Development mode
-
-- `tg-clipboard -dev` listens on localhost by default and skips the tailnet identity layer.
-- It is useful for local development only, not for network-exposed deployments.
-
-## Privacy controls in the architecture
-
-- Privacy controls are currently enforced in `tg-clipd`, before content is uploaded to the hub.
-- Operators can opt in to app-ignore, process-ignore, and sensitive-content filters.
-- Those controls are local and best-effort. They do not retroactively delete content that was already synced to other devices or cached elsewhere.
-
-## Why the architecture is centralized
-
-tg-clipboard intentionally uses a hub-and-spoke design instead of peer-to-peer merge logic:
-
-- clipboard state is naturally last-write-wins,
-- clients can reconnect and catch up from a single sequence source,
-- the hub can keep short history and status information in one place,
-- clients stay simple and only need REST/WebSocket connectivity.
-
-That simplicity comes with an explicit trade-off: the hub is trusted with clipboard contents and metadata. See [Security & Privacy](security.md) for the trust model and [Known Limitations](limitations.md) for behavior and portability caveats.
+Photos and ordinary files never enter this data plane. They are handled by the
+native Tailscale application.

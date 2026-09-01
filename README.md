@@ -36,15 +36,15 @@ to complete clipboard access in the foreground.
 ## Components
 
 - **Tailboard Engine** — Go clipboard agent with an optional embedded hub and
-  loopback-only desktop API. The Mac app runs it with legacy transfers off.
+  loopback-only desktop API.
 - **macOS menu-bar app** — a native Swift surface over an engine embedded and
   managed through Apple's modern service API.
 - **Android app** — current clip and history, device roster, settings, foreground
   sync connection, Quick Settings tile, and text/link share target.
 - **iOS app** — current clip and history, devices, settings, text/link share
   extension, keyboard, widget, Shortcuts, and Control Center controls.
-- **CLI** — `bin/tailboard` plus compatibility binaries inherited from
-  tg-clipboard.
+- **CLI** — scriptable clipboard, history, device, status, pause, and clear
+  commands inherited from and extended around tg-clipboard.
 
 ## Build from source
 
@@ -101,12 +101,9 @@ full threat model and reporting process.
 
 Tailboard is derived from the MIT-licensed
 [`thalysguimaraes/tg-clipboard`](https://github.com/thalysguimaraes/tg-clipboard)
-project and preserves its Git history and copyright notice. The upstream
-project already supplies the cross-platform Go clipboard core, iOS companion,
-initial macOS menu-bar surface, and CLI transfer machinery. Tailboard adds the
+project and preserves its Git history and copyright notice. Tailboard adds the
 Android client, embedded personal Mac workflow, modern Apple service management,
-Tailboard branding, and product-specific UX. Tailboard briefly productized the
-inherited transfer protocol, then retired that app UI in favor of Taildrop. See
+Tailboard branding, reliability fixes, and product-specific UX. See
 [NOTICE.md](NOTICE.md) for the precise provenance statement.
 
 ## Release status

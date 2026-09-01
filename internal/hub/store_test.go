@@ -68,7 +68,7 @@ func TestStoreRecoversFromInterruptedLegacyWrite(t *testing.T) {
 	}
 }
 
-func TestDeviceRegistryPersistsPublicKey(t *testing.T) {
+func TestDeviceRegistryPersistsCapabilities(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "devices.db")
 	store, err := OpenStore(path)
 	if err != nil {
@@ -76,8 +76,8 @@ func TestDeviceRegistryPersistsPublicKey(t *testing.T) {
 	}
 	device := protocol.Device{
 		DeviceID: "device-1", Name: "MacBook", Platform: "darwin",
-		Capabilities: []string{"clipboard", "transfers"}, PublicKey: "reserved-key",
-		LastSeen: time.Now().UTC().Truncate(time.Microsecond),
+		Capabilities: []string{"clipboard", "privacy-detector:appkit"},
+		LastSeen:     time.Now().UTC().Truncate(time.Microsecond),
 	}
 	if err := store.SaveDevice(device); err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func TestDeviceRegistryPersistsPublicKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(devices) != 1 || devices[0].DeviceID != device.DeviceID ||
-		devices[0].PublicKey != "reserved-key" || len(devices[0].Capabilities) != 2 {
+		len(devices[0].Capabilities) != 2 {
 		t.Fatalf("unexpected devices: %+v", devices)
 	}
 }

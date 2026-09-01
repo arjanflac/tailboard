@@ -11,11 +11,11 @@ import (
 
 const engineArgumentsFileName = "engine-arguments.json"
 
-var bundledEngineDefaults = []string{"--embed-hub", "--transfers", "off"}
+var bundledEngineDefaults = []string{"--embed-hub"}
 
 // configuredRuntimeArgs loads the per-user arguments written by the macOS app.
 // The SMAppService login-item bundle stays immutable inside the signed app;
-// user-specific names and transfer allowlists belong in Application Support.
+// user-specific settings belong in Application Support.
 func configuredRuntimeArgs() ([]string, error) {
 	path := engineArgumentsPath()
 	data, err := os.ReadFile(path)

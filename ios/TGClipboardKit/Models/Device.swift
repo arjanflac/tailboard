@@ -5,7 +5,6 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     public let name: String
     public let platform: String
     public let capabilities: [String]
-    public let publicKey: String?
     public let online: Bool
     public let lastSeen: Date
 
@@ -51,7 +50,6 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case name, platform, capabilities, online
         case deviceID = "device_id"
-        case publicKey = "public_key"
         case lastSeen = "last_seen"
     }
 
@@ -65,7 +63,6 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
         name = try container.decode(String.self, forKey: .name)
         platform = try container.decode(String.self, forKey: .platform)
         capabilities = try container.decodeIfPresent([String].self, forKey: .capabilities) ?? []
-        publicKey = try container.decodeIfPresent(String.self, forKey: .publicKey)
         online = try container.decodeIfPresent(Bool.self, forKey: .online) ?? false
         lastSeen = try container.decode(Date.self, forKey: .lastSeen)
     }

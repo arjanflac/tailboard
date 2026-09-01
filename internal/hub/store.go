@@ -120,7 +120,7 @@ func migrate(db *sql.DB) error {
 }
 
 func (s *Store) LoadDevices() ([]protocol.Device, error) {
-	rows, err := s.db.Query("SELECT device_id, name, platform, capabilities, public_key, last_seen FROM devices ORDER BY name")
+	rows, err := s.db.Query("SELECT device_id, name, platform, capabilities, last_seen FROM devices ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (s *Store) LoadDevices() ([]protocol.Device, error) {
 	for rows.Next() {
 		var device protocol.Device
 		var capabilities, lastSeen string
-		if err := rows.Scan(&device.DeviceID, &device.Name, &device.Platform, &capabilities, &device.PublicKey, &lastSeen); err != nil {
+		if err := rows.Scan(&device.DeviceID, &device.Name, &device.Platform, &capabilities, &lastSeen); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(capabilities), &device.Capabilities)
@@ -145,13 +145,13 @@ func (s *Store) SaveDevice(device protocol.Device) error {
 		return err
 	}
 	_, err = s.db.Exec(`
-		INSERT INTO devices (device_id, name, platform, capabilities, public_key, last_seen)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO devices (device_id, name, platform, capabilities, last_seen)
+		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(device_id) DO UPDATE SET
 			name=excluded.name, platform=excluded.platform,
-			capabilities=excluded.capabilities, public_key=excluded.public_key,
+			capabilities=excluded.capabilities,
 			last_seen=excluded.last_seen
-	`, device.DeviceID, device.Name, device.Platform, string(capabilities), device.PublicKey, device.LastSeen.Format(time.RFC3339Nano))
+	`, device.DeviceID, device.Name, device.Platform, string(capabilities), device.LastSeen.Format(time.RFC3339Nano))
 	return err
 }
 
@@ -351,7 +351,6 @@ const devicesTableDDL = `
 		name         TEXT NOT NULL,
 		platform     TEXT NOT NULL,
 		capabilities TEXT NOT NULL DEFAULT '[]',
-		public_key   TEXT NOT NULL DEFAULT '',
 		last_seen    TEXT NOT NULL
 	);
 `

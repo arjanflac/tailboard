@@ -40,9 +40,6 @@ func main() {
 	stateDir := flag.String("state-dir", defaultStateDir(), "tsnet state directory")
 	maxHistory := flag.Int("max-history", envInt("TG_CLIPBOARD_MAX_HISTORY", 50), "max history items")
 	ttl := flag.Duration("ttl", envDuration("TG_CLIPBOARD_TTL", 24*time.Hour), "item TTL")
-	spoolQuota := flag.Int64("spool-quota", envInt64("TG_CLIPBOARD_SPOOL_QUOTA", 10<<30), "maximum transfer spool bytes")
-	maxTransferSize := flag.Int64("max-transfer-size", envInt64("TG_CLIPBOARD_MAX_TRANSFER_SIZE", 100<<30), "maximum bytes per transfer")
-	transferTTL := flag.Duration("transfer-ttl", envDuration("TG_CLIPBOARD_TRANSFER_TTL", 48*time.Hour), "pending transfer TTL")
 	memoryLimit := flag.Int64("memory-limit", envInt64("TG_CLIPBOARD_MEMORY_LIMIT", 48<<20), "soft Go memory limit in bytes (0 to disable)")
 	gcPercent := flag.Int("gc-percent", envInt("TG_CLIPBOARD_GC_PERCENT", 25), "Go garbage collection target percentage")
 	flag.Parse()
@@ -54,24 +51,18 @@ func main() {
 	}
 
 	dbPath := ""
-	spoolDir := ""
 	if !*dev {
 		if err := os.MkdirAll(*stateDir, 0o700); err != nil {
 			slog.Error("create state dir failed", "component", "tg-clipboard", "error", err, "state_dir", *stateDir)
 			os.Exit(1)
 		}
 		dbPath = filepath.Join(*stateDir, "clips.db")
-		spoolDir = filepath.Join(*stateDir, "spool")
 	}
 
 	h, err := hub.New(hub.Config{
-		MaxHistory:      *maxHistory,
-		TTL:             *ttl,
-		DBPath:          dbPath,
-		SpoolDir:        spoolDir,
-		SpoolQuota:      *spoolQuota,
-		MaxTransferSize: *maxTransferSize,
-		TransferTTL:     *transferTTL,
+		MaxHistory: *maxHistory,
+		TTL:        *ttl,
+		DBPath:     dbPath,
 	})
 	if err != nil {
 		slog.Error("hub init failed", "component", "tg-clipboard", "error", err)

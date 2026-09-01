@@ -37,9 +37,9 @@ Suggested headings:
   background item.
 - Taildrop now owns photos and files. Tailboard's Mac file picker/drop target,
   Finder share extension, mobile file destinations/inboxes, and file share
-  handlers have been removed. Mobile share targets remain for text and links.
-- The installed Mac engine migrates legacy transfer policy to `off`, stops
-  advertising transfer capability, and skips transfer polling/recovery work.
+  handlers have been removed. The in-repo file-delivery protocol, server routes,
+  spool, CLI commands, and receiver code are also gone. Mobile share targets
+  remain for text and links.
 - iOS Control Center actions open Tailboard and complete pasteboard access in
   the foreground app process.
 - The iOS Live Activity has been removed because it could not keep the app's

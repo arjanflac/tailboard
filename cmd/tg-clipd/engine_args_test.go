@@ -14,8 +14,6 @@ func TestConfiguredRuntimeArgsRoundTrip(t *testing.T) {
 	want := []string{
 		"--embed-hub",
 		"--node", "Test Mac",
-		"--transfers", "accept",
-		"--transfer-allow", "phone-one,phone-two",
 	}
 	if err := writeConfiguredRuntimeArgs(want); err != nil {
 		t.Fatalf("writeConfiguredRuntimeArgs() error = %v", err)

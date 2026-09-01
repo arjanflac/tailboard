@@ -81,7 +81,6 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        HubConfig.removeLegacyTransferSettings(this);
         configurePalette();
         privacyWipeRequested = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0
                 && ACTION_DEBUG_PRIVACY_WIPE.equals(getIntent().getAction());
