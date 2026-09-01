@@ -66,7 +66,11 @@ type Hub struct {
 
 	devicesMu sync.RWMutex
 	devices   map[string]protocol.Device
-	transfers *transferStore
+	// deviceConnections counts live WebSockets per device. Scene transitions
+	// can briefly overlap an old and a new mobile connection; a close from the
+	// old socket must not mark the replacement offline.
+	deviceConnections map[string]int
+	transfers         *transferStore
 
 	stop      chan struct{}
 	closeOnce sync.Once
@@ -112,6 +116,7 @@ func New(cfg Config) (*Hub, error) {
 		ttl:                       cfg.TTL,
 		subs:                      make(map[*Subscriber]struct{}),
 		devices:                   make(map[string]protocol.Device),
+		deviceConnections:         make(map[string]int),
 		startedAt:                 time.Now(),
 		stop:                      make(chan struct{}),
 	}
@@ -209,6 +214,7 @@ func (h *Hub) RemoveDevice(deviceID string) bool {
 		return false
 	}
 	delete(h.devices, deviceID)
+	delete(h.deviceConnections, deviceID)
 	if h.store != nil {
 		if err := h.store.DeleteDevice(deviceID); err != nil {
 			slog.Error("failed to delete persisted device", "component", "hub_store", "device_id", deviceID, "error", err)
@@ -239,17 +245,45 @@ func (h *Hub) reapStaleDevices(now time.Time) {
 	}
 }
 
-func (h *Hub) SetDeviceOnline(deviceID string, online bool) {
+func (h *Hub) DeviceConnected(deviceID string) {
 	if deviceID == "" {
 		return
 	}
 	h.devicesMu.Lock()
 	defer h.devicesMu.Unlock()
+	if h.devices == nil {
+		h.devices = make(map[string]protocol.Device)
+	}
+	if h.deviceConnections == nil {
+		h.deviceConnections = make(map[string]int)
+	}
+	h.deviceConnections[deviceID]++
 	device, ok := h.devices[deviceID]
 	if !ok {
 		device = protocol.Device{DeviceID: deviceID, Name: deviceID}
 	}
-	device.Online = online
+	device.Online = true
+	device.LastSeen = time.Now()
+	h.devices[deviceID] = device
+}
+
+func (h *Hub) DeviceDisconnected(deviceID string) {
+	if deviceID == "" {
+		return
+	}
+	h.devicesMu.Lock()
+	defer h.devicesMu.Unlock()
+	connections := h.deviceConnections[deviceID]
+	if connections > 1 {
+		h.deviceConnections[deviceID] = connections - 1
+		return
+	}
+	delete(h.deviceConnections, deviceID)
+	device, ok := h.devices[deviceID]
+	if !ok {
+		return
+	}
+	device.Online = false
 	device.LastSeen = time.Now()
 	h.devices[deviceID] = device
 }

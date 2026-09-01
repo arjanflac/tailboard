@@ -44,10 +44,6 @@ final class AppViewModel {
     private var receivedBannerTask: Task<Void, Never>?
     private var sceneIsActive = false
 
-    // MARK: - Live Activity
-
-    private(set) var liveActivityRunning = false
-
     init() {
         let arguments = ProcessInfo.processInfo.arguments
         let shouldWipe = arguments.contains("--privacy-wipe")
@@ -455,7 +451,6 @@ final class AppViewModel {
     func setSceneActive(_ active: Bool) {
         sceneIsActive = active
         if active {
-            liveActivityRunning = !Activity<TGClipboardActivityAttributes>.activities.isEmpty
             setupWebSocket()
             Task { await refresh() }
         } else {
@@ -488,47 +483,12 @@ final class AppViewModel {
         return copyToPasteboard(clip)
     }
 
-    // MARK: - Live Activity
-
-    func startLiveActivity() async {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled,
-              let clip = currentClip else { return }
-        let state = TGClipboardActivityAttributes.ContentState(
-            preview: clip.preview,
-            source: clip.source,
-            updatedAt: clip.createdAt
-        )
-        do {
-            _ = try Activity.request(
-                attributes: TGClipboardActivityAttributes(),
-                content: ActivityContent(state: state, staleDate: clip.expiresAt),
-                pushType: nil
-            )
-            liveActivityRunning = true
-        } catch {
-            errorMessage = UserFacingError.message(error)
-        }
-    }
-
-    func stopLiveActivity() async {
+    /// Live Activities never kept Tailboard connected in the background and
+    /// could display a stale clip as if sync were still running. End any one
+    /// created by older builds during the migration away from that UI.
+    func endLegacyLiveActivities() async {
         for activity in Activity<TGClipboardActivityAttributes>.activities {
             await activity.end(nil, dismissalPolicy: .immediate)
-        }
-        liveActivityRunning = false
-    }
-
-    private func updateLiveActivities(with clip: ClipItem) {
-        let state = TGClipboardActivityAttributes.ContentState(
-            preview: clip.preview,
-            source: clip.source,
-            updatedAt: clip.createdAt
-        )
-        Task {
-            for activity in Activity<TGClipboardActivityAttributes>.activities {
-                await activity.update(
-                    ActivityContent(state: state, staleDate: clip.expiresAt)
-                )
-            }
         }
     }
 
@@ -551,7 +511,6 @@ final class AppViewModel {
                 }
                 self.cacheCurrentClip(item)
                 self.store.cachedRecentClips = self.history
-                self.updateLiveActivities(with: item)
             }
         }
         wsManager.onTransfer = { [weak self] transfer in

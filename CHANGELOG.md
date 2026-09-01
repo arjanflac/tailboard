@@ -40,6 +40,9 @@ Suggested headings:
 - Mac transfers now land directly in `~/Downloads`.
 - iOS Control Center actions open Tailboard and complete pasteboard access in
   the foreground app process.
+- The iOS app now waits for a real hub response before showing a connected
+  state, reconnects as one foreground-only stream, and retires its misleading
+  Live Activity control.
 - Public release and TestFlight workflows are disabled pending the documented
   release-readiness gates.
 - `make release` now emits publishable assets under `dist/release`, and `make release-verify` validates checksum and manifest consistency for dry runs and CI.
@@ -59,3 +62,5 @@ Suggested headings:
   launcher's round icon mask.
 - Respect Pixel system-bar insets and wait for launchd to finish unregistering
   the old Mac engine before reinstalling it.
+- Track overlapping WebSocket replacements correctly so a stale iPhone socket
+  cannot mark its live replacement offline.

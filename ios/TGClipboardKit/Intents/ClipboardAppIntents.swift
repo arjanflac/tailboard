@@ -21,7 +21,9 @@ public struct GetCurrentClipIntent: AppIntent {
 public struct ReceiveClipboardIntent: AppIntent {
     public static var title: LocalizedStringResource = "Receive Clipboard"
     public static var description = IntentDescription("Copies the latest synced clip onto this iPhone.")
-    public static var openAppWhenRun: Bool { false }
+    // iOS doesn't guarantee pasteboard access to a background intent process.
+    // Foreground the app so this action is dependable and visible.
+    public static var openAppWhenRun: Bool { true }
 
     public init() {}
 
@@ -47,8 +49,9 @@ public struct ReceiveClipboardIntent: AppIntent {
 
 public struct PushClipboardIntent: AppIntent {
     public static var title: LocalizedStringResource = "Send Clipboard"
-    public static var description = IntentDescription("Sends this iPhone's clipboard to MB and your other devices.")
-    public static var openAppWhenRun: Bool { false }
+    public static var description = IntentDescription("Sends this iPhone's clipboard through Tailboard.")
+    // Reading the user's pasteboard is a foreground action on iOS.
+    public static var openAppWhenRun: Bool { true }
 
     public init() {}
 
@@ -64,7 +67,7 @@ public struct PushClipboardIntent: AppIntent {
         } else {
             throw TGClipboardError.emptyClipboard
         }
-        return .result(dialog: "Clipboard sent to MB")
+        return .result(dialog: "Clipboard sent")
     }
 }
 #endif

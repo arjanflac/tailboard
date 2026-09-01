@@ -37,6 +37,7 @@ struct TGClipboardApp: App {
                 }
                 .task {
                     await viewModel.finishPrivacyWipe()
+                    await viewModel.endLegacyLiveActivities()
                     viewModel.setSceneActive(scenePhase == .active)
                     await viewModel.handlePendingControlAction()
                     if #available(iOS 18.0, *) {

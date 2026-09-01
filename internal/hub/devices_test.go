@@ -48,3 +48,23 @@ func TestReapStaleDevices(t *testing.T) {
 		t.Error("online device must never be reaped regardless of last_seen")
 	}
 }
+
+func TestOverlappingDeviceConnectionsStayOnlineUntilLastDisconnect(t *testing.T) {
+	h := newDeviceTestHub()
+	h.RegisterDevice(protocol.RegisterDeviceRequest{DeviceID: "phone", Name: "Phone", Platform: "ios"})
+
+	h.DeviceConnected("phone")
+	h.DeviceConnected("phone")
+	h.DeviceDisconnected("phone")
+
+	devices := h.Devices()
+	if len(devices) != 1 || !devices[0].Online {
+		t.Fatalf("replacement connection must keep device online, got %+v", devices)
+	}
+
+	h.DeviceDisconnected("phone")
+	devices = h.Devices()
+	if len(devices) != 1 || devices[0].Online {
+		t.Fatalf("last disconnect must mark device offline, got %+v", devices)
+	}
+}

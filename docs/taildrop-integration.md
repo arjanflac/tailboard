@@ -20,6 +20,24 @@ Tailboard's devices already belong to one persistent tailnet, so embedding
 Tailcat would add key exchange, discovery, retry, relay, and lifecycle work
 without adding a user-facing capability.
 
+## Where tsnet fits
+
+Tailboard already uses `tailscale.com/tsnet` in the optional standalone
+`tg-clipboard` hub. That binary joins the tailnet as its own userspace Tailscale
+node, which is useful when the hub runs somewhere without an installed Tailscale
+client.
+
+The default Mac app takes a lighter path. Its embedded hub listens on the Mac's
+normal network stack and is reached through the Tailscale client that is already
+installed. Embedding tsnet there would create another tailnet identity and
+userspace networking stack, duplicate authentication and state, and increase
+memory and binary size without improving the personal three-device setup.
+
+The mobile apps should remain ordinary clients as well. In particular, iOS
+supports only one active packet-tunnel VPN configuration, so Tailboard should
+use the existing Tailscale tunnel instead of trying to carry a second networking
+stack inside the app.
+
 ## Platform handoff
 
 ### iPhone and iPad
@@ -84,6 +102,7 @@ sheet go through Taildrop.
 ## Primary references
 
 - [Taildrop documentation](https://tailscale.com/docs/features/taildrop)
+- [tsnet documentation](https://tailscale.com/docs/features/tsnet)
 - [Tailscale Android share activity](https://github.com/tailscale/tailscale-android/blob/main/android/src/main/java/com/tailscale/ipn/ShareActivity.kt)
 - [Tailscale Android Taildrop view model](https://github.com/tailscale/tailscale-android/blob/main/android/src/main/java/com/tailscale/ipn/ui/viewModel/TaildropViewModel.kt)
 - [Tailcat announcement](https://tailscale.com/blog/tailcat)

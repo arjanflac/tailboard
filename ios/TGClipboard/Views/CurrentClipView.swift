@@ -36,7 +36,6 @@ struct CurrentClipView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Clipboard")
-            .toolbar { liveActivityButton }
             .refreshable { await viewModel.refresh() }
             .overlay(alignment: .top) { errorOverlay }
             .animation(reduceMotion ? .none : .tgSpring, value: viewModel.errorMessage != nil)
@@ -237,31 +236,7 @@ struct CurrentClipView: View {
         }
     }
 
-    // MARK: - Toolbar & overlays
-
-    private var liveActivityButton: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                Task {
-                    if viewModel.liveActivityRunning {
-                        await viewModel.stopLiveActivity()
-                    } else {
-                        await viewModel.startLiveActivity()
-                    }
-                }
-            } label: {
-                Label(
-                    "Live Activity",
-                    systemImage: viewModel.liveActivityRunning
-                        ? "stop.circle.fill"
-                        : "dot.radiowaves.left.and.right"
-                )
-            }
-            .disabled(viewModel.currentClip == nil && !viewModel.liveActivityRunning)
-            .accessibilityLabel(viewModel.liveActivityRunning ? "Stop Live Activity" : "Start Live Activity")
-            .accessibilityHint("Pins the current clip to your Lock Screen and Dynamic Island")
-        }
-    }
+    // MARK: - Overlays
 
     @ViewBuilder
     private var errorOverlay: some View {

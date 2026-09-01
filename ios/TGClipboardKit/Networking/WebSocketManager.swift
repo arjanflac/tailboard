@@ -5,9 +5,9 @@ import Foundation
 @Observable
 public final class WebSocketManager: @unchecked Sendable {
     private var task: URLSessionWebSocketTask?
+    private var connectionTask: Task<Void, Never>?
     private let session: URLSession
     private var lastSeq: UInt64 = 0
-    private var isRunning = false
 
     public var baseURL: URL?
     public var onUpdate: ((ClipItem) -> Void)?
@@ -25,13 +25,15 @@ public final class WebSocketManager: @unchecked Sendable {
     }
 
     public func start() {
-        guard !isRunning else { return }
-        isRunning = true
-        Task { await connectLoop() }
+        guard connectionTask == nil else { return }
+        connectionTask = Task { [weak self] in
+            await self?.connectLoop()
+        }
     }
 
     public func stop() {
-        isRunning = false
+        connectionTask?.cancel()
+        connectionTask = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         connectionState = .disconnected(reason: "Stopped")
@@ -40,13 +42,13 @@ public final class WebSocketManager: @unchecked Sendable {
     private func connectLoop() async {
         var backoff: UInt64 = 1_000_000_000
 
-        while isRunning {
+        while !Task.isCancelled {
             do {
                 connectionState = .connecting
                 try await connect()
                 backoff = 1_000_000_000
             } catch {
-                if !isRunning { return }
+                if Task.isCancelled { return }
                 connectionState = ConnectionState.from(error: error, hubURL: baseURL)
                 try? await Task.sleep(nanoseconds: backoff)
                 backoff = min(backoff * 2, 60_000_000_000)
@@ -75,13 +77,19 @@ public final class WebSocketManager: @unchecked Sendable {
         guard let url = components.url else { return }
         let wsTask = session.webSocketTask(with: url)
         self.task = wsTask
+        defer {
+            wsTask.cancel(with: .goingAway, reason: nil)
+            if self.task === wsTask {
+                self.task = nil
+            }
+        }
         wsTask.resume()
-        connectionState = .connected
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .tgSpringISO8601
+        var receivedServerMessage = false
 
-        while isRunning {
+        while !Task.isCancelled {
             let message = try await wsTask.receive()
             let data: Data
             switch message {
@@ -91,6 +99,10 @@ public final class WebSocketManager: @unchecked Sendable {
             }
 
             guard let wsMsg = try? decoder.decode(WSMessage.self, from: data) else { continue }
+            if !receivedServerMessage {
+                receivedServerMessage = true
+                connectionState = .connected
+            }
             if wsMsg.type == "clip_update", let item = wsMsg.item {
                 lastSeq = item.seq
                 onUpdate?(item)

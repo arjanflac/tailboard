@@ -413,6 +413,7 @@ func TestWebSocketStream(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.CloseNow()
+	assertWebSocketReady(t, ctx, conn)
 
 	body := `{"content":"ws test"}`
 	http.Post(srv.URL+"/api/clip", "application/json", bytes.NewBufferString(body))
@@ -449,6 +450,7 @@ func TestWebSocketStreamReplaySinceSeq(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.CloseNow()
+	assertWebSocketReady(t, ctx, conn)
 
 	var replay protocol.WSMessage
 	if err := wsjson.Read(ctx, conn, &replay); err != nil {
@@ -577,6 +579,7 @@ func TestLifecycleShutdownClosesStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.CloseNow()
+	assertWebSocketReady(t, ctx, conn)
 
 	obs.BeginShutdown()
 
@@ -612,5 +615,16 @@ func TestLifecycleShutdownClosesStreams(t *testing.T) {
 
 	if err := <-serveDone; err != nil && err != http.ErrServerClosed {
 		t.Fatalf("serve returned unexpected error %v", err)
+	}
+}
+
+func assertWebSocketReady(t *testing.T, ctx context.Context, conn *websocket.Conn) {
+	t.Helper()
+	var ready protocol.WSMessage
+	if err := wsjson.Read(ctx, conn, &ready); err != nil {
+		t.Fatalf("read websocket ready message: %v", err)
+	}
+	if ready.Type != "ready" {
+		t.Fatalf("expected websocket ready message, got %+v", ready)
 	}
 }

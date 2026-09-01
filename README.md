@@ -43,7 +43,7 @@ to complete clipboard access in the foreground.
 - **Android app** — current clip and history, device roster, settings, foreground
   sync connection, Quick Settings tile, and share-sheet destination.
 - **iOS app** — current clip and history, devices, transfers, settings, share
-  extension, keyboard, widgets, Live Activity, Shortcuts, and Control Center.
+  extension, keyboard, widgets, Shortcuts, and Control Center.
 - **CLI** — `bin/tailboard` plus compatibility binaries inherited from
   tg-clipboard.
 

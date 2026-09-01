@@ -469,8 +469,6 @@ func historyPageHandler(h *Hub) http.HandlerFunc {
 func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		deviceID := r.URL.Query().Get("device_id")
-		h.SetDeviceOnline(deviceID, true)
-		defer h.SetDeviceOnline(deviceID, false)
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			slog.Error(
@@ -482,6 +480,8 @@ func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 			return
 		}
 		defer conn.CloseNow()
+		h.DeviceConnected(deviceID)
+		defer h.DeviceDisconnected(deviceID)
 		obs.RecordWSConnect()
 		defer obs.RecordWSDisconnect()
 
@@ -498,6 +498,23 @@ func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 		// Subscribe first so we don't miss items arriving during catch-up.
 		sub := h.Subscribe(ctx)
 		defer sub.cancel()
+
+		// Confirm that the HTTP upgrade completed before clients report a
+		// healthy live connection. URLSessionWebSocketTask.resume() only starts
+		// an attempt; it does not mean the server accepted the WebSocket.
+		if err := wsjson.Write(ctx, conn, protocol.WSMessage{Type: "ready"}); err != nil {
+			slog.Debug(
+				"websocket ready write failed",
+				"component", "hub_stream",
+				"request_id", requestIDFromContext(r.Context()),
+				"error", err,
+			)
+			return
+		}
+		// This protocol is server-push-only. CloseRead consumes control frames so
+		// the hub observes iOS scene transitions and peer disconnects instead of
+		// retaining zombie subscribers indefinitely.
+		peerClosed := conn.CloseRead(ctx)
 
 		// Clipboard sync is last-write-wins. On reconnect, send only the latest
 		// state instead of materializing and serializing an entire binary history.
@@ -540,6 +557,8 @@ func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 			select {
 			case <-ctx.Done():
 				_ = conn.Close(websocket.StatusNormalClosure, "bye")
+				return
+			case <-peerClosed.Done():
 				return
 			case item := <-sub.C:
 				if item.Seq <= replayedUpTo {
