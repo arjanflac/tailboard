@@ -6,8 +6,8 @@ device.
 
 - The hub binds to the Mac's Tailscale address rather than a public interface.
 - Transport confidentiality and device admission come from Tailscale.
-- The hub stores bounded clipboard history in a local SQLite database.
-- Mobile clients may cache recent text locally.
+- The Mac relay stores exactly one current clipboard value in local SQLite.
+- Each mobile client stores at most 20 recent text clips locally for 24 hours.
 - Privacy filters can block configured apps, processes, or sensitive classes,
   but they are best-effort and disabled by the default personal configuration.
 - macOS pasteboard entries explicitly marked concealed or transient are not

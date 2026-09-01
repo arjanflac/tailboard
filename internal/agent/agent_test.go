@@ -52,7 +52,7 @@ func TestFailedSendRetry(t *testing.T) {
 	var received []protocol.ClipItem
 	var rejectPosts atomic.Bool
 
-	h, _ := hub.New(hub.Config{MaxHistory: 10, TTL: time.Hour})
+	h, _ := hub.New(hub.Config{})
 	mux := http.NewServeMux()
 	hub.Register(mux, h, func(r *http.Request) string {
 		return r.Header.Get("X-Clip-Source")
@@ -131,7 +131,7 @@ func TestFailedSendRetry(t *testing.T) {
 func TestFailedSendNewContentOverrides(t *testing.T) {
 	var rejectPosts atomic.Bool
 
-	h, _ := hub.New(hub.Config{MaxHistory: 10, TTL: time.Hour})
+	h, _ := hub.New(hub.Config{})
 	mux := http.NewServeMux()
 	hub.Register(mux, h, func(r *http.Request) string {
 		return r.Header.Get("X-Clip-Source")
@@ -190,7 +190,7 @@ func TestFailedSendNewContentOverrides(t *testing.T) {
 // TestBootstrapPreventsStaleOverwrite verifies that the agent does not
 // send stale local clipboard content before bootstrapping from the hub.
 func TestBootstrapPreventsStaleOverwrite(t *testing.T) {
-	h, _ := hub.New(hub.Config{MaxHistory: 10, TTL: time.Hour})
+	h, _ := hub.New(hub.Config{})
 	mux := http.NewServeMux()
 	hub.Register(mux, h, func(r *http.Request) string {
 		return r.Header.Get("X-Clip-Source")
@@ -254,7 +254,7 @@ func (p staticContextProvider) CurrentContext() (privacy.Context, error) {
 }
 
 func TestPrivacyIgnoreListKeepsClipboardLocal(t *testing.T) {
-	h, _ := hub.New(hub.Config{MaxHistory: 10, TTL: time.Hour})
+	h, _ := hub.New(hub.Config{})
 	mux := http.NewServeMux()
 	hub.Register(mux, h, func(r *http.Request) string {
 		return r.Header.Get("X-Clip-Source")
@@ -292,7 +292,7 @@ func TestPrivacyIgnoreListKeepsClipboardLocal(t *testing.T) {
 }
 
 func TestPrivacyFilterCanClearLocalClipboard(t *testing.T) {
-	h, _ := hub.New(hub.Config{MaxHistory: 10, TTL: time.Hour})
+	h, _ := hub.New(hub.Config{})
 	mux := http.NewServeMux()
 	hub.Register(mux, h, func(r *http.Request) string {
 		return r.Header.Get("X-Clip-Source")

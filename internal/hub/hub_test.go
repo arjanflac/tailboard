@@ -12,11 +12,11 @@ import (
 
 func newTestHub() *Hub {
 	h := &Hub{
-		maxHistory:              5,
-		maxResidentHistoryBytes: defaultResidentHistoryBytes,
-		ttl:                     time.Hour,
-		subs:                    make(map[*Subscriber]struct{}),
-		startedAt:               time.Now(),
+		subs:              make(map[*Subscriber]struct{}),
+		devices:           make(map[string]protocol.Device),
+		deviceConnections: make(map[string]int),
+		startedAt:         time.Now(),
+		stop:              make(chan struct{}),
 	}
 	h.publishCond = sync.NewCond(&h.publishMu)
 	return h
@@ -40,26 +40,14 @@ func newBlockingStore() *blockingStore {
 
 func (s *blockingStore) Close() error { return nil }
 
-func (s *blockingStore) LoadState(int, ...int) (uint64, []protocol.ClipItem, error) {
+func (s *blockingStore) LoadState() (uint64, *protocol.ClipItem, error) {
 	return 0, nil, nil
 }
 
-func (s *blockingStore) HistoryPage(int, uint64) ([]protocol.ClipItem, error) {
-	return nil, nil
-}
-
-func (s *blockingStore) SaveItem(item protocol.ClipItem) (protocol.ClipItem, error) {
+func (s *blockingStore) ReplaceCurrent(item protocol.ClipItem) error {
 	s.saveStarted <- item
 	<-s.releaseSave
-	return item, nil
-}
-
-func (s *blockingStore) TrimHistory(int, int64) (int, error) {
-	return 0, nil
-}
-
-func (s *blockingStore) DeleteExpired(time.Time) (int, error) {
-	return 0, nil
+	return nil
 }
 
 func (s *blockingStore) DeleteAll() error {
@@ -113,22 +101,6 @@ func TestMergeStringsKeepsCapabilitiesWithoutDuplicates(t *testing.T) {
 	}
 }
 
-func TestResidentHistoryIsBoundedByPayloadBytes(t *testing.T) {
-	h := newTestHub()
-	h.maxResidentHistoryBytes = 10
-
-	for _, content := range []string{"aaaaaa", "bbbbbb", "cccccc"} {
-		h.Put(PutInput{Content: content, Source: "node1"})
-	}
-
-	if len(h.history) != 1 {
-		t.Fatalf("expected only the current large clip in memory, got %d items", len(h.history))
-	}
-	if h.history[0].Seq != 3 {
-		t.Fatalf("expected current seq 3 to be retained, got %d", h.history[0].Seq)
-	}
-}
-
 func TestDedup(t *testing.T) {
 	h := newTestHub()
 
@@ -153,36 +125,7 @@ func TestMonotonicSeq(t *testing.T) {
 	}
 }
 
-func TestHistoryRingBuffer(t *testing.T) {
-	h := newTestHub()
-
-	for i := 0; i < 10; i++ {
-		h.Put(textInput(string(rune('a'+i)), "node1"))
-	}
-
-	hist := h.History(0)
-	if len(hist) != 5 {
-		t.Fatalf("expected 5 history items (maxHistory), got %d", len(hist))
-	}
-	if hist[0].Seq != 10 {
-		t.Fatalf("expected most recent seq 10, got %d", hist[0].Seq)
-	}
-}
-
-func TestHistoryLimit(t *testing.T) {
-	h := newTestHub()
-
-	for i := 0; i < 5; i++ {
-		h.Put(textInput(string(rune('a'+i)), "node1"))
-	}
-
-	hist := h.History(3)
-	if len(hist) != 3 {
-		t.Fatalf("expected 3 items, got %d", len(hist))
-	}
-}
-
-func TestClearRemovesCurrentAndHistory(t *testing.T) {
+func TestClearRemovesCurrent(t *testing.T) {
 	h := newTestHub()
 	h.Put(textInput("one", "node1"))
 	h.Put(textInput("two", "node2"))
@@ -193,9 +136,6 @@ func TestClearRemovesCurrentAndHistory(t *testing.T) {
 
 	if got := h.Get(); got != nil {
 		t.Fatalf("expected cleared current clip, got %+v", got)
-	}
-	if hist := h.History(0); len(hist) != 0 {
-		t.Fatalf("expected empty history after clear, got %+v", hist)
 	}
 	if h.Seq() != 2 {
 		t.Fatalf("expected clear to preserve seq 2, got %d", h.Seq())
@@ -370,24 +310,14 @@ func TestSlowSubscribersReceiveLatestUpdate(t *testing.T) {
 	}
 }
 
-func TestReapExpired(t *testing.T) {
-	h := &Hub{
-		maxHistory: 50,
-		ttl:        time.Millisecond,
-		subs:       make(map[*Subscriber]struct{}),
-		startedAt:  time.Now(),
+func TestCurrentDoesNotExpireOnRelay(t *testing.T) {
+	h := newTestHub()
+	item, _ := h.Put(textInput("durable current", "node1"))
+	if !item.ExpiresAt.Equal(item.CreatedAt.Add(mobileHistoryTTL)) {
+		t.Fatalf("expected mobile cache expiry hint, got %s", item.ExpiresAt)
 	}
-	h.publishCond = sync.NewCond(&h.publishMu)
-
-	h.Put(textInput("ephemeral", "node1"))
-	time.Sleep(10 * time.Millisecond)
-	h.reapExpired()
-
-	if h.Get() != nil {
-		t.Fatal("expected current to be nil after expiry")
-	}
-	if len(h.History(0)) != 0 {
-		t.Fatal("expected empty history after expiry")
+	if h.Get() == nil {
+		t.Fatal("relay current value must remain until replaced or cleared")
 	}
 }
 

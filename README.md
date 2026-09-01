@@ -71,9 +71,10 @@ cd android
 
 ## Privacy
 
-Tailboard trusts the devices already admitted to the tailnet. The Mac hub keeps
-bounded clipboard history in a local SQLite database, and mobile clients keep
-small local caches. Clipboard text is not end-to-end encrypted above Tailscale
+Tailboard trusts the devices already admitted to the tailnet. The Mac relay
+persists exactly one current clipboard value in SQLite. Each mobile app keeps at
+most 20 recent text clips locally for 24 hours. Clipboard text is not
+end-to-end encrypted above Tailscale
 and may also be retained by system clipboard managers. See
 [docs/security.md](docs/security.md).
 

@@ -19,22 +19,8 @@ func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestStreamURLAndEndpointConstruction(t *testing.T) {
-	var seenPath string
-	var seenQuery string
-
 	client, err := New(Config{
 		BaseURL: "https://example.com/root/",
-		HTTPClient: &http.Client{
-			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				seenPath = req.URL.Path
-				seenQuery = req.URL.RawQuery
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       ioNopCloser("[]"),
-					Header:     make(http.Header),
-				}, nil
-			}),
-		},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -44,14 +30,8 @@ func TestStreamURLAndEndpointConstruction(t *testing.T) {
 		t.Fatalf("unexpected stream URL %q", got)
 	}
 
-	if _, err := client.History(context.Background(), 7); err != nil {
-		t.Fatalf("History() error = %v", err)
-	}
-	if seenPath != "/root/api/clip/history" {
-		t.Fatalf("unexpected request path %q", seenPath)
-	}
-	if seenQuery != "limit=7" {
-		t.Fatalf("unexpected request query %q", seenQuery)
+	if got := client.StreamURLForDevice("pixel-1"); got != "wss://example.com/root/api/clip/stream?device_id=pixel-1" {
+		t.Fatalf("unexpected device stream URL %q", got)
 	}
 }
 
@@ -136,7 +116,7 @@ func TestStructuredHTTPErrorParsing(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	_, err = client.History(context.Background(), 50)
+	_, err = client.Current(context.Background())
 	if err == nil {
 		t.Fatal("expected structured HTTP error")
 	}

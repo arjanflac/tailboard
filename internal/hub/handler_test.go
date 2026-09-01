@@ -149,24 +149,15 @@ func TestPostClipEmptyContent(t *testing.T) {
 	}
 }
 
-func TestHistory(t *testing.T) {
+func TestHistoryEndpointIsRemoved(t *testing.T) {
 	_, srv := setupServer(t)
-
-	for i := 0; i < 3; i++ {
-		body, _ := json.Marshal(map[string]string{"content": string(rune('a' + i))})
-		http.Post(srv.URL+"/api/clip", "application/json", bytes.NewBuffer(body))
+	resp, err := http.Get(srv.URL + "/api/clip/history")
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	resp, _ := http.Get(srv.URL + "/api/clip/history?limit=2")
-	var items []protocol.ClipItem
-	json.NewDecoder(resp.Body).Decode(&items)
-	resp.Body.Close()
-
-	if len(items) != 2 {
-		t.Fatalf("expected 2 items, got %d", len(items))
-	}
-	if items[0].Seq != 3 {
-		t.Fatalf("expected most recent first, got seq %d", items[0].Seq)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected removed history endpoint to return 404, got %d", resp.StatusCode)
 	}
 }
 
@@ -204,18 +195,6 @@ func TestClearClip(t *testing.T) {
 		t.Fatalf("expected empty current clip after clear, got %d", resp.StatusCode)
 	}
 
-	resp, err = http.Get(srv.URL + "/api/clip/history")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	var items []protocol.ClipItem
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
-		t.Fatal(err)
-	}
-	if len(items) != 0 {
-		t.Fatalf("expected empty history after clear, got %+v", items)
-	}
 }
 
 func TestStatus(t *testing.T) {

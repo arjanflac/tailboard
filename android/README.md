@@ -22,6 +22,8 @@ The main app mirrors the iOS information architecture with Clipboard, Devices,
 and Settings tabs. It shows the current clip, recent text history, live device
 status and Quick Settings setup. Its screens are transient so leaving the app
 releases UI state while the small connection service remains alive.
+Recent text is local to the Pixel and fixed at the newest 20 items for 24 hours;
+the Mac relay does not keep that history.
 
 ## Build
 

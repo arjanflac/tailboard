@@ -15,7 +15,7 @@ import (
 )
 
 func TestWSClientReconnectsAndCatchesUpAfterDrop(t *testing.T) {
-	h, _ := hub.New(hub.Config{MaxHistory: 10, TTL: time.Hour})
+	h, _ := hub.New(hub.Config{})
 	mux := http.NewServeMux()
 	hub.Register(mux, h, func(r *http.Request) string {
 		return r.Header.Get("X-Clip-Source")

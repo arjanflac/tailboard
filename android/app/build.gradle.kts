@@ -10,8 +10,8 @@ android {
         applicationId = "com.arjanflac.tgclipboard"
         minSdk = 29
         targetSdk = 37
-        versionCode = 15
-        versionName = "0.8.0"
+        versionCode = 16
+        versionName = "0.9.0"
     }
 
     compileOptions {
@@ -22,4 +22,5 @@ android {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:5.5.0")
+    testImplementation("junit:junit:4.13.2")
 }

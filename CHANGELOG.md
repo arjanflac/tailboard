@@ -19,3 +19,7 @@
   native string representation, so browser and Notes copies cannot arrive as
   literal HTML markup on mobile devices.
 - Fixed the Pixel adaptive icon safe area.
+- Replaced Mac-side clipboard history with a one-row, last-value relay and
+  removed the history API and CLI command.
+- Moved recent clips to fixed device-local mobile caches: 20 items for 24 hours
+  on both Android and iOS.

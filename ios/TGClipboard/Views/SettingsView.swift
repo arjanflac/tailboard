@@ -47,6 +47,8 @@ struct SettingsView: View {
                     Button("Change Sync Server…") {
                         viewModel.beginReconfigure()
                     }
+
+                    LabeledContent("Recent Clips", value: "20 items · 24 hours")
                 }
 
                 Section("About") {

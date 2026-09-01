@@ -34,10 +34,6 @@ final class HubClient {
         void onResult(List<Device> devices, String error);
     }
 
-    interface ClipsCallback {
-        void onResult(List<Clip> clips, String error);
-    }
-
     interface StreamListener {
         void onConnected();
         void onClip(Clip clip);
@@ -139,18 +135,37 @@ final class HubClient {
         }
     }
 
-    void postText(Context context, String text, ResultCallback callback) {
+    void postText(Context context, String text, ClipCallback callback) {
         if (text == null || text.isEmpty()) {
-            callback.onResult(false, "Clipboard is empty");
+            callback.onResult(null, "Clipboard is empty");
             return;
         }
         try {
             JSONObject body = new JSONObject();
             body.put("content", text);
             body.put("device_id", HubConfig.deviceID(context));
-            execute(jsonRequest(context, "/api/clip", body), callback);
+            http.newCall(jsonRequest(context, "/api/clip", body)).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, java.io.IOException error) {
+                    callback.onResult(null, friendly(error));
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) {
+                    try (response) {
+                        String responseBody = response.body() == null ? "" : response.body().string();
+                        if (!response.isSuccessful()) {
+                            callback.onResult(null, "Hub returned " + response.code());
+                            return;
+                        }
+                        callback.onResult(Clip.fromJSON(new JSONObject(responseBody)), null);
+                    } catch (Exception error) {
+                        callback.onResult(null, friendly(error));
+                    }
+                }
+            });
         } catch (JSONException error) {
-            callback.onResult(false, error.getMessage());
+            callback.onResult(null, error.getMessage());
         }
     }
 
@@ -210,39 +225,6 @@ final class HubClient {
                         devices.add(Device.fromJSON(array.getJSONObject(index)));
                     }
                     callback.onResult(devices, null);
-                } catch (Exception error) {
-                    callback.onResult(List.of(), friendly(error));
-                }
-            }
-        });
-    }
-
-    void getHistory(Context context, int limit, ClipsCallback callback) {
-        HttpUrl url = HttpUrl.get(endpoint(context, "/api/clip/history"))
-                .newBuilder()
-                .addQueryParameter("limit", Integer.toString(limit))
-                .build();
-        Request request = new Request.Builder().url(url).get().build();
-        http.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, java.io.IOException error) {
-                callback.onResult(List.of(), friendly(error));
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) {
-                try (response) {
-                    String body = response.body() == null ? "" : response.body().string();
-                    if (!response.isSuccessful()) {
-                        callback.onResult(List.of(), "Hub returned " + response.code());
-                        return;
-                    }
-                    JSONArray array = new JSONArray(body);
-                    List<Clip> clips = new ArrayList<>();
-                    for (int index = 0; index < array.length(); index++) {
-                        clips.add(Clip.fromJSON(array.getJSONObject(index)));
-                    }
-                    callback.onResult(clips, null);
                 } catch (Exception error) {
                     callback.onResult(List.of(), friendly(error));
                 }

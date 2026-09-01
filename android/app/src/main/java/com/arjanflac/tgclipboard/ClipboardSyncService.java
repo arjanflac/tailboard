@@ -118,6 +118,7 @@ public final class ClipboardSyncService extends Service {
                 public void onClip(HubClient.Clip clip) {
                     if (thisGeneration != generation.get()) return;
                     HubConfig.setLastSequence(ClipboardSyncService.this, clip.sequence);
+                    LocalClipHistory.add(ClipboardSyncService.this, clip);
                     if (HubConfig.deviceID(ClipboardSyncService.this).equals(clip.deviceID)) return;
                     handler.post(() -> {
                         clipboard.setPrimaryClip(ClipData.newPlainText("Tailboard", clip.content));
@@ -144,13 +145,15 @@ public final class ClipboardSyncService extends Service {
     }
 
     private void sendText(String text) {
-        client.postText(this, text, (success, message) -> handler.post(() -> {
-            if (success) {
+        client.postText(this, text, (clip, error) -> handler.post(() -> {
+            if (clip != null) {
+                HubConfig.setLastSequence(this, clip.sequence);
+                LocalClipHistory.add(this, clip);
                 broadcastStatus("Clipboard sent");
                 Toast.makeText(this, "Clipboard sent", Toast.LENGTH_SHORT).show();
             } else {
-                broadcastStatus("Send failed: " + message);
-                Toast.makeText(this, "Send failed: " + message, Toast.LENGTH_LONG).show();
+                broadcastStatus("Send failed: " + error);
+                Toast.makeText(this, "Send failed: " + error, Toast.LENGTH_LONG).show();
             }
         }));
     }

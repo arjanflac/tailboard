@@ -1,42 +1,43 @@
 package hub
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/arjanflac/tailboard/internal/protocol"
 )
 
-func TestStoreRecoversFromInterruptedLegacyWrite(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "legacy.db")
+func testClip(seq uint64, content string, createdAt time.Time) protocol.ClipItem {
+	return protocol.ClipItem{
+		Seq:       seq,
+		Content:   content,
+		Hash:      protocol.HashContent(content),
+		Source:    "node1",
+		CreatedAt: createdAt,
+		ExpiresAt: createdAt.Add(24 * time.Hour),
+	}
+}
 
+func TestStoreRecoversFromInterruptedLegacyWrite(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "legacy.db")
 	db, err := openSQLite(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	_, err = db.Exec(`
 		CREATE TABLE clips (
-			seq        INTEGER PRIMARY KEY,
-			mime_type  TEXT    NOT NULL,
-			content    TEXT,
-			data       BLOB,
-			hash       TEXT    NOT NULL,
-			source     TEXT    NOT NULL,
-			created_at TEXT    NOT NULL,
-			expires_at TEXT    NOT NULL
+			seq INTEGER PRIMARY KEY, mime_type TEXT NOT NULL, content TEXT,
+			data BLOB, hash TEXT NOT NULL, source TEXT NOT NULL,
+			created_at TEXT NOT NULL, expires_at TEXT NOT NULL
 		);
-		CREATE TABLE meta (
-			key   TEXT PRIMARY KEY,
-			value TEXT NOT NULL
-		);
+		CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 	`)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	now := time.Now().UTC()
 	_, err = db.Exec(
 		"INSERT INTO clips (seq, mime_type, content, data, hash, source, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -50,21 +51,17 @@ func TestStoreRecoversFromInterruptedLegacyWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := OpenStore(dbPath)
+	store, err := OpenStore(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
-
-	seq, items, err := s.LoadState(50)
+	defer store.Close()
+	seq, current, err := store.LoadState()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if seq != 7 {
-		t.Fatalf("expected recovered seq 7 to match persisted clip history, got %d", seq)
-	}
-	if len(items) != 1 || items[0].Seq != 7 || items[0].Content != "persisted clip" {
-		t.Fatalf("expected recovered persisted clip, got %+v", items)
+	if seq != 7 || current == nil || current.Seq != 7 || current.Content != "persisted clip" {
+		t.Fatalf("unexpected recovered state: seq=%d current=%+v", seq, current)
 	}
 }
 
@@ -93,333 +90,144 @@ func TestDeviceRegistryPersistsCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(devices) != 1 || devices[0].DeviceID != device.DeviceID ||
-		len(devices[0].Capabilities) != 2 {
+	if len(devices) != 1 || devices[0].DeviceID != device.DeviceID || len(devices[0].Capabilities) != 2 {
 		t.Fatalf("unexpected devices: %+v", devices)
 	}
 }
 
-func TestStoreRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	s, err := OpenStore(filepath.Join(dir, "test.db"))
+func TestReplaceCurrentKeepsOneRow(t *testing.T) {
+	store, err := OpenStore(filepath.Join(t.TempDir(), "relay.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
-
-	now := time.Now()
-	item := protocol.ClipItem{
-		Seq:       42,
-		Content:   "hello",
-		Hash:      protocol.HashContent("hello"),
-		Source:    "node1",
-		CreatedAt: now,
-		ExpiresAt: now.Add(time.Hour),
+	defer store.Close()
+	now := time.Now().UTC()
+	if err := store.ReplaceCurrent(testClip(1, "first", now)); err != nil {
+		t.Fatal(err)
 	}
-
-	if _, err := s.SaveItem(item); err != nil {
+	if err := store.ReplaceCurrent(testClip(2, "second", now.Add(time.Second))); err != nil {
 		t.Fatal(err)
 	}
 
-	seq, items, err := s.LoadState(50)
+	seq, current, err := store.LoadState()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if seq != 42 {
-		t.Fatalf("expected seq 42, got %d", seq)
+	if seq != 2 || current == nil || current.Seq != 2 || current.Content != "second" {
+		t.Fatalf("unexpected relay state: seq=%d current=%+v", seq, current)
 	}
-	if len(items) != 1 || items[0].Content != "hello" {
-		t.Fatalf("expected 1 item with content 'hello', got %+v", items)
+	var rows int
+	if err := store.db.QueryRow("SELECT COUNT(*) FROM clips").Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 {
+		t.Fatalf("expected one persisted clip, got %d", rows)
 	}
 }
 
-func TestStoreAutoAssignsSequence(t *testing.T) {
-	dir := t.TempDir()
-	s, err := OpenStore(filepath.Join(dir, "test.db"))
+func TestOpenStoreCompactsExistingHistoryToLatest(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "old-history.db")
+	store, err := OpenStore(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
-
-	now := time.Now()
-	item := protocol.ClipItem{
-		Content:   "hello",
-		Hash:      protocol.HashContent("hello"),
-		Source:    "node1",
-		CreatedAt: now,
-		ExpiresAt: now.Add(time.Hour),
-	}
-
-	saved, err := s.SaveItem(item)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if saved.Seq != 1 {
-		t.Fatalf("expected auto-assigned seq 1, got %d", saved.Seq)
-	}
-
-	_, items, err := s.LoadState(50)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(items) != 1 || items[0].Content != "hello" {
-		t.Fatalf("expected stored text item, got %+v", items)
-	}
-}
-
-func TestStoreTrimHistoryByPayloadBytes(t *testing.T) {
-	s, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-
-	now := time.Now()
-	for seq, content := range []string{"aaaaaa", "bbbbbb", "cccccc"} {
-		if _, err := s.SaveItem(protocol.ClipItem{
-			Seq:       uint64(seq + 1),
-			Content:   content,
-			Hash:      protocol.HashContent(content),
-			Source:    "node1",
-			CreatedAt: now,
-			ExpiresAt: now.Add(time.Hour),
-		}); err != nil {
+	now := time.Now().UTC()
+	for seq := 1; seq <= 400; seq++ {
+		content := strings.Repeat(string(rune('a'+seq%26)), 8<<10)
+		item := testClip(uint64(seq), content, now.Add(time.Duration(seq)*time.Second))
+		_, err := store.db.Exec(
+			"INSERT OR REPLACE INTO clips (seq, content, hash, source, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			item.Seq, item.Content, item.Hash, item.Source, item.DeviceID,
+			item.CreatedAt.Format(time.RFC3339Nano), item.ExpiresAt.Format(time.RFC3339Nano),
+		)
+		if err != nil {
 			t.Fatal(err)
 		}
 	}
+	store.Close()
 
-	removed, err := s.TrimHistory(10, 10)
+	store, err = OpenStore(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if removed != 2 {
-		t.Fatalf("expected 2 trimmed clips, got %d", removed)
-	}
-	_, items, err := s.LoadState(10)
+	defer store.Close()
+	seq, current, err := store.LoadState()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 1 || items[0].Seq != 3 {
-		t.Fatalf("expected only newest clip after byte trim, got %+v", items)
+	if seq != 400 || current == nil || current.Seq != 400 {
+		t.Fatalf("unexpected compacted state: seq=%d current=%+v", seq, current)
+	}
+	var rows int
+	_ = store.db.QueryRow("SELECT COUNT(*) FROM clips").Scan(&rows)
+	if rows != 1 {
+		t.Fatalf("expected startup compaction to leave one row, got %d", rows)
+	}
+	var pageCount, freePages int
+	_ = store.db.QueryRow("PRAGMA page_count").Scan(&pageCount)
+	_ = store.db.QueryRow("PRAGMA freelist_count").Scan(&freePages)
+	if freePages > 128 || pageCount > 32 {
+		t.Fatalf("expected compact database, got page_count=%d freelist_count=%d", pageCount, freePages)
+	}
+	info, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() > 256<<10 {
+		t.Fatalf("expected compact file on disk, got %d bytes", info.Size())
 	}
 }
 
-func TestStoreDeleteExpired(t *testing.T) {
-	dir := t.TempDir()
-	s, err := OpenStore(filepath.Join(dir, "test.db"))
+func TestDeleteAllPreservesSequence(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "relay.db")
+	store, err := OpenStore(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
-
-	now := time.Now()
-	if _, err := s.SaveItem(protocol.ClipItem{
-		Seq: 1, Content: "expired", Hash: "a",
-		Source: "n", CreatedAt: now, ExpiresAt: now.Add(-time.Hour),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.SaveItem(protocol.ClipItem{
-		Seq: 2, Content: "alive", Hash: "b",
-		Source: "n", CreatedAt: now, ExpiresAt: now.Add(time.Hour),
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	n, err := s.DeleteExpired(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 {
-		t.Fatalf("expected 1 deleted, got %d", n)
-	}
-
-	_, items, _ := s.LoadState(50)
-	if len(items) != 1 || items[0].Content != "alive" {
-		t.Fatal("wrong items after delete")
-	}
-}
-
-func TestStoreDeleteAll(t *testing.T) {
-	dir := t.TempDir()
-	s, err := OpenStore(filepath.Join(dir, "test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-
-	now := time.Now()
-	if _, err := s.SaveItem(protocol.ClipItem{
-		Content:   "persisted",
-		Hash:      protocol.HashContent("persisted"),
-		Source:    "node1",
-		CreatedAt: now,
-		ExpiresAt: now.Add(time.Hour),
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.DeleteAll(); err != nil {
-		t.Fatal(err)
-	}
-
-	seq, items, err := s.LoadState(50)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if seq != 1 {
-		t.Fatalf("expected sqlite sequence to remain 1 after delete all, got %d", seq)
-	}
-	if len(items) != 0 {
-		t.Fatalf("expected empty history after delete all, got %+v", items)
-	}
-}
-
-func TestStorePersistsAcrossReopen(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "test.db")
-
-	s, _ := OpenStore(dbPath)
-	if _, err := s.SaveItem(protocol.ClipItem{
-		Seq: 10, Content: "persisted", Hash: "x",
-		Source: "n", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	s.Close()
-
-	s2, _ := OpenStore(dbPath)
-	defer s2.Close()
-	seq, items, _ := s2.LoadState(50)
-
-	if seq != 10 {
-		t.Fatalf("expected seq 10 after reopen, got %d", seq)
-	}
-	if len(items) != 1 || items[0].Content != "persisted" {
-		t.Fatal("data not persisted across reopen")
-	}
-}
-
-func TestStoreSequenceSurvivesHistoryDeletionAcrossReopen(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "test.db")
-
-	s, err := OpenStore(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	now := time.Now().UTC()
-	first, err := s.SaveItem(protocol.ClipItem{
-		Content:   "first",
-		Hash:      protocol.HashContent("first"),
-		Source:    "node1",
-		CreatedAt: now,
-		ExpiresAt: now.Add(time.Minute),
-	})
-	if err != nil {
+	if err := store.ReplaceCurrent(testClip(1, "first", now)); err != nil {
 		t.Fatal(err)
 	}
-	if first.Seq != 1 {
-		t.Fatalf("expected first seq 1, got %d", first.Seq)
+	if err := store.DeleteAll(); err != nil {
+		t.Fatal(err)
 	}
+	store.Close()
 
-	n, err := s.DeleteExpired(now.Add(2 * time.Minute))
+	store, err = OpenStore(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Fatalf("expected 1 deleted row, got %d", n)
-	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	s2, err := OpenStore(dbPath)
+	defer store.Close()
+	seq, current, err := store.LoadState()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s2.Close()
-
-	seq, items, err := s2.LoadState(50)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if seq != 1 {
-		t.Fatalf("expected seq 1 to survive reopen after history deletion, got %d", seq)
-	}
-	if len(items) != 0 {
-		t.Fatalf("expected empty history after deletion, got %+v", items)
-	}
-
-	second, err := s2.SaveItem(protocol.ClipItem{
-		Content:   "second",
-		Hash:      protocol.HashContent("second"),
-		Source:    "node1",
-		CreatedAt: now.Add(2 * time.Minute),
-		ExpiresAt: now.Add(3 * time.Minute),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if second.Seq != 2 {
-		t.Fatalf("expected next seq 2 after deleted history reopen, got %d", second.Seq)
+	if seq != 1 || current != nil {
+		t.Fatalf("expected empty state at sequence 1, got seq=%d current=%+v", seq, current)
 	}
 }
 
-func TestSince(t *testing.T) {
-	h := newTestHub()
-
-	for i := 0; i < 5; i++ {
-		h.Put(textInput(string(rune('a'+i)), "node1"))
-	}
-
-	items := h.Since(3)
-	if len(items) != 2 {
-		t.Fatalf("expected 2 items since seq 3, got %d", len(items))
-	}
-	// Should be chronological: seq 4 then seq 5.
-	if items[0].Seq != 4 || items[1].Seq != 5 {
-		t.Fatalf("expected seqs [4,5], got [%d,%d]", items[0].Seq, items[1].Seq)
-	}
-}
-
-func TestSinceEmpty(t *testing.T) {
-	h := newTestHub()
-	h.Put(textInput("a", "node1"))
-
-	items := h.Since(1)
-	if len(items) != 0 {
-		t.Fatalf("expected 0 items since current seq, got %d", len(items))
-	}
-}
-
-func TestHubWithPersistence(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "test.db")
-
-	h, err := New(Config{MaxHistory: 10, TTL: time.Hour, DBPath: dbPath})
+func TestHubPersistsCurrentAcrossRestart(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "relay.db")
+	hub, err := New(Config{DBPath: dbPath})
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.Put(PutInput{Content: "survive restart", Source: "n"})
-	h.Close()
+	hub.Put(PutInput{Content: "survive restart", Source: "node"})
+	if err := hub.Close(); err != nil {
+		t.Fatal(err)
+	}
 
-	// "Restart" the hub.
-	h2, err := New(Config{MaxHistory: 10, TTL: time.Hour, DBPath: dbPath})
+	restarted, err := New(Config{DBPath: dbPath})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h2.Close()
-
-	// Wait briefly for write-behind goroutine from first hub.
-	time.Sleep(50 * time.Millisecond)
-
-	if h2.Seq() != 1 {
-		t.Fatalf("expected seq 1 after restart, got %d", h2.Seq())
+	defer restarted.Close()
+	if restarted.Seq() != 1 {
+		t.Fatalf("expected seq 1 after restart, got %d", restarted.Seq())
 	}
-	item := h2.Get()
-	if item == nil || item.Content != "survive restart" {
-		t.Fatal("item not recovered after restart")
+	current := restarted.Get()
+	if current == nil || current.Content != "survive restart" {
+		t.Fatalf("current clip not recovered: %+v", current)
 	}
 }

@@ -17,10 +17,8 @@ import (
 const DefaultAddress = ":9437"
 
 type Config struct {
-	Address    string
-	StateDir   string
-	MaxHistory int
-	TTL        time.Duration
+	Address  string
+	StateDir string
 }
 
 // Server is an in-process hub carried by a tg-clipd instance.
@@ -46,11 +44,7 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("create embedded hub state directory: %w", err)
 	}
 
-	h, err := hub.New(hub.Config{
-		MaxHistory: cfg.MaxHistory,
-		TTL:        cfg.TTL,
-		DBPath:     filepath.Join(cfg.StateDir, "clips.db"),
-	})
+	h, err := hub.New(hub.Config{DBPath: filepath.Join(cfg.StateDir, "clips.db")})
 	if err != nil {
 		return nil, err
 	}

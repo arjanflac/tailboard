@@ -42,6 +42,11 @@ public final class SettingsActivity extends Activity {
         nameField = field(HubConfig.deviceName(this));
         content.addView(nameField);
 
+        content.addView(section("Recent clips"));
+        TextView retention = label("20 items · 24 hours", 16, false);
+        retention.setTextColor(Color.rgb(75, 85, 99));
+        content.addView(retention);
+
         Button save = new Button(this);
         save.setText("Save and reconnect");
         save.setAllCaps(false);

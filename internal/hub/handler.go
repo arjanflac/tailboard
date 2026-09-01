@@ -34,7 +34,6 @@ func Register(mux *http.ServeMux, h *Hub, identFn IdentityFunc, observers ...*Ob
 	handle("POST /api/clip", "/api/clip", postClipHandler(h, identFn, obs))
 	handle("GET /api/clip", "/api/clip", getClipHandler(h))
 	handle("DELETE /api/clip", "/api/clip", clearClipHandler(h))
-	handle("GET /api/clip/history", "/api/clip/history", historyHandler(h))
 	handle("GET /api/clip/stream", "/api/clip/stream", streamHandler(h, obs))
 	handle("GET /api/capabilities", "/api/capabilities", capabilitiesHandler(h))
 	handle("POST /api/devices/register", "/api/devices/register", registerDeviceHandler(h))
@@ -102,7 +101,7 @@ func capabilitiesHandler(_ *Hub) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, protocol.Capabilities{
 			HubVersion:      "dev",
 			ProtocolVersion: protocol.ProtocolVersion,
-			Features:        map[string]bool{"devices": true, "hub_role": true},
+			Features:        map[string]bool{"devices": true, "hub_role": true, "last_value_relay": true},
 			Limits: protocol.CapabilityLimits{
 				MaxClipSize: protocol.MaxContentSize,
 			},
@@ -169,20 +168,10 @@ func getClipHandler(h *Hub) http.HandlerFunc {
 func clearClipHandler(h *Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := h.Clear(); err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "clear_failed", "failed to clear current clip and history", nil)
+			writeAPIError(w, http.StatusInternalServerError, "clear_failed", "failed to clear current clip", nil)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-func historyHandler(h *Hub) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		limit, ok := parseLimitQuery(w, r, 50, protocol.MaxHistoryPageLimit)
-		if !ok {
-			return
-		}
-		writeJSON(w, http.StatusOK, h.History(limit))
 	}
 }
 
@@ -237,8 +226,7 @@ func streamHandler(h *Hub, obs *Observer) http.HandlerFunc {
 		peerClosed := conn.CloseRead(ctx)
 
 		// Clipboard sync is last-write-wins. On reconnect, send only the latest
-		// state instead of serializing the full history.
-		// Full history remains available through the explicit history APIs.
+		// state instead of serializing a backlog.
 		var replayedUpTo uint64
 		if s := r.URL.Query().Get("since_seq"); s != "" {
 			if sinceSeq, err := strconv.ParseUint(s, 10, 64); err == nil {

@@ -174,31 +174,7 @@ func (c *Client) Put(ctx context.Context, payload PutRequest) (*protocol.ClipIte
 	return &item, nil
 }
 
-// History fetches recent clipboard history.
-func (c *Client) History(ctx context.Context, limit int) ([]protocol.ClipItem, error) {
-	values := url.Values{}
-	if limit > 0 {
-		values.Set("limit", fmt.Sprintf("%d", limit))
-	}
-
-	resp, err := c.do(ctx, http.MethodGet, c.endpoint("api", "clip", "history"), nil, nil, values)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return nil, readHTTPError(resp)
-	}
-
-	var items []protocol.ClipItem
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-	return items, nil
-}
-
-// Clear removes the current hub clipboard state and persisted history.
+// Clear removes the current hub clipboard state.
 func (c *Client) Clear(ctx context.Context) error {
 	resp, err := c.do(ctx, http.MethodDelete, c.endpoint("api", "clip"), nil, nil)
 	if err != nil {

@@ -240,20 +240,24 @@ public final class MainActivity extends Activity {
                 currentCard.setOnClickListener(null);
                 return;
             }
+            LocalClipHistory.add(this, clip);
+            renderLocalHistory(history);
             currentPreview.setText(clipPreview(clip));
             currentMeta.setText("From " + friendlySource(clip.source) + " · tap to copy");
             currentCard.setOnClickListener(view -> copyClip(clip));
         }));
-        client.getHistory(this, 12, (clips, error) -> handler.post(() -> {
-            if (activeTab != 0 || history.getParent() == null) return;
-            history.removeAllViews();
-            if (clips.isEmpty()) {
-                history.addView(secondaryMessage(error == null ? "No recent clips" : error));
-                return;
-            }
-            for (HubClient.Clip clip : clips) history.addView(historyRow(clip));
-        }));
+        renderLocalHistory(history);
         return wrap(content);
+    }
+
+    private void renderLocalHistory(LinearLayout history) {
+        history.removeAllViews();
+        List<HubClient.Clip> recentClips = LocalClipHistory.load(this);
+        if (recentClips.isEmpty()) {
+            history.addView(secondaryMessage("No recent clips"));
+        } else {
+            for (HubClient.Clip clip : recentClips) history.addView(historyRow(clip));
+        }
     }
 
     private View historyRow(HubClient.Clip clip) {
@@ -323,6 +327,8 @@ public final class MainActivity extends Activity {
         connection.addView(settingRow("This device", HubConfig.deviceName(this)));
         connection.addView(divider());
         connection.addView(settingRow("Sync server", HubConfig.hubURL(this)));
+        connection.addView(divider());
+        connection.addView(settingRow("Recent clips", "20 items · 24 hours"));
         content.addView(connection, cardParams());
 
         Button edit = actionButton("Edit connection", true);
@@ -358,6 +364,7 @@ public final class MainActivity extends Activity {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         clipboard.clearPrimaryClip();
         HubConfig.setLastSequence(this, 0L);
+        LocalClipHistory.clear(this);
         Log.i("ClipboardPrivacy", "Primary clipboard cleared without reading it");
         finish();
     }
@@ -417,6 +424,7 @@ public final class MainActivity extends Activity {
                 Toast.makeText(this, error, Toast.LENGTH_LONG).show();
                 return;
             }
+            LocalClipHistory.add(this, clip);
             copyClip(clip);
         }));
     }

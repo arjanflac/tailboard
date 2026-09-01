@@ -44,14 +44,6 @@ public actor TGClipboardClient {
         return try decoder.decode(ClipItem.self, from: data)
     }
 
-    // MARK: - GET /api/clip/history
-
-    public func getHistory(limit: Int = 50) async throws -> [ClipItem] {
-        let (data, response) = try await get("/api/clip/history?limit=\(limit)")
-        try validate(response, body: data)
-        return try decoder.decode([ClipItem].self, from: data)
-    }
-
     // MARK: - POST /api/clip (text)
 
     public func postClip(content: String) async throws -> ClipItem {

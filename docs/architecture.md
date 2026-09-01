@@ -25,11 +25,13 @@ Pasteboard entries marked with macOS's `org.nspasteboard.ConcealedType` or
 paste-helper payloads (including Wispr Flow's paste-and-restore sequence) and
 password-manager secrets out of Tailboard without delaying ordinary copies.
 
-The embedded hub listens only on the Mac's Tailscale address, stores bounded
-history in SQLite, assigns monotonic sequences, and broadcasts updates over
-WebSocket. The old loopback desktop control server has been removed with the
-menu UI. Its protocol and schema contain text only; images and generic blobs are
-not accepted or stored.
+The embedded relay listens only on the Mac's Tailscale address, atomically
+persists one current value in SQLite, assigns monotonic sequences, and
+broadcasts updates over WebSocket. Reconnection sends that last value when it
+is newer than the client's sequence; there is no server-side history or backlog
+API. The old loopback desktop control server has been removed with the menu UI.
+Its protocol and schema contain text only; images and generic blobs are not
+accepted or stored.
 
 ## Android lifecycle
 
@@ -37,6 +39,8 @@ The Pixel foreground service keeps a WebSocket connected and applies inbound
 text as soon as it arrives. Android does not permit a normal background app to
 read copied text, so outbound text is explicitly triggered by the Quick
 Settings tile, an app action, or the text share target.
+The app keeps its own newest 20 clips for 24 hours; that cache is not uploaded
+back to the Mac as history.
 
 ## iOS lifecycle
 
@@ -44,3 +48,4 @@ The iOS app is a foreground-only optional client with no extensions or
 background UI. It is not responsible for normal Mac/iPhone continuity; Apple
 Universal Clipboard already handles that for devices on the same Apple Account.
 Tailboard iOS is only useful when a direct Pixel/iPhone bridge is wanted.
+Like Android, it keeps a device-local maximum of 20 clips for 24 hours.

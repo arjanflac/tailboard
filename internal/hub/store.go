@@ -25,7 +25,12 @@ func OpenStore(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	store := &Store{db: db}
+	if err := store.retainLatestOnly(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("compact relay state: %w", err)
+	}
+	return store, nil
 }
 
 // openSQLite keeps the always-on hub's database footprint deliberately small.
@@ -170,155 +175,84 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-// LoadState restores the seq counter and up to maxHistory items from the DB.
-// Items are returned newest-first.
-func (s *Store) LoadState(maxHistory int, maxBytes ...int) (uint64, []protocol.ClipItem, error) {
+// LoadState restores the monotonic sequence and the relay's single current
+// value. Older rows are removed during OpenStore migration.
+func (s *Store) LoadState() (uint64, *protocol.ClipItem, error) {
 	seq, err := s.loadSeq()
 	if err != nil {
 		return 0, nil, err
 	}
 
-	rows, err := s.db.Query(selectClipColumns+" ORDER BY seq DESC LIMIT ?", maxHistory)
+	row := s.db.QueryRow(selectClipColumns + " ORDER BY seq DESC LIMIT 1")
+	item, err := scanClip(row)
+	if err == sql.ErrNoRows {
+		return seq, nil, nil
+	}
 	if err != nil {
-		return seq, nil, fmt.Errorf("load history: %w", err)
+		return seq, nil, fmt.Errorf("load current clip: %w", err)
 	}
-	defer rows.Close()
-
-	residentLimit := 0
-	if len(maxBytes) > 0 {
-		residentLimit = maxBytes[0]
-	}
-	var items []protocol.ClipItem
-	residentBytes := 0
-	for rows.Next() {
-		item, err := scanClip(rows)
-		if err != nil {
-			return seq, nil, fmt.Errorf("scan clip: %w", err)
-		}
-		itemBytes := clipPayloadBytes(item)
-		if len(items) > 0 && residentLimit > 0 && residentBytes+itemBytes > residentLimit {
-			continue
-		}
-		items = append(items, item)
-		residentBytes += itemBytes
-	}
-	return seq, items, rows.Err()
+	return seq, &item, nil
 }
 
-// HistoryPage returns up to limit items newer than the optional beforeSeq cursor.
-// Items are returned newest-first.
-func (s *Store) HistoryPage(limit int, beforeSeq uint64) ([]protocol.ClipItem, error) {
-	query := selectClipColumns
-	args := make([]any, 0, 2)
-	if beforeSeq > 0 {
-		query += " WHERE seq < ?"
-		args = append(args, beforeSeq)
-	}
-	query += " ORDER BY seq DESC LIMIT ?"
-	args = append(args, limit)
-
-	rows, err := s.db.Query(query, args...)
+// ReplaceCurrent atomically stores one value and removes its predecessor.
+func (s *Store) ReplaceCurrent(item protocol.ClipItem) error {
+	tx, err := s.db.Begin()
 	if err != nil {
-		return nil, fmt.Errorf("load history page: %w", err)
+		return err
 	}
-	defer rows.Close()
-
-	var items []protocol.ClipItem
-	for rows.Next() {
-		item, err := scanClip(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan clip: %w", err)
-		}
-		items = append(items, item)
-	}
-	return items, rows.Err()
-}
-
-// SaveItem persists a clip item and returns it with seq assigned.
-func (s *Store) SaveItem(item protocol.ClipItem) (protocol.ClipItem, error) {
-	if item.Seq == 0 {
-		result, err := s.db.Exec(
-			"INSERT INTO clips (content, hash, source, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
-			item.Content, item.Hash, item.Source, item.DeviceID,
-			item.CreatedAt.Format(time.RFC3339Nano), item.ExpiresAt.Format(time.RFC3339Nano),
-		)
-		if err != nil {
-			return item, err
-		}
-		seq, err := result.LastInsertId()
-		if err != nil {
-			return item, fmt.Errorf("read inserted seq: %w", err)
-		}
-		item.Seq = uint64(seq)
-		return item, nil
-	}
-
-	_, err := s.db.Exec(
+	defer tx.Rollback()
+	if _, err := tx.Exec(
 		"INSERT OR REPLACE INTO clips (seq, content, hash, source, device_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		item.Seq, item.Content, item.Hash, item.Source, item.DeviceID,
 		item.CreatedAt.Format(time.RFC3339Nano), item.ExpiresAt.Format(time.RFC3339Nano),
-	)
-	return item, err
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM clips WHERE seq <> ?", item.Seq); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-// TrimHistory bounds durable history by both count and payload bytes. The most
-// recent item is always kept even when a single clipboard payload exceeds the
-// byte budget.
-func (s *Store) TrimHistory(maxItems int, maxBytes int64) (int, error) {
-	if maxItems <= 0 || maxBytes <= 0 {
-		return 0, nil
-	}
-	result, err := s.db.Exec(`
-		DELETE FROM clips
-		WHERE seq IN (
-			SELECT seq
-			FROM (
-				SELECT
-					seq,
-					ROW_NUMBER() OVER (ORDER BY seq DESC) AS item_number,
-					SUM(length(content))
-						OVER (ORDER BY seq DESC) AS cumulative_bytes
-				FROM clips
-			)
-			WHERE item_number > ? OR (item_number > 1 AND cumulative_bytes > ?)
-		)
-	`, maxItems, maxBytes)
-	if err != nil {
-		return 0, err
-	}
-	n, _ := result.RowsAffected()
-	if n > 0 {
-		s.reclaimFreePages(256)
-	}
-	return int(n), nil
-}
-
-// DeleteExpired removes clips that have expired before the given time.
-func (s *Store) DeleteExpired(before time.Time) (int, error) {
-	result, err := s.db.Exec("DELETE FROM clips WHERE expires_at < ?", before.Format(time.RFC3339Nano))
-	if err != nil {
-		return 0, err
-	}
-	n, _ := result.RowsAffected()
-	if n > 0 {
-		s.reclaimFreePages(256)
-	}
-	return int(n), nil
-}
-
-// DeleteAll removes all persisted clipboard history while preserving the
+// DeleteAll removes the persisted current value while preserving the
 // AUTOINCREMENT sequence so future clips remain monotonic.
 func (s *Store) DeleteAll() error {
 	if _, err := s.db.Exec("DELETE FROM clips"); err != nil {
 		return err
 	}
-	s.reclaimFreePages(2048)
+	s.reclaimFreePages()
 	return nil
 }
 
-func (s *Store) reclaimFreePages(pages int) {
-	_, _ = s.db.Exec(fmt.Sprintf("PRAGMA incremental_vacuum(%d)", pages))
-	_, _ = s.db.Exec("PRAGMA wal_checkpoint(PASSIVE)")
+func (s *Store) retainLatestOnly() error {
+	_, err := s.db.Exec("DELETE FROM clips WHERE seq <> (SELECT MAX(seq) FROM clips)")
+	if err != nil {
+		return err
+	}
+	// First checkpoint any migration deletes out of WAL, then reclaim a legacy
+	// history database when most of its pages are now empty. This runs only at
+	// startup and only for a materially bloated file; ordinary one-row updates
+	// never pay the cost of VACUUM.
+	_, _ = s.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	var pageCount, freePages int
+	if err := s.db.QueryRow("PRAGMA page_count").Scan(&pageCount); err != nil {
+		return err
+	}
+	if err := s.db.QueryRow("PRAGMA freelist_count").Scan(&freePages); err != nil {
+		return err
+	}
+	if freePages > 128 && freePages*2 > pageCount {
+		if _, err := s.db.Exec("VACUUM"); err != nil {
+			return err
+		}
+		_, _ = s.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	}
+	return nil
+}
+
+func (s *Store) reclaimFreePages() {
+	_, _ = s.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	_, _ = s.db.Exec("PRAGMA incremental_vacuum")
 }
 
 const clipsTableDDL = `
@@ -402,8 +336,4 @@ func scanClip(scanner clipScanner) (protocol.ClipItem, error) {
 	item.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 	item.ExpiresAt, _ = time.Parse(time.RFC3339Nano, expiresAt)
 	return item, nil
-}
-
-func clipPayloadBytes(item protocol.ClipItem) int {
-	return len(item.Content)
 }

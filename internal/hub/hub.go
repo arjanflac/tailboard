@@ -13,18 +13,15 @@ import (
 
 // Config holds hub configuration.
 type Config struct {
-	MaxHistory                int
-	MaxResidentHistoryBytes   int
-	MaxPersistentHistoryItems int
-	MaxPersistentHistoryBytes int64
-	TTL                       time.Duration
-	DBPath                    string // Empty = no persistence.
+	DBPath string // Empty = no persistence.
 }
 
 const (
-	defaultResidentHistoryBytes   = 12 << 20
-	defaultPersistentHistoryItems = 200
-	defaultPersistentHistoryBytes = int64(64 << 20)
+	// ClipItem retains the historical expires_at protocol field as a hint for
+	// mobile caches. The relay itself is last-value state and does not expire its
+	// single current value.
+	mobileHistoryTTL   = 24 * time.Hour
+	deviceReapInterval = 6 * time.Hour
 )
 
 // Subscriber receives clipboard updates via a channel.
@@ -35,17 +32,11 @@ type Subscriber struct {
 
 // Hub is the central clipboard broker.
 type Hub struct {
-	mu                        sync.RWMutex
-	current                   *protocol.ClipItem
-	history                   []protocol.ClipItem
-	maxHistory                int
-	maxResidentHistoryBytes   int
-	maxPersistentHistoryItems int
-	maxPersistentHistoryBytes int64
-	seq                       uint64
-	ttl                       time.Duration
-	startedAt                 time.Time
-	store                     clipStore // nil if no persistence.
+	mu        sync.RWMutex
+	current   *protocol.ClipItem
+	seq       uint64
+	startedAt time.Time
+	store     clipStore // nil if no persistence.
 
 	// publishMu serializes post-commit side effects in sequence order so
 	// persistence and subscriber delivery stay monotonic after h.mu is released.
@@ -70,45 +61,22 @@ type Hub struct {
 
 type clipStore interface {
 	Close() error
-	LoadState(maxHistory int, maxBytes ...int) (uint64, []protocol.ClipItem, error)
-	HistoryPage(limit int, beforeSeq uint64) ([]protocol.ClipItem, error)
-	SaveItem(item protocol.ClipItem) (protocol.ClipItem, error)
-	TrimHistory(maxItems int, maxBytes int64) (int, error)
-	DeleteExpired(before time.Time) (int, error)
+	LoadState() (uint64, *protocol.ClipItem, error)
+	ReplaceCurrent(item protocol.ClipItem) error
 	DeleteAll() error
 	LoadDevices() ([]protocol.Device, error)
 	SaveDevice(protocol.Device) error
 	DeleteDevice(deviceID string) error
 }
 
-// New creates a Hub, optionally backed by SQLite, and starts the TTL reaper.
+// New creates a last-value relay, optionally backed by SQLite.
 func New(cfg Config) (*Hub, error) {
-	if cfg.MaxHistory <= 0 {
-		cfg.MaxHistory = 50
-	}
-	if cfg.MaxResidentHistoryBytes <= 0 {
-		cfg.MaxResidentHistoryBytes = defaultResidentHistoryBytes
-	}
-	if cfg.MaxPersistentHistoryItems <= 0 {
-		cfg.MaxPersistentHistoryItems = defaultPersistentHistoryItems
-	}
-	if cfg.MaxPersistentHistoryBytes <= 0 {
-		cfg.MaxPersistentHistoryBytes = defaultPersistentHistoryBytes
-	}
-	if cfg.TTL <= 0 {
-		cfg.TTL = 24 * time.Hour
-	}
 	h := &Hub{
-		maxHistory:                cfg.MaxHistory,
-		maxResidentHistoryBytes:   cfg.MaxResidentHistoryBytes,
-		maxPersistentHistoryItems: cfg.MaxPersistentHistoryItems,
-		maxPersistentHistoryBytes: cfg.MaxPersistentHistoryBytes,
-		ttl:                       cfg.TTL,
-		subs:                      make(map[*Subscriber]struct{}),
-		devices:                   make(map[string]protocol.Device),
-		deviceConnections:         make(map[string]int),
-		startedAt:                 time.Now(),
-		stop:                      make(chan struct{}),
+		subs:              make(map[*Subscriber]struct{}),
+		devices:           make(map[string]protocol.Device),
+		deviceConnections: make(map[string]int),
+		startedAt:         time.Now(),
+		stop:              make(chan struct{}),
 	}
 	if cfg.DBPath != "" {
 		st, err := OpenStore(cfg.DBPath)
@@ -116,16 +84,13 @@ func New(cfg Config) (*Hub, error) {
 			return nil, fmt.Errorf("open clip store: %w", err)
 		}
 		h.store = st
-		seq, items, err := st.LoadState(cfg.MaxHistory, cfg.MaxResidentHistoryBytes)
+		seq, current, err := st.LoadState()
 		if err != nil {
 			st.Close()
 			return nil, fmt.Errorf("load clip state: %w", err)
 		}
 		h.seq = seq
-		h.history = items
-		if len(items) > 0 {
-			h.current = &items[0]
-		}
+		h.current = current
 		devices, err := st.LoadDevices()
 		if err != nil {
 			st.Close()
@@ -135,7 +100,7 @@ func New(cfg Config) (*Hub, error) {
 			device.Online = false
 			h.devices[device.DeviceID] = device
 		}
-		slog.Info("loaded state from db", "component", "hub_store", "sequence", seq, "history_items", len(items))
+		slog.Info("loaded relay state from db", "component", "hub_store", "sequence", seq, "has_current", current != nil)
 	}
 
 	h.publishCond = sync.NewCond(&h.publishMu)
@@ -320,12 +285,10 @@ func (h *Hub) Put(in PutInput) (protocol.ClipItem, bool) {
 		Source:    in.Source,
 		DeviceID:  in.DeviceID,
 		CreatedAt: now,
-		ExpiresAt: now.Add(h.ttl),
+		ExpiresAt: now.Add(mobileHistoryTTL),
 	}
 
 	h.current = &item
-	h.history = append([]protocol.ClipItem{item}, h.history...)
-	h.trimResidentHistoryLocked()
 	h.mu.Unlock()
 	h.publish(item)
 	return cloneClipItem(item), true
@@ -338,27 +301,7 @@ func (h *Hub) Get() *protocol.ClipItem {
 	return cloneClipItemPtr(h.current)
 }
 
-// History returns up to limit items from history.
-func (h *Hub) History(limit int) []protocol.ClipItem {
-	if limit <= 0 || limit > h.maxHistory {
-		limit = h.maxHistory
-	}
-	if h.store != nil {
-		if items, err := h.store.HistoryPage(limit, 0); err == nil {
-			return items
-		}
-	}
-
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	if limit > len(h.history) {
-		limit = len(h.history)
-	}
-	return cloneClipItems(h.history[:limit])
-}
-
-// Clear removes the current clip and persisted history while preserving the
+// Clear removes the current clip while preserving the
 // sequence counter for future writes.
 func (h *Hub) Clear() error {
 	h.mu.Lock()
@@ -371,22 +314,7 @@ func (h *Hub) Clear() error {
 	}
 
 	h.current = nil
-	h.history = nil
 	return nil
-}
-
-// Since returns all items in history with seq > afterSeq, in chronological order.
-func (h *Hub) Since(afterSeq uint64) []protocol.ClipItem {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	var out []protocol.ClipItem
-	for i := len(h.history) - 1; i >= 0; i-- {
-		if h.history[i].Seq > afterSeq {
-			out = append(out, cloneClipItem(h.history[i]))
-		}
-	}
-	return out
 }
 
 // Subscribe creates a new subscriber. Cancel the context to unsubscribe.
@@ -450,12 +378,8 @@ func (h *Hub) publish(item protocol.ClipItem) {
 	}
 
 	if h.store != nil {
-		if _, err := h.store.SaveItem(item); err != nil {
-			slog.Error("failed to persist clip", "component", "hub_store", "sequence", item.Seq, "error", err)
-		} else if removed, err := h.store.TrimHistory(h.maxPersistentHistoryItems, h.maxPersistentHistoryBytes); err != nil {
-			slog.Error("failed to trim persisted history", "component", "hub_store", "error", err)
-		} else if removed > 0 {
-			slog.Info("trimmed persisted history", "component", "hub_store", "removed_items", removed)
+		if err := h.store.ReplaceCurrent(item); err != nil {
+			slog.Error("failed to persist current clip", "component", "hub_store", "sequence", item.Seq, "error", err)
 		}
 	}
 
@@ -501,84 +425,19 @@ func cloneClipItemPtr(item *protocol.ClipItem) *protocol.ClipItem {
 	return &cloned
 }
 
-func cloneClipItems(items []protocol.ClipItem) []protocol.ClipItem {
-	cloned := make([]protocol.ClipItem, len(items))
-	for i := range items {
-		cloned[i] = cloneClipItem(items[i])
-	}
-	return cloned
-}
-
 func cloneClipItem(item protocol.ClipItem) protocol.ClipItem {
 	return item
 }
 
-// trimResidentHistoryLocked keeps metadata/history useful without allowing a
-// run of very large text clips to turn the always-on broker into a large
-// cache. The current clipboard item is always retained; older entries share
-// the remaining byte budget.
-func (h *Hub) trimResidentHistoryLocked() {
-	if len(h.history) == 0 {
-		return
-	}
-	kept := h.history[:0]
-	residentBytes := 0
-	for index, item := range h.history {
-		itemBytes := clipPayloadBytes(item)
-		if index > 0 && (len(kept) >= h.maxHistory || residentBytes+itemBytes > h.maxResidentHistoryBytes) {
-			continue
-		}
-		kept = append(kept, item)
-		residentBytes += itemBytes
-	}
-	// The backing array can be larger than the retained slice. Clear discarded
-	// entries so their text payloads become collectible immediately.
-	clear(h.history[len(kept):])
-	h.history = kept
-}
-
 func (h *Hub) reapLoop() {
-	ticker := time.NewTicker(60 * time.Second)
+	ticker := time.NewTicker(deviceReapInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-h.stop:
 			return
-		case <-ticker.C:
-			h.reapExpired()
+		case now := <-ticker.C:
+			h.reapStaleDevices(now)
 		}
-	}
-}
-
-func (h *Hub) reapExpired() {
-	now := time.Now()
-	h.reapStaleDevices(now)
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if h.current != nil && now.After(h.current.ExpiresAt) {
-		h.current = nil
-		slog.Info("current clip expired", "component", "hub_ttl")
-	}
-
-	kept := h.history[:0]
-	for _, item := range h.history {
-		if !now.After(item.ExpiresAt) {
-			kept = append(kept, item)
-		}
-	}
-	if reaped := len(h.history) - len(kept); reaped > 0 {
-		slog.Info("reaped expired clips", "component", "hub_ttl", "expired_items", reaped)
-	}
-	h.history = kept
-
-	if h.store != nil {
-		go func() {
-			if n, err := h.store.DeleteExpired(now); err != nil {
-				slog.Error("failed to delete expired from db", "component", "hub_store", "error", err)
-			} else if n > 0 {
-				slog.Info("reaped expired clips from db", "component", "hub_store", "expired_items", n)
-			}
-		}()
 	}
 }

@@ -10,10 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/arjanflac/tailboard/internal/clipboard"
 	"github.com/arjanflac/tailboard/internal/deviceid"
@@ -93,8 +91,6 @@ func main() {
 		err = cmdGet(ctx, args[1:])
 	case "put":
 		err = cmdPut(ctx, args[1:])
-	case "history":
-		err = cmdHistory(ctx, args[1:])
 	case "status":
 		err = cmdStatus(ctx)
 	case "devices":
@@ -118,10 +114,9 @@ func usage() {
 Commands:
   get                        Print current text
   put [text]                 Send text to clipboard (reads stdin if no args)
-  history [-n N]             Show clipboard history
   status                     Show hub status
   devices                    List registered devices and online state
-  clear [--local]            Clear hub clipboard/history (and optionally this machine's clipboard)
+  clear [--local]            Clear relay state (and optionally this machine's clipboard)
 
 Flags:
   --hub URL        Hub URL (default: auto-discovered, $TG_CLIPBOARD_HUB, or localhost)
@@ -199,34 +194,6 @@ func cmdPut(ctx context.Context, args []string) error {
 	return nil
 }
 
-func cmdHistory(ctx context.Context, args []string) error {
-	limit := 20
-	for i, arg := range args {
-		if (arg == "-n" || arg == "--limit") && i+1 < len(args) {
-			if n, err := strconv.Atoi(args[i+1]); err == nil && n > 0 {
-				limit = n
-			}
-			break
-		}
-	}
-
-	items, err := hub.History(ctx, limit)
-	if err != nil {
-		return err
-	}
-
-	for _, item := range items {
-		age := time.Since(item.CreatedAt).Truncate(time.Second)
-		preview := item.Content
-		if len(preview) > 80 {
-			preview = preview[:77] + "..."
-		}
-		preview = strings.ReplaceAll(preview, "\n", "\\n")
-		fmt.Printf("#%-4d [%s ago] %s  %q\n", item.Seq, age, item.Source, preview)
-	}
-	return nil
-}
-
 func cmdClear(ctx context.Context, args []string) error {
 	clearLocal := false
 	for _, arg := range args {
@@ -247,11 +214,11 @@ func cmdClear(ctx context.Context, args []string) error {
 		if err := localClipboard.Clear(); err != nil {
 			return err
 		}
-		fmt.Fprintln(os.Stderr, "cleared hub clipboard/history and the local system clipboard")
+		fmt.Fprintln(os.Stderr, "cleared relay state and the local system clipboard")
 		return nil
 	}
 
-	fmt.Fprintln(os.Stderr, "cleared hub clipboard/history")
+	fmt.Fprintln(os.Stderr, "cleared relay state")
 	return nil
 }
 

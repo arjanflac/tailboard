@@ -121,17 +121,14 @@ final class AppViewModel {
                 name: store.sourceName
             )
             async let clipTask = client.getCurrentClip()
-            async let histTask = client.getHistory(limit: 50)
             async let devicesTask = client.getDevices()
-            let (clip, hist, registeredDevices) =
-                try await (clipTask, histTask, devicesTask)
+            let (clip, registeredDevices) = try await (clipTask, devicesTask)
             currentClip = clip
-            history = hist
             devices = registeredDevices
             errorMessage = nil
 
             cacheCurrentClip(clip)
-            cache.save(hist)
+            if let clip { remember(clip) } else { pruneHistory() }
         } catch {
             errorMessage = UserFacingError.message(error)
         }
@@ -155,6 +152,7 @@ final class AppViewModel {
         do {
             let item = try await client.postClip(content: content)
             currentClip = item
+            remember(item)
             errorMessage = nil
         } catch {
             errorMessage = UserFacingError.message(error)
@@ -168,6 +166,7 @@ final class AppViewModel {
         do {
             if let text = UIPasteboard.general.string, !text.isEmpty {
                 currentClip = try await client.postClip(content: text)
+                if let currentClip { remember(currentClip) }
             } else {
                 errorMessage = "iPhone clipboard is empty."
                 return false
@@ -213,13 +212,21 @@ final class AppViewModel {
             guard let self else { return }
             Task { @MainActor in
                 self.currentClip = item
-                if !self.history.contains(where: { $0.seq == item.seq }) {
-                    self.history.insert(item, at: 0)
-                }
+                self.remember(item)
                 self.cacheCurrentClip(item)
             }
         }
         wsManager.start()
+    }
+
+    private func remember(_ item: ClipItem) {
+        history = ClipCache.retained([item] + history)
+        cache.save(history)
+    }
+
+    private func pruneHistory() {
+        history = ClipCache.retained(history)
+        cache.save(history)
     }
 }
 

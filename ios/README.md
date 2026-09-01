@@ -21,4 +21,7 @@ Choose the local Apple development team, run on the iPhone, keep Tailscale
 connected, and configure the Mac hub. The app opens a WebSocket only while its
 scene is active and closes it when backgrounded.
 
+Recent text is cached only on the iPhone, capped at 20 items, and removed after
+24 hours. The Mac relay persists only its single current value.
+
 Requirements: iOS 17+, Tailscale, and a reachable Tailboard Mac hub.
