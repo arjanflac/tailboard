@@ -14,14 +14,12 @@ fi
 . "$CONFIG_FILE"
 
 : "${TAILBOARD_DESKTOP_NAME:?missing TAILBOARD_DESKTOP_NAME}"
-: "${TAILBOARD_AUTO_ACCEPT_DEVICE_IDS:?missing TAILBOARD_AUTO_ACCEPT_DEVICE_IDS}"
 
 make -C "$PROJECT_DIR" tailboard-engine tailboard
 
 "$PROJECT_DIR/bin/Tailboard Engine" write-config \
   --embed-hub \
   --node "$TAILBOARD_DESKTOP_NAME" \
-  --transfers accept \
-  --transfer-allow "$TAILBOARD_AUTO_ACCEPT_DEVICE_IDS"
+  --transfers off
 
 "$PROJECT_DIR/scripts/install-menubar-local.sh"

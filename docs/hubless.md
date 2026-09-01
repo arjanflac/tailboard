@@ -1,5 +1,15 @@
 # Hubless tg-clipboard — Exploration
 
+> [!NOTE]
+> Historical design record. Native Tailboard apps are clipboard-focused and
+> use Taildrop for photos/files; transfer-spool tradeoffs below now apply only
+> to the compatibility CLI/backend.
+
+> [!NOTE]
+> Historical design record. Native Tailboard apps are clipboard-focused and
+> use Taildrop for photos/files; transfer-spool tradeoffs below now apply only
+> to the compatibility CLI/backend.
+
 Status: Option 1 implemented; Options 2–3 remain exploration · Companion to [SPEC.md](../SPEC.md) · Last updated: 2026-07-18
 
 ## Shipped: embedded hub role

@@ -1,5 +1,4 @@
 <resources>
     <string name="app_name">Tailboard</string>
     <string name="tile_send_clipboard">Send Clipboard</string>
-    <string name="send_to_default">Send to default device</string>
 </resources>

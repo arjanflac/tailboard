@@ -15,8 +15,9 @@ public or publish binaries until every blocking item below is resolved.
 - [ ] Replace personal deployment defaults with a documented onboarding flow
   that works on another person's tailnet.
 - [ ] Run the complete device matrix on at least one physical Mac, Pixel, and
-  iPhone, including offline/reconnect, large files, duplicate filenames,
-  clipboard privacy prompts, and background/foreground transitions.
+  iPhone, including offline/reconnect, clipboard privacy prompts,
+  background/foreground transitions, text share targets, and a documented
+  handoff to Taildrop for photos and files.
 - [ ] Decide which artifacts are supported. Public release and TestFlight
   workflows remain disabled until signing, package names, and rollback are set.
 

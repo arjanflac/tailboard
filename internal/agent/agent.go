@@ -160,13 +160,16 @@ func (a *Agent) Run(ctx context.Context) error {
 		URL: a.client.StreamURLForDevice(a.deviceID),
 		OnConnected: func() {
 			if a.deviceID != "" {
-				capabilities := []string{"clipboard", "transfers", "direct-fetch"}
+				capabilities := []string{"clipboard"}
+				if a.transferPolicy != "off" {
+					capabilities = append(capabilities, "transfers", "direct-fetch")
+				}
 				if reporter, ok := a.ctxProvider.(contextProviderReporter); ok {
 					capabilities = append(capabilities, "privacy-detector:"+reporter.Layer())
 				}
 				if _, err := a.client.RegisterDevice(ctx, protocol.RegisterDeviceRequest{
 					DeviceID: a.deviceID, Name: a.nodeName, Platform: runtime.GOOS,
-					Capabilities: capabilities,
+					Capabilities: capabilities, ReplaceCapabilities: true,
 				}); err != nil {
 					slog.Warn("device registration failed", "component", "tg-clipd", "error", err)
 				}
@@ -174,12 +177,17 @@ func (a *Agent) Run(ctx context.Context) error {
 			if !a.bootstrapped.Load() {
 				a.bootstrap(ctx)
 			}
-			go a.recoverIncomingTransfers(ctx)
+			if a.transferPolicy != "off" {
+				go a.recoverIncomingTransfers(ctx)
+			}
 		},
 		OnUpdate: func(item protocol.ClipItem) {
 			a.applyRemote(item)
 		},
 		OnTransfer: func(transfer protocol.Transfer) {
+			if a.transferPolicy == "off" {
+				return
+			}
 			if transfer.ToDevice != a.deviceID {
 				return
 			}

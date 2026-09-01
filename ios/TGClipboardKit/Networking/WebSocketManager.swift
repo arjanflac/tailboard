@@ -11,7 +11,6 @@ public final class WebSocketManager: @unchecked Sendable {
 
     public var baseURL: URL?
     public var onUpdate: ((ClipItem) -> Void)?
-    public var onTransfer: ((Transfer) -> Void)?
     /// Called on every connection state transition. Listeners that touch UI
     /// state must hop to the main actor (transitions fire from the connect loop).
     public var onConnectionStateChange: ((ConnectionState) -> Void)?
@@ -106,9 +105,6 @@ public final class WebSocketManager: @unchecked Sendable {
             if wsMsg.type == "clip_update", let item = wsMsg.item {
                 lastSeq = item.seq
                 onUpdate?(item)
-            } else if (wsMsg.type == "transfer_offer" || wsMsg.type == "transfer_state"),
-                      let transfer = wsMsg.transfer {
-                onTransfer?(transfer)
             }
         }
     }

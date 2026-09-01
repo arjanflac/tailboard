@@ -38,7 +38,7 @@ final class EngineServiceManager {
     private static let legacyServiceLabel = "com.arjanflac.tailboard.engine"
     private static let registeredHashKey = "TailboardRegisteredEngineBackgroundSHA256"
     static let lastErrorKey = "TailboardLastEngineServiceError"
-    private static let defaultArguments = ["--embed-hub", "--transfers", "ask"]
+    private static let defaultArguments = ["--embed-hub", "--transfers", "off"]
 
     private let service = SMAppService.loginItem(identifier: engineBundleIdentifier)
     private let loginItem = SMAppService.mainApp
@@ -192,14 +192,21 @@ final class EngineServiceManager {
     }
 
     private func ensureArgumentsFile(migrating legacyURL: URL) throws {
-        guard !fileManager.fileExists(atPath: argumentsFileURL.path) else { return }
-
-        let arguments: [String]
-        if let legacyArguments = try legacyProgramArguments(at: legacyURL), legacyArguments.count > 1 {
-            arguments = Array(legacyArguments.dropFirst())
-        } else {
-            arguments = Self.defaultArguments
+        let existingData = try? Data(contentsOf: argumentsFileURL)
+        let existing = existingData.flatMap {
+            try? JSONSerialization.jsonObject(with: $0) as? [String]
         }
+
+        let sourceArguments: [String]
+        if let existing {
+            sourceArguments = existing
+        } else if let legacyArguments = try legacyProgramArguments(at: legacyURL), legacyArguments.count > 1 {
+            sourceArguments = Array(legacyArguments.dropFirst())
+        } else {
+            sourceArguments = Self.defaultArguments
+        }
+        let arguments = Self.disablingLegacyTransfers(in: sourceArguments)
+        if existing == arguments { return }
 
         try fileManager.createDirectory(
             at: argumentsFileURL.deletingLastPathComponent(),
@@ -211,6 +218,43 @@ final class EngineServiceManager {
             [.posixPermissions: 0o600],
             ofItemAtPath: argumentsFileURL.path
         )
+    }
+
+    /// Taildrop owns file delivery. Rewrite prior app-managed arguments so an
+    /// upgrade stops advertising or receiving Tailboard's legacy transfers.
+    private static func disablingLegacyTransfers(in arguments: [String]) -> [String] {
+        var result: [String] = []
+        var index = 0
+        var foundPolicy = false
+        while index < arguments.count {
+            let argument = arguments[index]
+            if argument == "--transfers" {
+                result.append(contentsOf: ["--transfers", "off"])
+                foundPolicy = true
+                index += min(2, arguments.count - index)
+                continue
+            }
+            if argument.hasPrefix("--transfers=") {
+                result.append("--transfers=off")
+                foundPolicy = true
+                index += 1
+                continue
+            }
+            if argument == "--transfer-allow" {
+                index += min(2, arguments.count - index)
+                continue
+            }
+            if argument.hasPrefix("--transfer-allow=") {
+                index += 1
+                continue
+            }
+            result.append(argument)
+            index += 1
+        }
+        if !foundPolicy {
+            result.append(contentsOf: ["--transfers", "off"])
+        }
+        return result
     }
 
     private func legacyProgramArguments(at url: URL) throws -> [String]? {

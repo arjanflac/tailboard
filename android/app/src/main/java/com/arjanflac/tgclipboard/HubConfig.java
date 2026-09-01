@@ -9,14 +9,12 @@ import java.util.UUID;
 final class HubConfig {
     static final String DEFAULT_HUB_URL = "http://tailboard-hub:9437";
     static final String DEFAULT_DEVICE_NAME = "android";
-    static final String DEFAULT_TRANSFER_DEVICE = "";
 
     private static final String PREFS = "tg_clipboard";
     private static final String KEY_HUB_URL = "hub_url";
     private static final String KEY_DEVICE_NAME = "device_name";
     private static final String KEY_DEVICE_ID = "device_id";
     private static final String KEY_LAST_SEQUENCE = "last_sequence";
-    private static final String KEY_DEFAULT_TRANSFER_DEVICE = "default_transfer_device";
 
     private HubConfig() {}
 
@@ -47,30 +45,6 @@ final class HubConfig {
         return preferences(context).getLong(KEY_LAST_SEQUENCE, 0L);
     }
 
-    static String defaultTransferDevice(Context context) {
-        return preferences(context).getString(KEY_DEFAULT_TRANSFER_DEVICE, DEFAULT_TRANSFER_DEVICE);
-    }
-
-    static String friendlyTransferDevice(Context context) {
-        return friendlyTransferDevice(defaultTransferDevice(context));
-    }
-
-    static String friendlyTransferDevice(String value) {
-        String name = value == null ? "" : value.trim();
-        String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.equals("mb") || lower.equals("mac") || lower.contains("macbook")) {
-            return "MacBook";
-        }
-        if (lower.contains("iphone")) return "iPhone";
-        if (lower.contains("pixel")) return "Pixel";
-        if (name.isEmpty()) return "device";
-        return name.substring(0, 1).toUpperCase(Locale.ROOT) + name.substring(1);
-    }
-
-    static void setDefaultTransferDevice(Context context, String name) {
-        preferences(context).edit().putString(KEY_DEFAULT_TRANSFER_DEVICE, name.trim()).apply();
-    }
-
     static void setLastSequence(Context context, long sequence) {
         preferences(context).edit().putLong(KEY_LAST_SEQUENCE, sequence).apply();
     }
@@ -84,5 +58,9 @@ final class HubConfig {
                 .putString(KEY_HUB_URL, normalized)
                 .putString(KEY_DEVICE_NAME, deviceName.trim())
                 .apply();
+    }
+
+    static void removeLegacyTransferSettings(Context context) {
+        preferences(context).edit().remove("default_transfer_device").apply();
     }
 }

@@ -9,19 +9,21 @@ This roadmap focuses on the gaps that matter most for adoption. It is intentiona
 - Desktop clipboard parity for plain text, HTML, and PNG across macOS, Linux, and Windows.
 - Event-driven Windows/Wayland watching and cheap change-sequence polling fallbacks.
 - Stable device registry, protocol capabilities, privacy presets, detector reporting, and packaged background services.
-- Maintained iOS app/keyboard/share/widgets/Intents surface with CI, foreground reconnect, Keychain configuration, transfer inbox, and background share uploads.
+- Maintained iOS app/keyboard/text-share/widget/controls/Intents surface with CI, foreground reconnect, and Keychain configuration.
+- Maintained Android app with foreground sync, text sharing, and Quick Settings clipboard action.
 - Hub-spooled targeted transfers with consent policies, allowlists, integrity checks, quota/TTL, resumable CLI uploads, and deterministic directory manifests.
-- Loopback-only desktop device surface with drop-to-send, progress/state, incoming consent, show-in-folder, and clipboard pause/resume.
+- Native macOS menu-bar status and clipboard pause/resume over the loopback control surface.
+- Taildrop handoff for photos/files across macOS, Android, and iOS.
 - Capability-gated direct desktop fetch with scoped bearer serving, range support, integrity verification, receipt waiting, and transparent spool fallback.
 
 ## Next product layer
 
 - Add optional native menu-bar/taskbar wrappers around the shipped browser-backed desktop companion.
 - Finish external distribution wiring: TestFlight signing plus authenticated pushes to the Homebrew tap and Scoop bucket.
-- Evaluate making direct fetch automatic for large online-desktop sends after field data from the explicit `--direct` path.
+- Remove the legacy transfer server/CLI after a documented compatibility window.
 
 ## Deliberately deferred
 
 - Targeted-transfer E2EE has an accepted transfers-first design and downgrade rule, but implementation awaits cross-platform key custody, shared test vectors, and cryptographic review; the hub currently sees spool contents.
 - Clipboard sync stays hub-mediated, last-write-wins, and broadcast.
-- There is no Android client, stranger pairing, LAN mDNS discovery, or permanent transfer archive.
+- There is no stranger pairing, LAN mDNS discovery, or permanent archive.

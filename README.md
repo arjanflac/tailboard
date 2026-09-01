@@ -1,9 +1,9 @@
 # Tailboard
 
-Tailboard is a self-hosted clipboard and file bridge for macOS, Android, and
-iPhone over a private Tailscale tailnet. One Mac can carry the hub, clipboard
-engine, menu-bar app, and Finder share extension; the mobile apps provide
-explicit clipboard actions and one-shot photo or file drops.
+Tailboard is a self-hosted clipboard bridge for macOS, Android, and iPhone over
+a private Tailscale tailnet. One Mac carries the hub, lightweight clipboard
+engine, and menu-bar app. Tailscale's native Taildrop owns photo and file
+delivery.
 
 > [!IMPORTANT]
 > Tailboard is pre-release source code. There are no signed public binaries or
@@ -14,21 +14,20 @@ explicit clipboard actions and one-shot photo or file drops.
 
 - Copy ordinary text on a Mac and receive clean text on Android or iPhone.
 - Send the Android clipboard from a Quick Settings tile.
-- Share photos and files from either mobile share sheet to a chosen device.
-- Save an optional default destination for immediate, one-shot file sends; a
-  fresh install asks every time.
-- Receive verified mobile files directly in `~/Downloads` on the Mac.
+- Share selected text or links to Tailboard from the Android or iOS share sheet.
+- Send photos and files with the Tailscale share target already available on
+  macOS, Android, and iOS.
 - Keep the transport private to devices already trusted on a Tailscale tailnet.
 
 ## Platform behavior
 
-| Direction | Clipboard | Files |
+| Direction | Tailboard clipboard | Photos and files |
 | --- | --- | --- |
-| Mac → Android | Automatic | Automatic, SHA-256 verified, saved under `Downloads/Tailboard` |
-| Android → Mac | Quick Settings or app action | Android share target, saved under `~/Downloads` |
-| iPhone → Mac | Foreground app, keyboard, Shortcut, or control | iOS share extension, saved under `~/Downloads` |
-| Mac → iPhone | Foreground app/keyboard workflow | Accepted while Tailboard is open; saved in Files → On My iPhone → Tailboard |
-| iPhone ↔ Android | Shared clipboard while iOS is active | Select the other phone in the share sheet or save it as the default |
+| Mac → Android | Automatic | Tailscale/Taildrop |
+| Android → Mac | Quick Settings, app action, or text share | Tailscale/Taildrop |
+| iPhone → Mac | Foreground app, keyboard, Shortcut, control, or text share | Tailscale/Taildrop |
+| Mac → iPhone | Foreground app/keyboard workflow | Tailscale/Taildrop |
+| iPhone ↔ Android | Shared clipboard while iOS is active | Tailscale/Taildrop |
 
 iOS does not permit continuous clipboard observation. Tailboard keeps iPhone
 clipboard reads user initiated. Its iOS 18 Control Center buttons open the app
@@ -36,14 +35,14 @@ to complete clipboard access in the foreground.
 
 ## Components
 
-- **Tailboard Engine** — Go clipboard agent with an optional embedded hub,
-  transfer receiver, and loopback-only desktop API.
-- **macOS menu-bar app and Finder Share extension** — native Swift surfaces
-  over an engine embedded and managed through Apple's modern service API.
+- **Tailboard Engine** — Go clipboard agent with an optional embedded hub and
+  loopback-only desktop API. The Mac app runs it with legacy transfers off.
+- **macOS menu-bar app** — a native Swift surface over an engine embedded and
+  managed through Apple's modern service API.
 - **Android app** — current clip and history, device roster, settings, foreground
-  sync connection, Quick Settings tile, and share-sheet destination.
-- **iOS app** — current clip and history, devices, transfers, settings, share
-  extension, keyboard, widgets, Shortcuts, and Control Center.
+  sync connection, Quick Settings tile, and text/link share target.
+- **iOS app** — current clip and history, devices, settings, text/link share
+  extension, keyboard, widget, Shortcuts, and Control Center controls.
 - **CLI** — `bin/tailboard` plus compatibility binaries inherited from
   tg-clipboard.
 
@@ -90,9 +89,10 @@ cp config.example.env config.local.env
 
 Tailboard relies on Tailscale membership and OS disk encryption. Clipboard
 history is stored locally by the hub and mobile previews are cached locally.
-File payloads are SHA-256 verified but are not additionally end-to-end
-encrypted at the application layer. Privacy filters are available but opt-in.
-Do not sync secrets unless every participating device is trusted for them.
+Privacy filters are available but opt-in. Do not sync secrets unless every
+participating device is trusted for them. Files sent through Taildrop use
+Tailscale's encrypted peer-to-peer transport and are outside Tailboard's data
+plane.
 
 See [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md) for the
 full threat model and reporting process.
@@ -103,10 +103,11 @@ Tailboard is derived from the MIT-licensed
 [`thalysguimaraes/tg-clipboard`](https://github.com/thalysguimaraes/tg-clipboard)
 project and preserves its Git history and copyright notice. The upstream
 project already supplies the cross-platform Go clipboard core, iOS companion,
-and initial macOS menu-bar surface. Tailboard adds the Android client, integrated
-cross-mobile file transfers, embedded personal Mac workflow, Finder sharing,
-Tailboard branding, and product-specific UX. See [NOTICE.md](NOTICE.md) for the
-precise provenance statement.
+initial macOS menu-bar surface, and CLI transfer machinery. Tailboard adds the
+Android client, embedded personal Mac workflow, modern Apple service management,
+Tailboard branding, and product-specific UX. Tailboard briefly productized the
+inherited transfer protocol, then retired that app UI in favor of Taildrop. See
+[NOTICE.md](NOTICE.md) for the precise provenance statement.
 
 ## Release status
 

@@ -2,7 +2,11 @@
 
 See also: [Security & Privacy](security.md), [Transfer E2EE Decision](e2ee-transfers.md), [Known Limitations](limitations.md), [Platform Support](platform-support.md), [Roadmap](roadmap.md), [README](../README.md)
 
-tg-clipboard is built around a single tailnet broker role with two distinct primitives: broadcast, ephemeral clipboard state and explicit, durable-until-claimed transfers targeted to a registered device. The role may run as standalone `tg-clipboard` or inside a normal desktop agent via `tg-clipd --embed-hub`; a dedicated hub machine is optional.
+Tailboard's supported apps are built around a single tailnet clipboard broker.
+The role may run as standalone `tg-clipboard` or inside a normal desktop agent
+via `tg-clipd --embed-hub`; a dedicated hub machine is optional. The inherited
+Go transfer protocol remains available to legacy CLI users, but Taildrop is the
+supported photo/file path and native apps do not advertise transfer capability.
 
 ## System layout
 
@@ -11,22 +15,23 @@ local clipboard <-> tg-clipd ----------------------+
                                                 |
 tg-clip ------------------------------------+  |
                                              |  v
-iOS app / share extension / keyboard --> tg-clipboard --> SQLite history + device registry
+iOS app / text share / keyboard -----> tg-clipboard --> SQLite history + device registry
                                              ^
                                              |
                                WebSocket stream + REST API
 
-sender -- resumable upload --> disk spool --> receiver
+photos/files ------------------------> Tailscale Taildrop
 ```
 
 ## Core components
 
 | Component | Responsibility |
 | --- | --- |
-| `tg-clipboard` | Central broker. Stores clipboard history, device/transfer metadata, and transfer spool files; exposes REST + targeted WebSocket events. |
-| `tg-clipd` | Desktop agent. Watches clipboard changes, enforces local privacy policy, applies remote updates, receives targeted transfers, and serves a loopback-only desktop control surface. |
-| `tg-clip` | Scriptable client for clipboard operations, device discovery, and resumable send/receive workflows. |
-| iOS app and extensions | Device-first companion with clipboard/history surfaces, transfer inbox, keyboard, share extension, widgets, App Intents, and background uploads. |
+| `tg-clipboard` | Central broker. Stores clipboard history and device metadata. Legacy transfer endpoints remain for compatibility. |
+| `tg-clipd` | Desktop agent. Watches clipboard changes, enforces local privacy policy, applies remote updates, and serves a loopback-only desktop control surface. |
+| `tg-clip` | Scriptable client for clipboard operations and device discovery; inherited transfer commands are compatibility-only. |
+| iOS app and extensions | Clipboard/history surfaces, keyboard, text/link share extension, widget, App Intents, and foreground-only controls. |
+| Android app | Foreground clipboard connection, history/devices UI, text share target, and Quick Settings action. |
 
 ## Data flow
 
@@ -38,7 +43,10 @@ sender -- resumable upload --> disk spool --> receiver
 6. Other clients receive the update, apply it locally, read back what the OS actually stored, and mark that result as self-written so the next poll does not loop the same item back to the hub.
 7. Reconnecting clients can resume from `since_seq` to catch up on missed items.
 
-## Transfer flow
+## Legacy transfer flow
+
+This protocol is retained for compatibility and is not exposed by Tailboard's
+native apps. Tailscale/Taildrop is the supported product path for photos/files.
 
 1. Clients register stable device IDs and capabilities; online state comes from live WebSocket connections.
 2. A sender creates a transfer manifest naming one target device and declaring each file's size, MIME type, and SHA-256.
@@ -52,11 +60,8 @@ For two online desktop endpoints, `tg-clip send --direct` starts a bearer-scoped
 
 ## Desktop companion
 
-`tg-clipd` serves a loopback-only control surface at `127.0.0.1:9438` by default. `tg-clipd --tray` opens it in the default browser. It is a thin client over the running agent and hub APIs:
+`tg-clipd` serves a loopback-only control surface at `127.0.0.1:9438` by default. `tg-clipd --tray` opens it in the default browser. The native Tailboard menu-bar app uses the same state endpoint for clipboard/device status:
 
-- device cards are file drop targets,
-- active transfers show uploaded progress and state,
-- incoming offers expose Accept/Decline and completed downloads expose Show in folder,
 - clipboard pause/resume changes the live agent state.
 
 The listener rejects non-loopback configuration and cross-origin browser requests. Set `--control-addr off` for a strictly headless agent.

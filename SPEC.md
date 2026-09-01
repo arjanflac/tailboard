@@ -2,6 +2,13 @@
 
 Status: implemented · Last updated: 2026-07-18
 
+> Historical design record: this specification describes the transfer system
+> that Tailboard previously shipped. Current native Tailboard apps are
+> clipboard-only and delegate photos/files to Tailscale's Taildrop. The Go
+> transfer implementation remains for compatibility, disabled by default in
+> the bundled Mac engine. See `docs/taildrop-integration.md` for the current
+> product boundary.
+
 ## Implementation outcome
 
 Tracks A–C and the recommended embedded-hub option from `docs/hubless.md` are implemented in the repository. The shipped result includes:

@@ -89,7 +89,7 @@ struct ConnectionBanner: View {
     }
 }
 
-/// Transient error surface for failed refresh / transfer / push actions.
+/// Transient error surface for failed refresh or clipboard actions.
 /// Previously these errors were written to the view model and never shown.
 struct ErrorBanner: View {
     let message: String

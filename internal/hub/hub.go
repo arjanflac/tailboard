@@ -174,7 +174,11 @@ func (h *Hub) RegisterDevice(req protocol.RegisterDeviceRequest) protocol.Device
 	device.DeviceID = req.DeviceID
 	device.Name = req.Name
 	device.Platform = req.Platform
-	device.Capabilities = mergeStrings(device.Capabilities, req.Capabilities)
+	if req.ReplaceCapabilities {
+		device.Capabilities = mergeStrings(nil, req.Capabilities)
+	} else {
+		device.Capabilities = mergeStrings(device.Capabilities, req.Capabilities)
+	}
 	device.PublicKey = req.PublicKey
 	device.LastSeen = time.Now()
 	h.devices[req.DeviceID] = device

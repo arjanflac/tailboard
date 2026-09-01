@@ -8,7 +8,6 @@ struct SettingsView: View {
     private let store = AppGroupStore()
     @State private var deviceName = AppGroupStore().sourceName
     @State private var controlDiagnostic = AppGroupStore().lastControlDiagnostic
-    @State private var defaultTransferDeviceName = AppGroupStore().defaultTransferDeviceName
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -46,36 +45,11 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("File Transfers") {
-                    Picker("Default Destination", selection: $defaultTransferDeviceName) {
-                        Label("Ask Every Time", systemImage: "questionmark.circle")
-                            .tag("")
-                        ForEach(transferDevices) { device in
-                            Label(device.name, systemImage: device.platformSymbol)
-                                .tag(device.name.trimmingCharacters(in: .whitespacesAndNewlines))
-                        }
-                        if !defaultTransferDeviceName.isEmpty,
-                           !transferDevices.contains(where: {
-                               $0.name.caseInsensitiveCompare(defaultTransferDeviceName) == .orderedSame
-                           }) {
-                            Text("\(defaultTransferDeviceName) — unavailable")
-                                .tag(defaultTransferDeviceName)
-                        }
-                    }
-                    .onChange(of: defaultTransferDeviceName) { _, name in
-                        store.defaultTransferDeviceName = name
-                    }
-
-                    Text("Choose Ask Every Time to pick a device in the share sheet. A saved destination sends files immediately. Text still updates the shared clipboard on every device.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    Text("Files sent from your Mac are accepted automatically while Tailboard is open and saved in Files → On My iPhone → Tailboard.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
                 Section("Control Center") {
+                    Text("These controls open Tailboard to complete clipboard access in the foreground. iOS does not allow continuous background clipboard sync.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
                     LabeledContent("Configured Controls") {
                         Text("\(store.configuredControlKinds.count)")
                     }
@@ -127,7 +101,6 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .onAppear {
                 controlDiagnostic = store.lastControlDiagnostic
-                defaultTransferDeviceName = store.defaultTransferDeviceName
                 Task { await viewModel.refresh() }
             }
         }
@@ -149,11 +122,5 @@ struct SettingsView: View {
         case .disconnected: return .orange
         case .noVPN: return .red
         }
-    }
-
-    private var transferDevices: [Device] {
-        viewModel.devices
-            .filter { $0.deviceID != store.deviceID && $0.capabilities.contains("transfers") }
-            .sorted { ($0.online ? 0 : 1, $0.name) < ($1.online ? 0 : 1, $1.name) }
     }
 }

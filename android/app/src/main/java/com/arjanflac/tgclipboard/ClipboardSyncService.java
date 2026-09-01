@@ -9,19 +9,12 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.widget.Toast;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 import okhttp3.WebSocket;
 
@@ -30,11 +23,8 @@ public final class ClipboardSyncService extends Service {
     static final String ACTION_RESTART = "com.arjanflac.tgclipboard.RESTART";
     static final String ACTION_STOP = "com.arjanflac.tgclipboard.STOP";
     static final String ACTION_SEND_TEXT = "com.arjanflac.tgclipboard.SEND_TEXT";
-    static final String ACTION_SEND_FILES = "com.arjanflac.tgclipboard.SEND_FILES";
     static final String ACTION_STATUS = "com.arjanflac.tgclipboard.STATUS";
     static final String EXTRA_TEXT = "text";
-    static final String EXTRA_URIS = "uris";
-    static final String EXTRA_TARGET_DEVICE = "target_device";
     static final String EXTRA_STATUS = "status";
 
     private static final String CHANNEL_ID = "clipboard_connection";
@@ -43,8 +33,6 @@ public final class ClipboardSyncService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final AtomicInteger generation = new AtomicInteger();
     private final HubClient client = new HubClient();
-    private final Set<String> receivingTransferIDs =
-            Collections.synchronizedSet(new HashSet<>());
 
     private ClipboardManager clipboard;
     private WebSocket stream;
@@ -66,31 +54,6 @@ public final class ClipboardSyncService extends Service {
         Intent intent = new Intent(context, ClipboardSyncService.class)
                 .setAction(ACTION_SEND_TEXT)
                 .putExtra(EXTRA_TEXT, text);
-        context.startForegroundService(intent);
-    }
-
-    static void sendFiles(Context context, List<Uri> uris) {
-        sendFiles(context, uris, HubConfig.defaultTransferDevice(context));
-    }
-
-    static void sendFiles(Context context, List<Uri> uris, String targetDevice) {
-        ArrayList<Uri> payload = new ArrayList<>(uris);
-        Intent intent = new Intent(context, ClipboardSyncService.class)
-                .setAction(ACTION_SEND_FILES)
-                .putParcelableArrayListExtra(EXTRA_URIS, payload)
-                .putExtra(EXTRA_TARGET_DEVICE, targetDevice)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        if (!payload.isEmpty()) {
-            ClipData grants = new ClipData(
-                    "Shared files",
-                    new String[]{"*/*"},
-                    new ClipData.Item(payload.get(0))
-            );
-            for (int index = 1; index < payload.size(); index++) {
-                grants.addItem(new ClipData.Item(payload.get(index)));
-            }
-            intent.setClipData(grants);
-        }
         context.startForegroundService(intent);
     }
 
@@ -122,9 +85,6 @@ public final class ClipboardSyncService extends Service {
         if (ACTION_SEND_TEXT.equals(action)) {
             sendText(intent.getStringExtra(EXTRA_TEXT));
         }
-        if (ACTION_SEND_FILES.equals(action)) {
-            sendFiles(readSharedURIs(intent), intent.getStringExtra(EXTRA_TARGET_DEVICE));
-        }
         if (ACTION_RESTART.equals(action)) {
             reconnectAttempt = 0;
             generation.incrementAndGet();
@@ -152,10 +112,6 @@ public final class ClipboardSyncService extends Service {
                     if (thisGeneration != generation.get()) return;
                     reconnectAttempt = 0;
                     updateStatus("Connected through Tailscale");
-                    client.listIncomingTransfers(
-                            ClipboardSyncService.this,
-                            ClipboardSyncService.this::handleIncomingTransfer
-                    );
                 }
 
                 @Override
@@ -179,38 +135,11 @@ public final class ClipboardSyncService extends Service {
                 }
 
                 @Override
-                public void onTransfer(HubClient.IncomingTransfer transfer) {
-                    if (thisGeneration != generation.get()) return;
-                    handleIncomingTransfer(transfer);
-                }
-
-                @Override
                 public void onDisconnected(String reason) {
                     scheduleReconnect(thisGeneration, reason);
                 }
             });
         });
-    }
-
-    private void handleIncomingTransfer(HubClient.IncomingTransfer transfer) {
-        if (!HubConfig.deviceID(this).equals(transfer.toDevice)) return;
-        if (!"offered".equals(transfer.state) && !"accepted".equals(transfer.state)) return;
-        if (!receivingTransferIDs.add(transfer.transferID)) return;
-
-        client.receiveTransferFromTrustedDevice(
-                this,
-                transfer,
-                (success, message) -> handler.post(() -> {
-                    receivingTransferIDs.remove(transfer.transferID);
-                    if ("ignored".equals(message)) return;
-                    broadcastStatus(message);
-                    Toast.makeText(
-                            this,
-                            message,
-                            success ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG
-                    ).show();
-                })
-        );
     }
 
     private void scheduleReconnect(int failedGeneration, String reason) {
@@ -233,48 +162,6 @@ public final class ClipboardSyncService extends Service {
                 Toast.makeText(this, "Send failed: " + message, Toast.LENGTH_LONG).show();
             }
         }));
-    }
-
-    @SuppressWarnings("deprecation")
-    private List<Uri> readSharedURIs(Intent intent) {
-        ArrayList<Uri> uris;
-        if (Build.VERSION.SDK_INT >= 33) {
-            uris = intent.getParcelableArrayListExtra(EXTRA_URIS, Uri.class);
-        } else {
-            uris = intent.getParcelableArrayListExtra(EXTRA_URIS);
-        }
-        return uris == null ? Collections.emptyList() : uris;
-    }
-
-    private void sendFiles(List<Uri> uris, String requestedTarget) {
-        if (uris.isEmpty()) {
-            Toast.makeText(this, "No files to send", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String targetName = requestedTarget == null
-                ? HubConfig.defaultTransferDevice(this)
-                : requestedTarget.trim();
-        if (targetName.isEmpty()) {
-            Toast.makeText(this, "Choose a destination in Tailboard", Toast.LENGTH_LONG).show();
-            return;
-        }
-        String friendlyTarget = HubConfig.friendlyTransferDevice(targetName);
-        client.sendFilesToDeviceNamed(
-                this,
-                uris,
-                targetName,
-                (success, message) -> handler.post(() -> {
-                    String confirmation = success
-                            ? (uris.size() == 1 ? "File sent to " : "Files sent to ") + friendlyTarget
-                            : message;
-                    broadcastStatus(confirmation);
-                    Toast.makeText(
-                            getApplicationContext(),
-                            confirmation,
-                            Toast.LENGTH_LONG
-                    ).show();
-                })
-        );
     }
 
     private void updateStatus(String status) {
@@ -317,7 +204,6 @@ public final class ClipboardSyncService extends Service {
         handler.removeCallbacksAndMessages(null);
         if (stream != null) stream.close(1000, "Service destroyed");
         stream = null;
-        receivingTransferIDs.clear();
         super.onDestroy();
     }
 

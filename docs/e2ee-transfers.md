@@ -1,5 +1,15 @@
 # Transfer E2EE Decision
 
+> [!NOTE]
+> Historical design record for the inherited transfer protocol. Native
+> Tailboard apps now use Taildrop for photos/files; this proposal is not on the
+> active app roadmap.
+
+> [!NOTE]
+> Historical design record for the inherited transfer protocol. Native
+> Tailboard apps now use Taildrop for photos/files; this proposal is not on the
+> active app roadmap.
+
 Status: design accepted for a future protocol revision; implementation deferred
 
 ## Decision

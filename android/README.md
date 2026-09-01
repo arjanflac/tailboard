@@ -7,26 +7,21 @@ Tailscale:
   connection service.
 - Android → other devices: copy text, then tap the **Send Clipboard** Quick
   Settings tile.
-- Android share sheet: choose **Tailboard** to send text, photos, or files. A
-  fresh install asks for the file destination; Settings can save a default for
-  immediate one-shot sends.
+- Android share sheet: choose **Tailboard** for selected text. Choose
+  **Send with Taildrop** for photos and files.
 - The old Direct Share shortcut was removed so the share sheet has one clear
   destination: **Tailboard**.
-- Incoming files from registered macOS and iOS devices are accepted automatically,
-  verified with SHA-256, and published under `Downloads/Tailboard`.
 
 Android 10+ only lets the focused app or default keyboard read clipboard
 contents. The Quick Settings tile therefore uses a 1×1 transparent activity to
 perform the user-requested read. Android's own pasteboard privacy notice cannot
 be renamed by the app. Notification permission is intentionally not requested,
-which hides the foreground-service notification. File shares show an immediate
-"Sending…" toast from the share surface and a final "File sent to MacBook"
-confirmation.
+which hides the foreground-service notification.
 
 The main app mirrors the iOS information architecture with Clipboard, Devices,
 and Settings tabs. It shows the current clip, recent text history, live device
-status, file destination, and Quick Settings setup. Legacy HTML clipboard
-payloads are converted to readable plain text on receipt.
+status and Quick Settings setup. Legacy HTML clipboard payloads are converted
+to readable plain text on receipt.
 
 ## Build
 

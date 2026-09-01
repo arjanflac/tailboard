@@ -1,7 +1,7 @@
 # Tailboard for iOS
 
-iOS companion for Tailboard: device-first container app, custom paste keyboard,
-share extension, widgets, Live Activity, and App Intents.
+iOS companion for Tailboard: clipboard app, custom paste keyboard, text/link
+share extension, widget, Control Center controls, and App Intents.
 
 ## Setup
 
@@ -38,9 +38,9 @@ Hub configuration is shared through Keychain. Clip previews remain cached in the
 ## Architecture
 
 - **TGClipboardKit**: shared framework with REST client, WebSocket manager, models, storage
-- **Tailboard**: device roster, transfer inbox, current clip, history, settings, widgets, and Shortcuts actions
+- **Tailboard**: device roster, current clip, history, settings, widget, controls, and Shortcuts actions
 - **TGPasteKeyboard**: inserts text, copies image clips to the pasteboard, and can push the local clipboard
-- **TGClipboardShare**: sends text to the shared clipboard and waits for file uploads to reach the default Mac before reporting success
+- **TGClipboardShare**: sends selected text or a link to the shared clipboard
 
 ## iOS interaction model
 
@@ -48,17 +48,14 @@ iOS does not allow background clipboard observation. Every local clipboard read 
 
 - Paste with the keyboard.
 - Copy a hub clip from the app, widget deep link, or Shortcut.
-- Send from the share sheet, keyboard Push action, app, or Shortcut.
-- The share extension asks for a file destination by default. Saving a default
-  device in Settings restores one-tap automatic sends. The receiver must allow
-  the iPhone's device ID.
+- Send text from the share sheet, keyboard Push action, app, or Shortcut.
 - iOS 18+ exposes **Send Clipboard** and **Receive Clipboard** controls. A
   UI-less extension cannot reliably use the system pasteboard, so each control
   opens Tailboard and completes its user-requested clipboard access in the
-  foreground app. The last execution result appears in Settings.
-- While Tailboard is foregrounded, incoming Mac files are accepted automatically.
-  Downloads live in Files → On My iPhone → Tailboard. Filename collisions are
-  numbered and identical retries are deduplicated.
+  foreground app. The last execution result appears in Settings. These controls
+  do not keep Tailboard alive in the background.
+- Use **Send via Tailscale** for photos and files. Tailboard deliberately does
+  not appear as a photo/file share target and has no file destination setting.
 
 The keyboard needs Full Access for live networking. Without it, cached clips remain available.
 

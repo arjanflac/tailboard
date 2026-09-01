@@ -14,7 +14,8 @@ tg-clipboard is intentionally small and opinionated. The current behavior favors
 ## Content-type limitations
 
 - The protocol caps individual clipboard payloads at 10 MiB.
-- Files use a separate, targeted transfer primitive. Hub-spooled transfers are resumable and asynchronous. Direct fetch is available from the CLI with `tg-clip send --direct`, but the sender must remain online until receipt.
+- Tailboard apps do not send files. Use Taildrop. The inherited Go CLI still
+  exposes a legacy transfer primitive during a compatibility window.
 - Rich content support is platform-dependent:
   - macOS, Linux, and Windows exchange `text/plain`, `text/html`, and `image/png`.
   - OS-native format conversion can still alter HTML or image representation.
@@ -34,14 +35,15 @@ tg-clipboard is intentionally small and opinionated. The current behavior favors
 - Privacy controls exist, but they are opt-in and local to `tg-clipd`; the hub does not centrally enforce them for every client.
 - Ignore-list behavior is best-effort because it depends on foreground-context detection. Native Hyprland/Sway and pure-Go X11 EWMH paths are preferred; `xdotool` remains a fallback.
 - There is still no per-device permission model, selective sync, or application-layer history encryption.
-- Hub-spooled file contents are not end-to-end encrypted.
+- Legacy hub-spooled CLI file contents are not end-to-end encrypted.
 - Development mode is not a hardened network deployment path.
 
 ## Operational limitations
 
 - Auto-discovery depends on Tailscale metadata. If discovery fails, clients fall back to localhost-oriented behavior unless you set an explicit hub URL.
 - History retention is short by design. tg-clipboard is a sync tool, not a long-term clipboard archive.
-- Transfer spooling is bounded by quota and TTL. For an online desktop receiver, `--direct` bypasses spool capacity; otherwise it falls back to the spool and can still fail when capacity is exhausted.
+- Legacy CLI transfer spooling is bounded by quota and TTL. Native Tailboard
+  apps keep transfers off and do not poll or recover this state.
 - `tg-clip clear` and `tg-clip clear --local` help with cleanup, but they do not retroactively wipe clipboard contents that were already written to other devices or offline caches.
 
 The planned work to address the biggest gaps is tracked in [Roadmap](roadmap.md).

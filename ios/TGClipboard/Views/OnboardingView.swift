@@ -36,7 +36,7 @@ struct OnboardingView: View {
                 Text("Tailboard")
                     .font(.largeTitle.bold())
 
-                Text("Your clipboard and files, on every device. Private, over Tailscale.")
+                Text("Your clipboard, on every device. Private, over Tailscale.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

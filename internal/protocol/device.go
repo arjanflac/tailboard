@@ -13,11 +13,12 @@ type Device struct {
 }
 
 type RegisterDeviceRequest struct {
-	DeviceID     string   `json:"device_id"`
-	Name         string   `json:"name"`
-	Platform     string   `json:"platform"`
-	Capabilities []string `json:"capabilities,omitempty"`
-	PublicKey    string   `json:"public_key,omitempty"`
+	DeviceID            string   `json:"device_id"`
+	Name                string   `json:"name"`
+	Platform            string   `json:"platform"`
+	Capabilities        []string `json:"capabilities,omitempty"`
+	ReplaceCapabilities bool     `json:"replace_capabilities,omitempty"`
+	PublicKey           string   `json:"public_key,omitempty"`
 }
 
 type TransferFile struct {

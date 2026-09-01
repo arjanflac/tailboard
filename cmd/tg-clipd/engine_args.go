@@ -11,7 +11,7 @@ import (
 
 const engineArgumentsFileName = "engine-arguments.json"
 
-var bundledEngineDefaults = []string{"--embed-hub", "--transfers", "ask"}
+var bundledEngineDefaults = []string{"--embed-hub", "--transfers", "off"}
 
 // configuredRuntimeArgs loads the per-user arguments written by the macOS app.
 // The SMAppService login-item bundle stays immutable inside the signed app;

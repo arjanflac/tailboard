@@ -28,6 +28,21 @@ func TestRemoveDevice(t *testing.T) {
 	}
 }
 
+func TestRegisterDeviceCanReplaceStaleCapabilities(t *testing.T) {
+	h := newDeviceTestHub()
+	h.RegisterDevice(protocol.RegisterDeviceRequest{
+		DeviceID: "d1", Name: "Phone", Platform: "android",
+		Capabilities: []string{"clipboard", "transfers"},
+	})
+	device := h.RegisterDevice(protocol.RegisterDeviceRequest{
+		DeviceID: "d1", Name: "Phone", Platform: "android",
+		Capabilities: []string{"clipboard"}, ReplaceCapabilities: true,
+	})
+	if len(device.Capabilities) != 1 || device.Capabilities[0] != "clipboard" {
+		t.Fatalf("stale capabilities survived replacement: %v", device.Capabilities)
+	}
+}
+
 func TestReapStaleDevices(t *testing.T) {
 	h := newDeviceTestHub()
 	now := time.Now()

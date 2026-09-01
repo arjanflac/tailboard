@@ -15,6 +15,10 @@ public struct AppGroupStore: @unchecked Sendable {
 
     public init() {
         self.defaults = UserDefaults(suiteName: Self.suiteName) ?? .standard
+        // Version 1.9 retired Tailboard's app-managed file transport in favor
+        // of Taildrop. Remove the old destination instead of carrying a
+        // misleading preference indefinitely.
+        self.defaults.removeObject(forKey: "defaultTransferDeviceName")
     }
 
     // MARK: - Hub URL
@@ -54,16 +58,6 @@ public struct AppGroupStore: @unchecked Sendable {
         nonmutating set {
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             defaults.set(trimmed.isEmpty ? "iphone" : trimmed.lowercased(), forKey: "sourceName")
-        }
-    }
-
-    public var defaultTransferDeviceName: String {
-        get { defaults.string(forKey: "defaultTransferDeviceName") ?? "" }
-        nonmutating set {
-            defaults.set(
-                newValue.trimmingCharacters(in: .whitespacesAndNewlines),
-                forKey: "defaultTransferDeviceName"
-            )
         }
     }
 

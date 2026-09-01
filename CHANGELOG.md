@@ -22,9 +22,7 @@ Suggested headings:
 - Standalone Tailboard repository preserving the upstream tg-clipboard Git
   history and MIT attribution.
 - Android Clipboard, Devices, and Settings tabs with current clip, recent
-  history, live device status, Quick Settings setup, and file-destination UX.
-- Optional default file destinations on Android and iOS; fresh installs ask in
-  the share sheet while configured destinations send immediately.
+  history, live device status, and Quick Settings setup.
 - Android CI alongside the existing Go and iOS validation.
 - Governance baseline for contributors and maintainers, including contribution, security, and conduct documentation plus GitHub issue and pull request templates.
 - Deterministic release automation that builds publishable archives, writes SHA-256 checksums, generates release notes, and records release metadata for GitHub releases.
@@ -37,9 +35,15 @@ Suggested headings:
 - macOS now presents the managed background component as Tailboard Engine under
   Tailboard instead of exposing the signing certificate holder as a standalone
   background item.
-- Mac transfers now land directly in `~/Downloads`.
+- Taildrop now owns photos and files. Tailboard's Mac file picker/drop target,
+  Finder share extension, mobile file destinations/inboxes, and file share
+  handlers have been removed. Mobile share targets remain for text and links.
+- The installed Mac engine migrates legacy transfer policy to `off`, stops
+  advertising transfer capability, and skips transfer polling/recovery work.
 - iOS Control Center actions open Tailboard and complete pasteboard access in
   the foreground app process.
+- The iOS Live Activity has been removed because it could not keep the app's
+  network connection alive and made stale state look current.
 - The iOS app now waits for a real hub response before showing a connected
   state, reconnects as one foreground-only stream, and retires its misleading
   Live Activity control.

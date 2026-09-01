@@ -86,9 +86,3 @@ LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 # both main-app and engine registration through SMAppService.
 osascript -e 'tell application "System Events" to if exists login item "Tailboard" then delete login item "Tailboard"' 2>/dev/null || true
 open "$DESTINATION"
-
-SHARE_EXTENSION="$DESTINATION/Contents/PlugIns/TailboardShare.appex"
-if [ -d "$SHARE_EXTENSION" ]; then
-  /usr/bin/pluginkit -a "$SHARE_EXTENSION" 2>/dev/null || true
-  /usr/bin/pluginkit -e use -i com.arjanflac.tgclipboard.menubar.share 2>/dev/null || true
-fi

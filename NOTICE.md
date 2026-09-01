@@ -11,11 +11,14 @@ history. The original copyright and permission notice remain in `LICENSE`.
 Tailboard-specific work includes:
 
 - the Android application, foreground sync service, Quick Settings action,
-  adaptive launcher assets, and Android share-sheet file flow;
-- integrated cross-device file transfer and verified receive flows;
-- the embedded personal Mac hub/engine workflow and Finder Share extension;
+  adaptive launcher assets, and text share-sheet flow;
+- the embedded personal Mac hub/engine workflow;
 - Tailboard product branding and the expanded mobile/desktop UX;
 - local deployment and configuration scripts.
+
+The repository still contains the earlier transfer engine for compatibility and
+historical attribution, but current Tailboard apps delegate photos and files to
+Tailscale's Taildrop instead of exposing a parallel transfer interface.
 
 Subsequent upstream and Tailboard development may overlap. This notice is an
 attribution record, not a claim that every modified line is unique to Tailboard.

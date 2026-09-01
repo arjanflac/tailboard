@@ -1,5 +1,15 @@
 # Interface Spec: A LocalSend/Blip-Style Experience for tg-clipboard
 
+> [!NOTE]
+> Historical design record. Its file-transfer UI was implemented and later
+> retired in favor of Tailscale Taildrop. Current behavior is defined by
+> [Taildrop integration](taildrop-integration.md) and [Platform Support](platform-support.md).
+
+> [!NOTE]
+> Historical design record. Its file-transfer UI was implemented and later
+> retired in favor of Tailscale Taildrop. Current behavior is defined by
+> [Taildrop integration](taildrop-integration.md) and [Platform Support](platform-support.md).
+
 Status: **Proposed**
 Scope: macOS `tg-clipd` companion UI, iOS tg-clipboard app, shared vocabulary and onboarding.
 Non-scope: protocol changes beyond small control-API additions, E2EE (tracked in `docs/e2ee-transfers.md`), Windows/Linux GUIs (follow the same principles later).

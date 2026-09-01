@@ -42,7 +42,12 @@ Foreground detection is best-effort and platform-specific:
 
 `tg-clip status` and `tg-clipd` logs report the selected detector layer. These controls reduce exposure, but they are not end-to-end secrecy or centrally enforced policy.
 
-## File-transfer security
+## Legacy file-transfer compatibility
+
+Current Tailboard apps do not advertise or expose this transfer subsystem.
+Photos and files are delegated to Tailscale's Taildrop. The following notes
+describe the retained Go compatibility implementation for operators who invoke
+it explicitly; it is not part of the supported Tailboard app experience.
 
 - Transfers are targeted and default to receiver consent (`ask`). Desktop agents may auto-accept only from an explicit device-ID allowlist.
 - The hub spools transfer bytes and can read them. Transfer metadata is persisted in SQLite; file bodies remain in the spool directory and expire after the transfer TTL.
@@ -62,7 +67,8 @@ Foreground detection is best-effort and platform-specific:
 
 - A compromised or untrusted hub operator. The hub can read synced content.
 - A compromised client device. Any synced clipboard is available to that device once applied locally.
-- Clipboard broadcast remains non-selective. File transfers are targeted to a registered device and require consent, but this is not a general authorization system.
+- Clipboard broadcast remains non-selective. The retained legacy file-transfer
+  protocol is targeted, but it is not a general authorization system.
 - End-to-end encryption from source device to destination device.
 - At-rest encryption managed by tg-clipboard itself. Use OS or disk encryption if you need stronger local storage protections.
 - Reliable retroactive wipe semantics after content was already synced.

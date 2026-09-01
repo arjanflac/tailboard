@@ -88,7 +88,7 @@ final class DisplayHelperTests: XCTestCase {
             "device_id": "d1",
             "name": "Test",
             "platform": "\(platform)",
-            "capabilities": ["transfers"],
+            "capabilities": ["clipboard"],
             "online": \(online),
             "last_seen": "2026-03-16T12:00:00Z"
         }

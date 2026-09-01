@@ -1,7 +1,9 @@
 # Taildrop integration direction
 
-Status: proposed migration; the existing Tailboard transfer protocol remains
-enabled until the mobile handoff flows have been verified on real devices.
+Status: adopted for the native macOS, Android, and iOS apps. The legacy Go
+transfer API and CLI remain temporarily for compatibility, but the installed
+Mac engine runs with transfers disabled and app clients do not advertise the
+capability.
 
 ## Decision
 
@@ -49,15 +51,13 @@ one-tap replacement for Tailboard's iOS share extension.
 
 Tailboard cannot directly invoke another app's App Intent as a private API.
 The supported boundary is the user-owned Shortcut. Tailboard can explain how
-to create it and detect whether the legacy transfer feature is still enabled,
-but it should not attempt to automate the Tailscale app UI.
+to create it, but it should not attempt to automate the Tailscale app UI.
 
 ### Android
 
 Tailscale exports `ShareActivity` for `ACTION_SEND` and
-`ACTION_SEND_MULTIPLE`, so Tailboard can forward Android content to the native
-Taildrop screen or users can choose Tailscale directly in the system share
-sheet.
+`ACTION_SEND_MULTIPLE`; users choose it directly in the system share sheet.
+Tailboard does not forward content through another app's private UI.
 
 The current activity accepts file URIs only. It does not define a supported
 intent extra for a default destination, and its view model always presents the
@@ -82,18 +82,14 @@ The target list is available through `tailscale file cp --targets`. Incoming
 files are then handled by Tailscale's normal Taildrop receiver and Downloads
 folder behavior, not Tailboard's embedded hub spool.
 
-## Migration plan
+## Migration state
 
-1. Verify an iOS share-sheet Shortcut with the Mac fixed as its destination.
-2. Verify the Tailscale share target on the Pixel and decide whether its one
-   target-selection tap is acceptable.
-3. Add a Tailboard setting that labels file transport as `Taildrop` or
-   `Legacy`, with Taildrop recommended and new installs defaulting to it.
-4. Stop accepting new legacy file transfers after all three devices use the
-   Taildrop path. Keep existing spool metadata readable until pending transfers
-   finish or expire.
-5. Remove the legacy transfer server, mobile upload clients, and spool only in
-   a later compatibility-breaking release.
+- The Mac menu-bar file picker/drop target and Finder share extension are gone.
+- Android and iOS file destination/inbox UI and upload/download clients are gone.
+- Mobile Tailboard share targets accept text/links only.
+- New and upgraded Mac installs enforce `--transfers off`.
+- The server schema/API and desktop CLI remain readable during a compatibility
+  window. Removing them is a later protocol-breaking cleanup, not app scope.
 
 Clipboard images remain clipboard items and continue through Tailboard. Photos
 or files intentionally shared from Photos, Files, Finder, or an Android share

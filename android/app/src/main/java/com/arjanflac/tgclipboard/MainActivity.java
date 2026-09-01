@@ -70,8 +70,6 @@ public final class MainActivity extends Activity {
                         status.startsWith("Connected")
                                 || status.startsWith("Received")
                                 || status.startsWith("Clipboard sent")
-                                || status.startsWith("File sent")
-                                || status.startsWith("Files sent")
                 );
                 if (activeTab == 0 && (status.startsWith("Received") || status.startsWith("Clipboard sent"))) {
                     showTab(0);
@@ -83,6 +81,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        HubConfig.removeLegacyTransferSettings(this);
         configurePalette();
         privacyWipeRequested = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0
                 && ACTION_DEBUG_PRIVACY_WIPE.equals(getIntent().getAction());
@@ -149,7 +148,7 @@ public final class MainActivity extends Activity {
         TextView brand = text("Tailboard", 29, primaryText);
         brand.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         header.addView(brand);
-        TextView tagline = text("Clipboard and file drops over your tailnet", 14, secondaryText);
+        TextView tagline = text("Clipboard sync over your tailnet", 14, secondaryText);
         tagline.setPadding(0, dp(3), 0, dp(12));
         header.addView(tagline);
         statusView = text("Connecting…", 13, Color.parseColor("#B45309"));
@@ -319,7 +318,7 @@ public final class MainActivity extends Activity {
 
     private View settingsScreen() {
         LinearLayout content = screenContent();
-        addScreenTitle(content, "Settings", "Connection, share-sheet destination, and quick actions.");
+        addScreenTitle(content, "Settings", "Connection and quick clipboard actions.");
 
         content.addView(sectionLabel("Connection"));
         LinearLayout connection = card();
@@ -328,23 +327,7 @@ public final class MainActivity extends Activity {
         connection.addView(settingRow("Sync server", HubConfig.hubURL(this)));
         content.addView(connection, cardParams());
 
-        content.addView(sectionLabel("File transfers"));
-        LinearLayout transfers = card();
-        String defaultTarget = HubConfig.defaultTransferDevice(this);
-        transfers.addView(settingRow(
-                "Default destination",
-                defaultTarget.isEmpty() ? "Ask every time" : HubConfig.friendlyTransferDevice(defaultTarget)
-        ));
-        TextView transferNote = text(
-                "Share photos or files to Tailboard. With a saved destination they send immediately; otherwise Tailboard asks where to send them.",
-                13,
-                secondaryText
-        );
-        transferNote.setPadding(0, dp(12), 0, 0);
-        transfers.addView(transferNote);
-        content.addView(transfers, cardParams());
-
-        Button edit = actionButton("Edit connection and destination", true);
+        Button edit = actionButton("Edit connection", true);
         edit.setOnClickListener(view -> startActivity(new Intent(this, SettingsActivity.class)));
         content.addView(edit, spaced(dp(12)));
 
@@ -368,8 +351,6 @@ public final class MainActivity extends Activity {
         }
         LinearLayout about = card();
         about.addView(settingRow("Version", version));
-        about.addView(divider());
-        about.addView(settingRow("Incoming files", "Downloads/Tailboard"));
         content.addView(about, cardParams());
         return wrap(content);
     }
@@ -386,8 +367,7 @@ public final class MainActivity extends Activity {
     private void performDebugConfiguration() {
         String hubURL = getIntent().getStringExtra("hub_url");
         String deviceName = getIntent().getStringExtra("device_name");
-        String defaultTarget = getIntent().getStringExtra("default_target");
-        if (hubURL == null || deviceName == null || defaultTarget == null
+        if (hubURL == null || deviceName == null
                 || !(hubURL.startsWith("http://") || hubURL.startsWith("https://"))
                 || deviceName.isBlank()) {
             Log.e("TailboardConfig", "Debug configuration arguments are incomplete");
@@ -395,7 +375,6 @@ public final class MainActivity extends Activity {
             return;
         }
         HubConfig.save(this, hubURL, deviceName);
-        HubConfig.setDefaultTransferDevice(this, defaultTarget);
         ClipboardSyncService.restart(this);
         Log.i("TailboardConfig", "Local configuration saved");
         finish();

@@ -116,7 +116,9 @@ func (a *Agent) controlStateHandler(w http.ResponseWriter, r *http.Request) {
 	var clip *protocol.ClipItem
 	var clipSize int64
 	if connection == "synced" {
-		transfers, _ = a.client.Transfers(ctx, a.deviceID, "", "")
+		if a.transferPolicy != "off" {
+			transfers, _ = a.client.Transfers(ctx, a.deviceID, "", "")
+		}
 		// Best-effort: the popover clip card degrades gracefully without it.
 		// Binary payloads are stripped — the popover shows a summary, not
 		// the bytes, and state is polled frequently.

@@ -1,4 +1,3 @@
-import ActivityKit
 import SwiftUI
 import WidgetKit
 import TGClipboardKit
@@ -184,68 +183,10 @@ private struct CurrentClipWidget: Widget {
     }
 }
 
-private struct TGClipboardLiveActivity: Widget {
-    var body: some WidgetConfiguration {
-        ActivityConfiguration(for: TGClipboardActivityAttributes.self) { context in
-            VStack(alignment: .leading, spacing: 4) {
-                Label(context.attributes.title, systemImage: "doc.on.clipboard")
-                    .font(.caption.weight(.semibold))
-                Text(context.state.preview)
-                    .font(.callout)
-                    .lineLimit(2)
-                    .privacySensitive()
-                HStack(spacing: 4) {
-                    Text("from \(context.state.source)")
-                    Text("·")
-                    Text(context.state.updatedAt, style: .relative)
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-            .padding()
-            .activityBackgroundTint(Color.accentColor.opacity(0.15))
-            .widgetURL(URL(string: "tgclipboard://copy-current"))
-        } dynamicIsland: { context in
-            DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: "doc.on.clipboard")
-                        .foregroundStyle(Color.accentColor)
-                }
-                DynamicIslandExpandedRegion(.center) {
-                    Text(context.state.preview)
-                        .lineLimit(2)
-                        .privacySensitive()
-                }
-                DynamicIslandExpandedRegion(.bottom) {
-                    HStack(spacing: 4) {
-                        Text("from \(context.state.source)")
-                        Text("·")
-                        Text(context.state.updatedAt, style: .relative)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            } compactLeading: {
-                Image(systemName: "doc.on.clipboard")
-            } compactTrailing: {
-                // The trailing slot carries the source name instead of the
-                // static word "Clip".
-                Text(context.state.source)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            } minimal: {
-                Image(systemName: "doc.on.clipboard")
-            }
-            .widgetURL(URL(string: "tgclipboard://copy-current"))
-        }
-    }
-}
-
 @main
 struct TGClipboardWidgetBundle: WidgetBundle {
     var body: some Widget {
         CurrentClipWidget()
-        TGClipboardLiveActivity()
         if #available(iOS 18.0, *) {
             SendClipboardControl()
             ReceiveClipboardControl()

@@ -1,20 +1,10 @@
 import SwiftUI
 import TGClipboardKit
 
-/// The LocalSend heart of the app (spec §5.2): a tile grid of your devices,
-/// with incoming transfer offers on top. Tiles are status-first today; the
-/// send sheet arrives with in-app sending (phase 5).
+/// A status-first grid of the devices sharing this clipboard.
 struct DevicesView: View {
     @Environment(AppViewModel.self) private var viewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private let store = AppGroupStore()
-
-    private var incoming: [Transfer] {
-        viewModel.transfers.filter {
-            $0.state == "offered" && $0.toDevice == store.deviceID
-        }
-    }
-
     private let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
@@ -24,12 +14,8 @@ struct DevicesView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if !incoming.isEmpty {
-                        incomingSection
-                    }
-
                     if viewModel.devices.isEmpty {
-                        if incoming.isEmpty && !viewModel.isLoading {
+                        if !viewModel.isLoading {
                             emptyState
                         }
                     } else {
@@ -54,35 +40,6 @@ struct DevicesView: View {
             .overlay(alignment: .top) { errorOverlay }
             .animation(reduceMotion ? .none : .tgSpring, value: viewModel.errorMessage != nil)
             .task { await viewModel.refresh() }
-        }
-    }
-
-    // MARK: - Incoming offers
-
-    private var incomingSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Incoming")
-                .font(.headline)
-
-            VStack(spacing: 0) {
-                ForEach(incoming) { transfer in
-                    TransferRowView(
-                        transfer: transfer,
-                        fromName: deviceName(transfer.fromDevice),
-                        isReceiving: viewModel.receivingTransferIDs.contains(transfer.id),
-                        accept: { Task { await viewModel.accept(transfer) } },
-                        decline: { Task { await viewModel.decline(transfer) } }
-                    )
-                    .padding(.horizontal)
-                    if transfer.id != incoming.last?.id {
-                        Divider()
-                    }
-                }
-            }
-            .background(
-                Color(.secondarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-            )
         }
     }
 
@@ -153,9 +110,6 @@ struct DevicesView: View {
         }
     }
 
-    private func deviceName(_ id: String) -> String {
-        viewModel.devices.first(where: { $0.deviceID == id })?.name ?? "Unknown device"
-    }
 }
 
 /// One device in the grid: a friendly colored avatar (Blip-style), name,
