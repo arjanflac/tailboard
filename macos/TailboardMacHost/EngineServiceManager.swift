@@ -132,6 +132,27 @@ final class EngineServiceManager {
             application.forceTerminate()
         }
 
+        // On macOS 27 betas an enabled SMAppService can remain registered after
+        // an in-place bundle update while its previous process is recorded as a
+        // successful exit. Launch Services may acknowledge the first open
+        // request before the new executable is actually running, so verify and
+        // retry instead of silently leaving the relay stopped.
+        for attempt in 0..<4 {
+            try await requestEngineLaunch(at: url)
+            if await waitForEngineLaunch() {
+                return
+            }
+            if attempt < 3 {
+                try await Task.sleep(for: .milliseconds(500 * (attempt + 1)))
+            }
+        }
+
+        throw EngineServiceError.registrationFailed(
+            "macOS accepted the launch request but the engine did not remain running"
+        )
+    }
+
+    private func requestEngineLaunch(at url: URL) async throws {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         try await withCheckedThrowingContinuation {
@@ -139,11 +160,23 @@ final class EngineServiceManager {
             NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
+                    return
                 }
+                continuation.resume()
             }
         }
+    }
+
+    private func waitForEngineLaunch() async -> Bool {
+        for _ in 0..<12 {
+            if !NSRunningApplication.runningApplications(
+                withBundleIdentifier: Self.engineBundleIdentifier
+            ).isEmpty {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        return false
     }
 
     private func ensureArgumentsFile() throws {

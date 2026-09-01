@@ -23,3 +23,5 @@
   removed the history API and CLI command.
 - Moved recent clips to fixed device-local mobile caches: 20 items for 24 hours
   on both Android and iOS.
+- Verify and retry the modern macOS login-item launch after in-place updates so
+  macOS 27 cannot leave an enabled Tailboard Engine in a stopped state.

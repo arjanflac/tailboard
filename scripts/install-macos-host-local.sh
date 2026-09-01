@@ -67,6 +67,7 @@ pkill -x Tailboard 2>/dev/null || true
 # macOS 27 may expose an SMAppService login item under its bundle identifier
 # rather than its executable name.
 pkill -f '^com\.arjanflac\.tailboard\.engine\.background$' 2>/dev/null || true
+pkill -f '^/Applications/Tailboard[.]app/Contents/Library/LoginItems/Tailboard Engine[.]app/Contents/MacOS/Tailboard Engine$' 2>/dev/null || true
 sleep 1
 if [ -d "$DESTINATION" ]; then
   # Keep the application URL continuously present. macOS 27 betas can lose an
@@ -81,4 +82,38 @@ LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 "$LSREGISTER" -f "$DESTINATION"
 "$LSREGISTER" -f "$DESTINATION/Contents/Library/LoginItems/Tailboard Engine.app"
 
-open "$DESTINATION"
+open -W "$DESTINATION"
+
+ENGINE_DESTINATION="$DESTINATION/Contents/Library/LoginItems/Tailboard Engine.app"
+ENGINE_SERVICE="gui/$(id -u)/com.arjanflac.tailboard.engine.background"
+engine_running() {
+  pgrep -f '^(com[.]arjanflac[.]tailboard[.]engine[.]background|/Applications/Tailboard[.]app/Contents/Library/LoginItems/Tailboard Engine[.]app/Contents/MacOS/Tailboard Engine)$' >/dev/null
+}
+
+# Wait for the one-shot host to finish registration, remove any direct
+# Launch Services instance it used while recovering, then start the registered
+# SMAppService job itself. `kickstart` is needed on macOS 27 betas when the job
+# remains enabled but records the replaced executable as a successful exit.
+pkill -f '^/Applications/Tailboard[.]app/Contents/Library/LoginItems/Tailboard Engine[.]app/Contents/MacOS/Tailboard Engine$' 2>/dev/null || true
+launchctl kickstart -kp "$ENGINE_SERVICE" >/dev/null 2>&1 || true
+
+launch_attempt=0
+while [ "$launch_attempt" -lt 20 ] && ! engine_running; do
+  sleep 0.5
+  launch_attempt=$((launch_attempt + 1))
+done
+
+if ! engine_running; then
+  # Last-resort recovery for systems where the service job is still importing.
+  open -gj "$ENGINE_DESTINATION"
+  launch_attempt=0
+  while [ "$launch_attempt" -lt 20 ] && ! engine_running; do
+    sleep 0.5
+    launch_attempt=$((launch_attempt + 1))
+  done
+fi
+
+if ! engine_running; then
+  echo "Tailboard Engine did not start after installation" >&2
+  exit 1
+fi
