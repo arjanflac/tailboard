@@ -18,8 +18,6 @@ magick "$SOURCE" -crop 1020x1246+51+72 +repage "$BRAND_DIR/tailboard-mark.png"
 magick -size 1024x1024 'xc:#202124' \
   \( "$BRAND_DIR/tailboard-mark.png" -resize 680x760 \) \
   -gravity center -composite -depth 8 \
-  "$BRAND_DIR/tailboard-app-icon-ios-1024.png"
-cp "$BRAND_DIR/tailboard-app-icon-ios-1024.png" \
   "$BRAND_DIR/tailboard-app-icon-macos-1024.png"
 
 magick -size 512x512 'xc:#202124' \
@@ -34,9 +32,6 @@ magick -size 432x432 xc:none \
   \( "$BRAND_DIR/tailboard-mark.png" -resize 120x146 \) \
   -gravity center -composite -depth 8 \
   "$BRAND_DIR/tailboard-adaptive-foreground-432.png"
-
-cp "$BRAND_DIR/tailboard-app-icon-ios-1024.png" \
-  "$PROJECT_DIR/ios/TGClipboard/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
 
 for density_spec in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
   density=${density_spec%%:*}

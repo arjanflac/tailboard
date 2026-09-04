@@ -1,36 +1,14 @@
 package clipboard
 
-import "context"
+import "errors"
 
-// Content is the plain text Tailboard reads and writes.
-type Content struct {
-	Text string
-}
+var ErrNoText = errors.New("clipboard does not contain standalone text")
 
-// Empty returns true if there is no data.
-func (c Content) Empty() bool {
-	return c.Text == ""
-}
-
-// Clipboard reads and writes plain text only. Taildrop owns files and images.
+// Clipboard exposes only literal text. File URLs, file promises, images, and
+// values marked concealed or transient are deliberately invisible here.
 type Clipboard interface {
-	// ReadBest returns the pasteboard's plain-text representation.
-	ReadBest() (Content, error)
-
-	// Write sets the clipboard to the given content.
-	Write(Content) error
-
-	// Clear removes clipboard contents from the local system clipboard.
+	ReadText() (string, error)
+	WriteText(string) error
 	Clear() error
-}
-
-// ChangeDetector allows polling agents to avoid reading clipboard contents when
-// the platform's cheap change sequence has not moved.
-type ChangeDetector interface {
 	Changed() (bool, error)
-}
-
-// Watcher provides event-driven clipboard change notifications.
-type Watcher interface {
-	Watch(context.Context) (<-chan struct{}, error)
 }

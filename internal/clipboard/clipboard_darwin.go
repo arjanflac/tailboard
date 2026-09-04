@@ -40,21 +40,21 @@ func (c *darwinClipboard) Changed() (bool, error) {
 	return true, nil
 }
 
-func (c *darwinClipboard) ReadBest() (Content, error) {
+func (c *darwinClipboard) ReadText() (string, error) {
 	if C.tailboard_pasteboard_should_ignore() != 0 {
-		return Content{}, nil
+		return "", ErrNoText
 	}
 
 	raw := C.tailboard_pasteboard_copy_text()
 	if raw == nil {
-		return Content{}, fmt.Errorf("no plain text on clipboard")
+		return "", ErrNoText
 	}
 	defer C.free(unsafe.Pointer(raw))
-	return Content{Text: C.GoString(raw)}, nil
+	return C.GoString(raw), nil
 }
 
-func (c *darwinClipboard) Write(content Content) error {
-	text := C.CString(content.Text)
+func (c *darwinClipboard) WriteText(content string) error {
+	text := C.CString(content)
 	defer C.free(unsafe.Pointer(text))
 	if C.tailboard_pasteboard_set_text(text) == 0 {
 		return fmt.Errorf("write plain text to pasteboard")

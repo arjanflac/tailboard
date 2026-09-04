@@ -41,8 +41,8 @@ jobs:
       - working-directory: android
         run: ./gradlew test lint assembleDebug
 
-  apple:
-    name: Apple apps
+  mac-app:
+    name: Mac app
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -52,27 +52,16 @@ jobs:
           cache: true
       - run: brew install xcodegen
       - run: make tailboard-engine-app
-      - working-directory: ios
+      - working-directory: macos
         run: xcodegen generate
       - name: Build macOS host
-        working-directory: ios
+        working-directory: macos
         run: |
           xcodebuild \
-            -project TGClipboard.xcodeproj \
-            -scheme TailboardMacHost \
+            -project Tailboard.xcodeproj \
+            -scheme Tailboard \
             -configuration Release \
             -destination 'platform=macOS' \
             -derivedDataPath ../.derived-data-ci-macos \
             CODE_SIGNING_ALLOWED=NO \
             build
-      - name: Test iOS app
-        working-directory: ios
-        run: |
-          device_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for runtime in d.values() for x in runtime if x["isAvailable"]))')"
-          xcodebuild \
-            -project TGClipboard.xcodeproj \
-            -scheme TGClipboard \
-            -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,id=$device_id" \
-            CODE_SIGNING_ALLOWED=NO \
-            test

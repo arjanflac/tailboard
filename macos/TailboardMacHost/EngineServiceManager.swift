@@ -29,16 +29,13 @@ final class EngineServiceManager {
     private static let engineBundleIdentifier = "com.arjanflac.tailboard.engine.background"
     private static let registeredHashKey = "TailboardRegisteredEngineBackgroundSHA256"
     static let lastErrorKey = "TailboardLastEngineServiceError"
-    private static let defaultArguments = ["--embed-hub", "--poll", "100"]
 
     private let service = SMAppService.loginItem(identifier: engineBundleIdentifier)
-    private let fileManager = FileManager.default
 
     private init() {}
 
     func activate(forceRestart: Bool = false) async throws {
         registerBundleLocations()
-        try ensureArgumentsFile()
         try await ensureEngineRegistered(forceRestart: forceRestart)
         UserDefaults.standard.removeObject(forKey: Self.lastErrorKey)
     }
@@ -52,7 +49,7 @@ final class EngineServiceManager {
             .appendingPathComponent("Contents/Library/LoginItems", isDirectory: true)
             .appendingPathComponent("Tailboard Engine.app", isDirectory: true)
         let engineURL = engineAppURL.appendingPathComponent("Contents/MacOS/Tailboard Engine")
-        guard fileManager.isExecutableFile(atPath: engineURL.path) else {
+        guard FileManager.default.isExecutableFile(atPath: engineURL.path) else {
             throw EngineServiceError.embeddedEngineMissing
         }
 
@@ -60,6 +57,9 @@ final class EngineServiceManager {
         registrationContent.append(
             try Data(contentsOf: engineAppURL.appendingPathComponent("Contents/Info.plist"))
         )
+        registrationContent.append(Data((Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? "").utf8))
         let engineHash = SHA256.hash(data: registrationContent)
             .map { String(format: "%02x", $0) }
             .joined()
@@ -69,10 +69,20 @@ final class EngineServiceManager {
         case .requiresApproval:
             throw EngineServiceError.approvalRequired
         case .enabled:
+            if storedHash != engineHash {
+                // ServiceManagement keeps the parent bundle version captured
+                // at registration time. Refresh that record after an in-place
+                // app update so launchd executes the replacement helper.
+                try await service.unregister()
+                try await Task.sleep(for: .milliseconds(300))
+                try service.register()
+                UserDefaults.standard.set(engineHash, forKey: Self.registeredHashKey)
+                return
+            }
             let isRunning = !NSRunningApplication.runningApplications(
                 withBundleIdentifier: Self.engineBundleIdentifier
             ).isEmpty
-            if forceRestart || storedHash != engineHash || !isRunning {
+            if forceRestart || !isRunning {
                 try await restartEngineApplication(at: engineAppURL)
                 UserDefaults.standard.set(engineHash, forKey: Self.registeredHashKey)
             }
@@ -179,31 +189,4 @@ final class EngineServiceManager {
         return false
     }
 
-    private func ensureArgumentsFile() throws {
-        if let data = try? Data(contentsOf: argumentsFileURL),
-           let arguments = try? JSONSerialization.jsonObject(with: data) as? [String],
-           !arguments.isEmpty {
-            return
-        }
-
-        try fileManager.createDirectory(
-            at: argumentsFileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        let data = try JSONSerialization.data(
-            withJSONObject: Self.defaultArguments,
-            options: [.prettyPrinted, .sortedKeys]
-        )
-        try data.write(to: argumentsFileURL, options: .atomic)
-        try fileManager.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: argumentsFileURL.path
-        )
-    }
-
-    private var argumentsFileURL: URL {
-        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("tg-clipboard", isDirectory: true)
-            .appendingPathComponent("engine-arguments.json")
-    }
 }

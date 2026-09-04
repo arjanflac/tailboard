@@ -22,8 +22,24 @@ int tailboard_pasteboard_should_ignore(void) {
         // clipboard-history software not to retain an ephemeral payload.
         // Wispr Flow marks the temporary text it pastes this way before
         // restoring the user's prior clipboard a fraction of a second later.
-        return [types containsObject:@"org.nspasteboard.ConcealedType"]
-            || [types containsObject:@"org.nspasteboard.TransientType"];
+        if ([types containsObject:@"org.nspasteboard.ConcealedType"]
+            || [types containsObject:@"org.nspasteboard.TransientType"]
+            || [types containsObject:NSPasteboardTypeFileURL]
+            || [types containsObject:@"NSFilenamesPboardType"]) {
+            return 1;
+        }
+
+        // File managers may publish a promise alongside a string such as
+        // "photo.raf". That string is file metadata, not copied text.
+        for (NSPasteboardType type in types) {
+            NSString *identifier = [type lowercaseString];
+            if ([identifier containsString:@"filepromise"]
+                || [identifier containsString:@"file-promise"]
+                || [identifier containsString:@"promised-file"]) {
+                return 1;
+            }
+        }
+        return 0;
     }
 }
 

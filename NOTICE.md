@@ -1,20 +1,11 @@
-# Attribution and provenance
+# Attribution
 
-Tailboard is a derivative of
-[`thalysguimaraes/tg-clipboard`](https://github.com/thalysguimaraes/tg-clipboard),
-originally created by Thalys Guimarães and distributed under the MIT License.
+Tailboard began as a derivative of Thalys Guimarães's
+[`tg-clipboard`](https://github.com/thalysguimaraes/tg-clipboard), distributed
+under the MIT License. The original copyright notice, permission notice, and
+Git history are retained.
 
-This repository was created from upstream commit
-`2cfad69b9b13fdde26ac2b616e87390a84a711f1` and retains the upstream Git
-history. The original copyright and permission notice remain in `LICENSE`.
-
-Tailboard-specific work includes:
-
-- the Android application, foreground sync service, Quick Settings action,
-  adaptive launcher assets, and text share-sheet flow;
-- the embedded personal Mac hub/engine workflow;
-- Tailboard product branding and the personal Mac/Pixel/iPhone workflow;
-- local deployment and configuration scripts.
-
-Subsequent upstream and Tailboard development may overlap. This notice is an
-attribution record, not a claim that every modified line is unique to Tailboard.
+Tailboard now has a narrower macOS/Android implementation: an in-memory
+plain-text relay, a signed macOS login item, and an Android foreground client
+with a Quick Settings action. It does not include `tg-clipboard`'s persistence,
+multi-desktop support, rich clipboard formats, or Apple client.

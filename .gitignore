@@ -2,7 +2,7 @@ bin/
 dist/
 *.exe
 test_e2e.sh
-ios/*.xcodeproj/
+macos/*.xcodeproj/
 android/.gradle/
 android/build/
 android/app/build/
@@ -10,8 +10,5 @@ android/local.properties
 config.local.env
 *.local.md
 .derived-data/
-.derived-data-ios/
-.derived-data-ios-device/
-.derived-data-ios-tests/
 .derived-data-ci-macos/
 .tailboard-build/

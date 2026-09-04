@@ -16,7 +16,39 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 DEVELOPER_DIR=${TAILBOARD_DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
-: "${TAILBOARD_MAC_CODESIGN_IDENTITY:?missing TAILBOARD_MAC_CODESIGN_IDENTITY in $CONFIG_FILE}"
+if [ -z "${TAILBOARD_MAC_CODESIGN_IDENTITY:-}" ]; then
+  tailboard_preferred_team=${TAILBOARD_APPLE_DEVELOPMENT_TEAM:-}
+  if [ -z "$tailboard_preferred_team" ] && [ -d "$DESTINATION" ]; then
+    tailboard_preferred_team=$(codesign -dvv "$DESTINATION" 2>&1 \
+      | sed -n 's/^TeamIdentifier=//p')
+  fi
+  tailboard_identities=$(security find-identity -v -p codesigning \
+    | sed -n '/Apple Development/p')
+  if [ -n "$tailboard_preferred_team" ]; then
+    while IFS= read -r tailboard_identity_line; do
+      tailboard_identity_hash=$(printf '%s\n' "$tailboard_identity_line" \
+        | sed -n 's/.*\([0-9A-F]\{40\}\).*/\1/p')
+      tailboard_identity_name=$(printf '%s\n' "$tailboard_identity_line" \
+        | sed -n 's/.*"\(.*\)".*/\1/p')
+      tailboard_identity_team=$(security find-certificate -a -c "$tailboard_identity_name" -p 2>/dev/null \
+        | openssl x509 -noout -subject 2>/dev/null \
+        | sed -n 's/.*OU=\([^,]*\).*/\1/p' \
+        | head -1)
+      if [ "$tailboard_identity_team" = "$tailboard_preferred_team" ]; then
+        TAILBOARD_MAC_CODESIGN_IDENTITY=$tailboard_identity_hash
+        break
+      fi
+    done <<EOF
+$tailboard_identities
+EOF
+  fi
+  if [ -z "${TAILBOARD_MAC_CODESIGN_IDENTITY:-}" ]; then
+    TAILBOARD_MAC_CODESIGN_IDENTITY=$(printf '%s\n' "$tailboard_identities" \
+      | sed -n 's/.*\([0-9A-F]\{40\}\).*/\1/p' \
+      | head -1)
+  fi
+fi
+: "${TAILBOARD_MAC_CODESIGN_IDENTITY:?no Apple Development signing identity found}"
 : "${DEVELOPER_DIR:?missing stable Xcode developer directory}"
 if [ ! -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]; then
   echo "stable Xcode not found at $DEVELOPER_DIR" >&2
@@ -35,17 +67,17 @@ engine_team=$(codesign -dvv "$ENGINE_APP" 2>&1 \
 TAILBOARD_APPLE_DEVELOPMENT_TEAM=${TAILBOARD_APPLE_DEVELOPMENT_TEAM:-$engine_team}
 : "${TAILBOARD_APPLE_DEVELOPMENT_TEAM:?could not determine Apple development team}"
 
-xcodegen generate --spec "$PROJECT_DIR/ios/project.yml" \
-  --project "$PROJECT_DIR/ios"
+xcodegen generate --spec "$PROJECT_DIR/macos/project.yml" \
+  --project "$PROJECT_DIR/macos"
 xcodebuild -quiet \
-  -project "$PROJECT_DIR/ios/TGClipboard.xcodeproj" \
-  -scheme TailboardMacHost \
+  -project "$PROJECT_DIR/macos/Tailboard.xcodeproj" \
+  -scheme Tailboard \
   -configuration Release \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath "$DERIVED_DATA" \
   DEVELOPMENT_TEAM="$TAILBOARD_APPLE_DEVELOPMENT_TEAM" \
-  CODE_SIGN_IDENTITY="Apple Development" \
-  CODE_SIGN_STYLE=Automatic \
+  CODE_SIGN_IDENTITY="$TAILBOARD_MAC_CODESIGN_IDENTITY" \
+  CODE_SIGN_STYLE=Manual \
   build
 
 codesign --verify --deep --strict "$PRODUCT"

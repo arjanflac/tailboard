@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TGClipboardAndroid"
+rootProject.name = "TailboardAndroid"
 include(":app")
