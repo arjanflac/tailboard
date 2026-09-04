@@ -21,6 +21,7 @@ import android.os.Looper;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -103,7 +104,7 @@ public final class MainActivity extends Activity {
         scroll.setBackgroundColor(background);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(22), dp(30), dp(22), dp(30));
+        applySystemInsets(root);
         scroll.addView(root);
 
         TextView title = text("Tailboard", 30, primary);
@@ -171,6 +172,27 @@ public final class MainActivity extends Activity {
         footer.setGravity(Gravity.CENTER);
         root.addView(footer, blockParams(dp(30)));
         return scroll;
+    }
+
+    @SuppressWarnings("deprecation")
+    private void applySystemInsets(View root) {
+        int horizontal = dp(22);
+        int top = dp(24);
+        int bottom = dp(30);
+        root.setPadding(horizontal, top, horizontal, bottom);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            int statusBar;
+            int navigationBar;
+            if (Build.VERSION.SDK_INT >= 30) {
+                statusBar = insets.getInsets(WindowInsets.Type.statusBars()).top;
+                navigationBar = insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
+            } else {
+                statusBar = insets.getSystemWindowInsetTop();
+                navigationBar = insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(horizontal, top + statusBar, horizontal, bottom + navigationBar);
+            return insets;
+        });
     }
 
     private void refresh() {

@@ -10,8 +10,8 @@ android {
         applicationId = "com.arjanflac.tailboard"
         minSdk = 29
         targetSdk = 37
-        versionCode = 17
-        versionName = "1.0.0"
+        versionCode = 18
+        versionName = "1.0.1"
     }
 
     compileOptions {
