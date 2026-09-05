@@ -2,8 +2,6 @@ package relay
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,16 +17,12 @@ import (
 
 const MaxTextBytes = 1 << 20
 
-// Clip is the one current text value. The timestamp/hash fields keep clients
-// installed from earlier Tailboard builds wire-compatible; nothing is retained.
+// Clip is the one current text value; there is no history or expiry schedule.
 type Clip struct {
-	Seq       uint64    `json:"seq"`
-	Content   string    `json:"content"`
-	Hash      string    `json:"hash"`
-	Source    string    `json:"source"`
-	DeviceID  string    `json:"device_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Seq      uint64 `json:"seq"`
+	Content  string `json:"content"`
+	Source   string `json:"source"`
+	DeviceID string `json:"device_id,omitempty"`
 }
 
 type message struct {
@@ -61,20 +55,15 @@ func (r *Relay) PutLocal(content, source string) *Clip {
 }
 
 func (r *Relay) put(content, source, deviceID string) *Clip {
-	sum := sha256.Sum256([]byte(content))
-	hash := hex.EncodeToString(sum[:])
-
 	r.mu.Lock()
-	if r.current != nil && r.current.Hash == hash {
+	if r.current != nil && r.current.Content == content {
 		item := *r.current
 		r.mu.Unlock()
 		return &item
 	}
 	r.seq++
-	now := time.Now().UTC()
 	item := Clip{
-		Seq: r.seq, Content: content, Hash: hash, Source: source,
-		DeviceID: deviceID, CreatedAt: now, ExpiresAt: now.Add(24 * time.Hour),
+		Seq: r.seq, Content: content, Source: source, DeviceID: deviceID,
 	}
 	r.current = &item
 	clients := r.snapshotClientsLocked()

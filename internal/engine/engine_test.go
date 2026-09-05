@@ -1,6 +1,11 @@
 package engine
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/arjanflac/tailboard/internal/relay"
+)
 
 type fakeClipboard struct {
 	text    string
@@ -56,5 +61,17 @@ func TestClearRemoteClearsSystemClipboard(t *testing.T) {
 	}
 	if board.text != "" || board.clears != 1 {
 		t.Fatalf("board = %#v", board)
+	}
+}
+
+func TestOversizedMacClipboardDoesNotReplaceCurrentText(t *testing.T) {
+	board := &fakeClipboard{text: "small", changed: true}
+	engine := New(board, "Mac")
+	engine.Poll()
+	board.text = strings.Repeat("x", relay.MaxTextBytes+1)
+	board.changed = true
+	engine.Poll()
+	if current := engine.Relay().Current(); current.Content != "small" || current.Seq != 1 {
+		t.Fatal("oversized clipboard replaced the current text")
 	}
 }

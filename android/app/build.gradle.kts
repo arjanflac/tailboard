@@ -10,8 +10,8 @@ android {
         applicationId = "com.arjanflac.tailboard"
         minSdk = 29
         targetSdk = 37
-        versionCode = 18
-        versionName = "1.0.1"
+        versionCode = 19
+        versionName = "1.0.2"
     }
 
     compileOptions {
@@ -22,5 +22,4 @@ android {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:5.5.0")
-    testImplementation("junit:junit:4.13.2")
 }

@@ -29,9 +29,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public final class MainActivity extends Activity {
-    private static final String ACTION_DEBUG_CONFIGURE =
-            "com.arjanflac.tailboard.DEBUG_CONFIGURE";
-
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final TailboardClient client = new TailboardClient();
     private TextView status;
@@ -59,10 +56,6 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         palette();
         setContentView(build());
-        if (ACTION_DEBUG_CONFIGURE.equals(getIntent().getAction())) {
-            configureFromIntent();
-            return;
-        }
         ClipboardSyncService.start(this);
         client.probe(this, (success, message) -> handler.post(() ->
                 status.setText(success ? "Connected through Tailscale" : "Mac unavailable")));
@@ -240,16 +233,6 @@ public final class MainActivity extends Activity {
             Toast.makeText(this, success ? "Both clipboards cleared" : message, Toast.LENGTH_SHORT).show();
             refresh();
         }));
-    }
-
-    private void configureFromIntent() {
-        String server = getIntent().getStringExtra("server_url");
-        String name = getIntent().getStringExtra("device_name");
-        if (server != null && name != null && !name.isBlank()) {
-            TailboardConfig.save(this, server, name);
-            ClipboardSyncService.restart(this);
-        }
-        finish();
     }
 
     private void requestTile() {

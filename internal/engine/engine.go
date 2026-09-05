@@ -32,11 +32,14 @@ func (e *Engine) Poll() {
 		return
 	}
 	text, err := e.board.ReadText()
-	if errors.Is(err, clipboard.ErrNoText) || text == "" {
+	if errors.Is(err, clipboard.ErrNoText) {
 		return
 	}
 	if err != nil {
 		slog.Warn("could not read clipboard", "error", err)
+		return
+	}
+	if text == "" || len(text) > relay.MaxTextBytes {
 		return
 	}
 

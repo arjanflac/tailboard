@@ -34,9 +34,9 @@ final class EngineServiceManager {
 
     private init() {}
 
-    func activate(forceRestart: Bool = false) async throws {
+    func activate() async throws {
         registerBundleLocations()
-        try await ensureEngineRegistered(forceRestart: forceRestart)
+        try await ensureEngineRegistered()
         UserDefaults.standard.removeObject(forKey: Self.lastErrorKey)
     }
 
@@ -44,7 +44,7 @@ final class EngineServiceManager {
         SMAppService.openSystemSettingsLoginItems()
     }
 
-    private func ensureEngineRegistered(forceRestart: Bool) async throws {
+    private func ensureEngineRegistered() async throws {
         let engineAppURL = Bundle.main.bundleURL
             .appendingPathComponent("Contents/Library/LoginItems", isDirectory: true)
             .appendingPathComponent("Tailboard Engine.app", isDirectory: true)
@@ -82,7 +82,7 @@ final class EngineServiceManager {
             let isRunning = !NSRunningApplication.runningApplications(
                 withBundleIdentifier: Self.engineBundleIdentifier
             ).isEmpty
-            if forceRestart || !isRunning {
+            if !isRunning {
                 try await restartEngineApplication(at: engineAppURL)
                 UserDefaults.standard.set(engineHash, forKey: Self.registeredHashKey)
             }

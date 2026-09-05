@@ -31,7 +31,7 @@ plutil -insert CFBundleInfoDictionaryVersion -string '6.0' "$INFO_PLIST"
 plutil -insert CFBundleName -string 'Tailboard Engine' "$INFO_PLIST"
 plutil -insert CFBundlePackageType -string APPL "$INFO_PLIST"
 plutil -insert CFBundleShortVersionString -string 2.0 "$INFO_PLIST"
-plutil -insert CFBundleVersion -string 8 "$INFO_PLIST"
+plutil -insert CFBundleVersion -string 9 "$INFO_PLIST"
 plutil -insert LSBackgroundOnly -bool true "$INFO_PLIST"
 plutil -insert LSMinimumSystemVersion -string 14.0 "$INFO_PLIST"
 

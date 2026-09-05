@@ -11,6 +11,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import okhttp3.HttpUrl;
+
 public final class SettingsActivity extends Activity {
     private EditText server;
     private EditText name;
@@ -56,7 +58,10 @@ public final class SettingsActivity extends Activity {
     private void save() {
         String url = server.getText().toString().trim();
         String phone = name.getText().toString().trim();
-        if (!(url.startsWith("http://") || url.startsWith("https://")) || phone.isEmpty()) {
+        HttpUrl parsed = HttpUrl.parse(url);
+        if (parsed == null || !parsed.username().isEmpty() || !parsed.password().isEmpty()
+                || !parsed.encodedPath().equals("/") || parsed.query() != null
+                || parsed.fragment() != null || phone.isEmpty()) {
             Toast.makeText(this, "Enter a valid Mac URL and phone name", Toast.LENGTH_LONG).show();
             return;
         }

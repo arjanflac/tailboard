@@ -29,13 +29,11 @@ final class TailboardClient {
     }
 
     static final class Clip {
-        final long sequence;
         final String content;
         final String source;
         final String deviceID;
 
-        Clip(long sequence, String content, String source, String deviceID) {
-            this.sequence = sequence;
+        Clip(String content, String source, String deviceID) {
             this.content = content;
             this.source = source;
             this.deviceID = deviceID;
@@ -43,7 +41,6 @@ final class TailboardClient {
 
         static Clip fromJSON(JSONObject json) {
             return new Clip(
-                    json.optLong("seq"),
                     json.optString("content"),
                     json.optString("source", "Mac"),
                     json.optString("device_id")
