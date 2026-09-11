@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,6 +20,7 @@ const MaxTextBytes = 1 << 20
 
 // Clip is the one current text value; there is no history or expiry schedule.
 type Clip struct {
+	ID       string `json:"id"`
 	Seq      uint64 `json:"seq"`
 	Content  string `json:"content"`
 	Source   string `json:"source"`
@@ -63,12 +65,12 @@ func (r *Relay) put(content, source, deviceID string) *Clip {
 	}
 	r.seq++
 	item := Clip{
+		ID:  rand.Text(),
 		Seq: r.seq, Content: content, Source: source, DeviceID: deviceID,
 	}
 	r.current = &item
-	clients := r.snapshotClientsLocked()
+	r.broadcastLocked(message{Type: "clip_update", Item: &item})
 	r.mu.Unlock()
-	r.broadcast(clients, message{Type: "clip_update", Item: &item})
 	return &item
 }
 
@@ -86,21 +88,13 @@ func (r *Relay) clear() {
 	r.mu.Lock()
 	r.current = nil
 	r.seq++
-	clients := r.snapshotClientsLocked()
+	r.broadcastLocked(message{Type: "clip_clear"})
 	r.mu.Unlock()
-	r.broadcast(clients, message{Type: "clip_clear"})
 }
 
-func (r *Relay) snapshotClientsLocked() []chan message {
-	clients := make([]chan message, 0, len(r.clients))
+// Queue in mutation order so an older update cannot follow a newer one.
+func (r *Relay) broadcastLocked(update message) {
 	for client := range r.clients {
-		clients = append(clients, client)
-	}
-	return clients
-}
-
-func (r *Relay) broadcast(clients []chan message, update message) {
-	for _, client := range clients {
 		select {
 		case client <- update:
 		default:

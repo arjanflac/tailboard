@@ -29,11 +29,13 @@ final class TailboardClient {
     }
 
     static final class Clip {
+        final String id;
         final String content;
         final String source;
         final String deviceID;
 
-        Clip(String content, String source, String deviceID) {
+        Clip(String id, String content, String source, String deviceID) {
+            this.id = id;
             this.content = content;
             this.source = source;
             this.deviceID = deviceID;
@@ -41,6 +43,7 @@ final class TailboardClient {
 
         static Clip fromJSON(JSONObject json) {
             return new Clip(
+                    json.optString("id"),
                     json.optString("content"),
                     json.optString("source", "Mac"),
                     json.optString("device_id")

@@ -2,10 +2,15 @@ package relay
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 )
 
 func TestPostGetAndClear(t *testing.T) {
@@ -78,5 +83,43 @@ func TestDuplicateTextDoesNotAdvanceSequence(t *testing.T) {
 	second := relay.PutLocal("same", "Mac")
 	if first.Seq != 1 || second.Seq != 1 {
 		t.Fatalf("sequences = %d, %d", first.Seq, second.Seq)
+	}
+	if first.ID == "" || first.ID != second.ID {
+		t.Fatal("duplicate text must retain its receipt ID")
+	}
+}
+
+func TestReconnectReplaysSameReceiptAndNewTextGetsNewReceipt(t *testing.T) {
+	r := New(nil, nil)
+	first := r.PutLocal("old text", "Mac")
+	server := httptest.NewServer(r.Handler())
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for range 3 {
+		conn, _, err := websocket.Dial(ctx, server.URL+"/api/clip/stream", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ready, update message
+		if err := wsjson.Read(ctx, conn, &ready); err != nil {
+			t.Fatal(err)
+		}
+		if err := wsjson.Read(ctx, conn, &update); err != nil {
+			t.Fatal(err)
+		}
+		conn.CloseNow()
+		if ready.Type != "ready" || update.Item == nil || update.Item.ID != first.ID {
+			t.Fatal("reconnect changed the receipt ID")
+		}
+	}
+	r.PutLocal("different text", "Mac")
+	again := r.PutLocal("old text", "Mac")
+	if again.ID == first.ID {
+		t.Fatal("a new copy needs a new receipt, even with the same text")
+	}
+	restarted := New(nil, nil).PutLocal("old text", "Mac")
+	if restarted.ID == first.ID {
+		t.Fatal("receipt IDs must not collide after a Mac restart")
 	}
 }

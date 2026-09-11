@@ -31,6 +31,7 @@ public final class ClipboardSyncService extends Service {
     private final AtomicInteger generation = new AtomicInteger();
     private final TailboardClient client = new TailboardClient();
     private WebSocket stream;
+    private ClipboardUpdates updates;
     private int reconnectAttempt;
     private boolean stopped;
 
@@ -52,6 +53,7 @@ public final class ClipboardSyncService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
+        updates = new ClipboardUpdates(TailboardConfig.lastReceivedID(this));
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID, "Tailboard connection", NotificationManager.IMPORTANCE_LOW);
         channel.setDescription("Keeps text connected to your Mac through Tailscale");
@@ -65,7 +67,7 @@ public final class ClipboardSyncService extends Service {
         if (ACTION_RESTART.equals(action)) {
             reconnectAttempt = 0;
             generation.incrementAndGet();
-            if (stream != null) stream.close(1000, "Settings changed");
+            if (stream != null) stream.cancel();
             stream = null;
         }
         if (ACTION_SEND_TEXT.equals(action)) sendText(intent.getStringExtra(EXTRA_TEXT));
@@ -78,35 +80,39 @@ public final class ClipboardSyncService extends Service {
         updateStatus("Connecting to Mac…");
         stream = client.openStream(this, new TailboardClient.StreamListener() {
             @Override public void onConnected() {
-                if (currentGeneration != generation.get()) return;
-                reconnectAttempt = 0;
-                updateStatus("Connected through Tailscale");
+                handler.post(() -> {
+                    if (stopped || currentGeneration != generation.get()) return;
+                    reconnectAttempt = 0;
+                    updateStatus("Connected through Tailscale");
+                });
             }
 
             @Override public void onClip(TailboardClient.Clip clip) {
-                if (currentGeneration != generation.get()) return;
-                if (TailboardConfig.deviceID(ClipboardSyncService.this).equals(clip.deviceID)) return;
                 handler.post(() -> {
-                    TextClipboard.write(ClipboardSyncService.this, clip.content);
-                    updateStatus("Copied from " + clip.source);
+                    if (stopped || currentGeneration != generation.get()) return;
+                    if (TailboardConfig.deviceID(ClipboardSyncService.this).equals(clip.deviceID)) return;
+                    if (updates.apply(clip.id, () -> TextClipboard.write(ClipboardSyncService.this, clip.content))) {
+                        TailboardConfig.received(ClipboardSyncService.this, clip.id);
+                        updateStatus("Copied from " + clip.source);
+                    }
                 });
             }
 
             @Override public void onClear() {
-                if (currentGeneration != generation.get()) return;
                 handler.post(() -> {
+                    if (stopped || currentGeneration != generation.get()) return;
                     TextClipboard.clear(ClipboardSyncService.this);
                     updateStatus("Clipboard cleared");
                 });
             }
 
             @Override public void onDisconnected(String reason) {
-                scheduleReconnect(currentGeneration, reason);
+                handler.post(() -> scheduleReconnect(currentGeneration));
             }
         });
     }
 
-    private void scheduleReconnect(int failedGeneration, String reason) {
+    private void scheduleReconnect(int failedGeneration) {
         if (stopped || failedGeneration != generation.get()) return;
         stream = null;
         long delay = Math.min(60_000L, 1_000L << Math.min(reconnectAttempt++, 6));
@@ -156,7 +162,7 @@ public final class ClipboardSyncService extends Service {
         stopped = true;
         generation.incrementAndGet();
         handler.removeCallbacksAndMessages(null);
-        if (stream != null) stream.close(1000, "Service stopped");
+        if (stream != null) stream.cancel();
         stream = null;
         super.onDestroy();
     }

@@ -12,6 +12,8 @@ Text only. Use [Taildrop](https://tailscale.com/kb/1106/taildrop) for files and 
 Tailboard has no clipboard history, database, share extension, or menu bar icon.
 The Mac keeps one text value in memory (up to 1 MiB); the phone stays connected
 in the background.
+Reconnecting does not copy the same update again. Android saves only the last
+received update's random ID, never its text. Update both apps together.
 There is no iOS app in this repo, and older Tailboard iOS builds are unsupported.
 
 ## Setup

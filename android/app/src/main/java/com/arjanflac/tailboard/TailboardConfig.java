@@ -12,6 +12,7 @@ final class TailboardConfig {
     private static final String SERVER = "server_url";
     private static final String NAME = "device_name";
     private static final String ID = "device_id";
+    private static final String RECEIVED = "last_received_id";
 
     private TailboardConfig() {}
 
@@ -21,6 +22,14 @@ final class TailboardConfig {
 
     static String serverURL(Context context) {
         return preferences(context).getString(SERVER, DEFAULT_SERVER_URL);
+    }
+
+    static String lastReceivedID(Context context) {
+        return preferences(context).getString(RECEIVED, "");
+    }
+
+    static void received(Context context, String id) {
+        preferences(context).edit().putString(RECEIVED, id).apply();
     }
 
     static String deviceName(Context context) {
