@@ -66,6 +66,7 @@ func TestSameOriginBrowserRequestIsRejected(t *testing.T) {
 	r := New(nil, nil)
 	r.PutLocal("synthetic", "Mac")
 	req := httptest.NewRequest("GET", "/api/clip", nil)
+	req.Host = "100.64.1.2:9437"
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	response := httptest.NewRecorder()
 	r.Handler().ServeHTTP(response, req)
@@ -86,6 +87,7 @@ func TestEscapedTextLimitAndDeviceMetadata(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			body, _ := json.Marshal(map[string]string{"content": tc.text, "device_id": tc.device})
 			req := httptest.NewRequest("POST", "/api/clip", bytes.NewReader(body))
+			req.Host = "100.64.1.2:9437"
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-Clip-Source", tc.source)
 			response := httptest.NewRecorder()
@@ -153,6 +155,7 @@ func TestRejectsEmptyAndOversizedText(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/api/clip", bytes.NewReader(body))
+			request.Host = "100.64.1.2:9437"
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
 			relay.Handler().ServeHTTP(response, request)
@@ -272,6 +275,7 @@ func TestRejectsBrowserAndFormClipboardRequests(t *testing.T) {
 			mutations := 0
 			r := New(func(string) error { mutations++; return nil }, func() error { mutations++; return nil })
 			req := httptest.NewRequest(tc.method, "/api/clip", bytes.NewBufferString(`{"content":"synthetic text"}`))
+			req.Host = "100.64.1.2:9437"
 			if tc.origin != "" {
 				req.Header.Set("Origin", tc.origin)
 			}
@@ -288,6 +292,30 @@ func TestRejectsBrowserAndFormClipboardRequests(t *testing.T) {
 			}
 			if tc.want == 201 && mutations != 1 {
 				t.Fatal("native request did not update clipboard")
+			}
+		})
+	}
+}
+
+func TestPublicHostCannotReadClipboardByDNSRebinding(t *testing.T) {
+	r := New(nil, nil)
+	r.PutLocal("synthetic private text", "Mac")
+	for _, host := range []string{"attacker.example", "8.8.8.8:9437", "macbook", "macbook.example.ts.net:9437", "100.64.1.2:9437", "127.0.0.1:9437"} {
+		t.Run(host, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/api/clip", nil)
+			req.Host = host
+			response := httptest.NewRecorder()
+			r.Handler().ServeHTTP(response, req)
+			forbidden := host == "attacker.example" || host == "8.8.8.8:9437"
+			if forbidden {
+				if response.Code != 403 || strings.Contains(response.Body.String(), "synthetic private text") {
+					t.Fatal("untrusted host could read clipboard")
+				}
+			} else if response.Code != 200 {
+				t.Fatalf("native destination rejected: %d", response.Code)
+			}
+			if response.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("clipboard response can be cached")
 			}
 		})
 	}

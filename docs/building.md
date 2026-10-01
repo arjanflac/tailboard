@@ -39,7 +39,7 @@ Mac's Tailscale address at port 9437. Do not use `--listen` to expose it publicl
 If several VPNs use Tailscale's IP range, automatic detection stops. Run the
 engine with `--listen YOUR_TAILSCALE_IP:9437` to choose the correct address.
 Clients connect directly to the selected Mac; HTTP redirects and system proxies
-are disabled.
+are disabled. Use its Tailscale IP or MagicDNS name; public DNS names are rejected.
 
 ## Optional Mac app
 

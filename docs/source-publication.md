@@ -39,8 +39,9 @@ replace, or clear the clipboard; there is no additional app login. Keep the
 service private and restrict it to trusted devices.
 
 Automatic discovery excludes LAN interfaces and refuses ambiguous CGNAT VPN
-matches. Browser Origin/Fetch Metadata requests are rejected. Payloads,
-metadata, stream counts, and network waits are bounded. Clients do not follow
+matches. Browser Origin/Fetch Metadata requests and public DNS Host headers are
+rejected; clipboard responses cannot be cached. Payloads, metadata, stream counts,
+and network waits are bounded. Clients do not follow
 HTTP redirects or use system proxies. These checks reduce specific risks;
 they do not make an untrusted tailnet safe.
 

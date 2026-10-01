@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -131,8 +132,25 @@ func (r *Relay) Handler() http.Handler {
 			writeError(w, http.StatusForbidden, "browser requests are not supported")
 			return
 		}
+		// Reject public DNS names, including DNS-rebinding requests whose
+		// browser omits Origin/Fetch Metadata on an insecure HTTP origin.
+		if !privateHost(request.Host) {
+			writeError(w, http.StatusForbidden, "use a Tailscale address or MagicDNS name")
+			return
+		}
 		mux.ServeHTTP(w, request)
 	})
+}
+
+func privateHost(host string) bool {
+	if name, _, err := net.SplitHostPort(host); err == nil {
+		host = name
+	}
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return ip.IsLoopback() || netip.MustParsePrefix("100.64.0.0/10").Contains(ip)
+	}
+	return host != "" && (host == "localhost" || !strings.ContainsAny(host, ".:[]") || strings.HasSuffix(host, ".ts.net"))
 }
 
 func (r *Relay) get(w http.ResponseWriter, _ *http.Request) {
@@ -290,6 +308,8 @@ func Listen(ctx context.Context, address string, r *Relay) error {
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
