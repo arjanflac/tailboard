@@ -1,4 +1,4 @@
-<img src="assets/branding/tailboard-app-icon-macos-1024.png" alt="Tailboard icon" width="96" height="96">
+<img src="assets/branding/tailboard-mark.png" alt="Tailboard icon" width="64" height="78">
 
 # Tailboard
 
