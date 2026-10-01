@@ -10,6 +10,12 @@ DESTINATION=/Applications/Tailboard.app
 INSTALL_STAGING="$PROJECT_DIR/.tailboard-build/install"
 STAGED_APP="$INSTALL_STAGING/Tailboard.app"
 
+if [ -f "$HOME/Library/LaunchAgents/com.arjanflac.tailboard.engine.local.plist" ] || \
+   launchctl print "gui/$(id -u)/com.arjanflac.tailboard.engine.local" >/dev/null 2>&1; then
+  echo "Remove the engine-only login agent with scripts/install-macos-engine-local.sh --uninstall before installing the app." >&2
+  exit 1
+fi
+
 if [ -f "$CONFIG_FILE" ]; then
   # shellcheck disable=SC1090
   . "$CONFIG_FILE"

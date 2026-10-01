@@ -30,6 +30,10 @@ Validation included Go tests, race checks and vet; Android unit tests, lint,
 builds and device tests; a local Mac app build and install; and an isolated
 ad-hoc-signed engine LaunchAgent started without a signing identity. The
 engine-only installer also refused to conflict with the personal app service.
+Go vulnerability scanning found standard-library issues in the old local
+toolchain; the minimum version was raised to patched Go 1.26.8, the engine
+rebuilt, and the scan added to CI. No reachable vulnerabilities were reported
+after the update.
 Android destination settings survive an upgrade and the installed phone can
 reach the installed Mac. These checks cover the supported personal setup;
 they are not a promise to support every macOS, Android, or tailnet policy.

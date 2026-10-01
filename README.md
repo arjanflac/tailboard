@@ -66,7 +66,7 @@ artifacts or using the maintainer's signing credentials.
 The engine does all clipboard and network work. `Tailboard.app` is an optional
 launcher that registers it with macOS as a background login item and then exits.
 You do not need the app, an Apple ID, or a signing certificate to build and run
-the engine locally. Install Go 1.26.1+ and Xcode Command Line Tools (or Xcode),
+the engine locally. Install Go 1.26.8+ and Xcode Command Line Tools (or Xcode),
 then run:
 
 ```sh
