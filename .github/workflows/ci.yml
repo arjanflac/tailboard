@@ -39,7 +39,7 @@ jobs:
       - uses: android-actions/setup-android@v4
       - run: sdkmanager "platforms;android-37.0" "build-tools;36.1.0"
       - working-directory: android
-        run: ./gradlew test lint assembleDebug
+        run: ./gradlew test lint assembleDebug assembleDebugAndroidTest
 
   mac-app:
     name: Mac app

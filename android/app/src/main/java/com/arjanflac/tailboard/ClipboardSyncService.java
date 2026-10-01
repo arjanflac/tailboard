@@ -7,6 +7,8 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ComponentName;
+import android.service.quicksettings.TileService;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -22,6 +24,7 @@ public final class ClipboardSyncService extends Service {
     static final String ACTION_SEND_TEXT = "com.arjanflac.tailboard.SEND_TEXT";
     static final String ACTION_STATUS = "com.arjanflac.tailboard.STATUS";
     static final String EXTRA_TEXT = "text";
+    static final String EXTRA_SERVER = "server";
     static final String EXTRA_STATUS = "status";
 
     private static final String CHANNEL_ID = "clipboard_connection";
@@ -34,6 +37,8 @@ public final class ClipboardSyncService extends Service {
     private ClipboardUpdates updates;
     private int reconnectAttempt;
     private boolean stopped;
+    private MacDestination destination;
+    private String connectionStatus = "Connecting…";
 
     static void start(Context context) {
         context.startForegroundService(new Intent(context, ClipboardSyncService.class)
@@ -53,6 +58,7 @@ public final class ClipboardSyncService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
+        destination = TailboardConfig.destination(this);
         updates = new ClipboardUpdates(TailboardConfig.lastReceivedID(this));
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID, "Tailboard connection", NotificationManager.IMPORTANCE_LOW);
@@ -61,29 +67,31 @@ public final class ClipboardSyncService extends Service {
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startID) {
-        startForeground(NOTIFICATION_ID, notification("Connected through Tailscale"));
+        startForeground(NOTIFICATION_ID, notification(connectionStatus));
         stopped = false;
         String action = intent == null ? ACTION_START : intent.getAction();
-        if (ACTION_RESTART.equals(action)) {
+        if (ACTION_RESTART.equals(action) || !destination.url.equals(TailboardConfig.serverURL(this))) {
+            destination = TailboardConfig.destination(this);
             reconnectAttempt = 0;
             generation.incrementAndGet();
             if (stream != null) stream.cancel();
             stream = null;
         }
         if (ACTION_SEND_TEXT.equals(action)) sendText(intent.getStringExtra(EXTRA_TEXT));
-        if (stream == null) connect();
+        if (stream == null && destination.configured()) connect();
+        if (!destination.configured()) updateConnectionStatus("Choose a default Mac in Tailboard");
         return START_STICKY;
     }
 
     private void connect() {
         int currentGeneration = generation.incrementAndGet();
-        updateStatus("Connecting to Mac…");
+        updateConnectionStatus("Connecting to " + destination.name + "…");
         stream = client.openStream(this, new TailboardClient.StreamListener() {
             @Override public void onConnected() {
                 handler.post(() -> {
                     if (stopped || currentGeneration != generation.get()) return;
                     reconnectAttempt = 0;
-                    updateStatus("Connected through Tailscale");
+                    updateConnectionStatus("Connected to " + destination.name);
                 });
             }
 
@@ -116,29 +124,35 @@ public final class ClipboardSyncService extends Service {
         if (stopped || failedGeneration != generation.get()) return;
         stream = null;
         long delay = Math.min(60_000L, 1_000L << Math.min(reconnectAttempt++, 6));
-        updateStatus("Reconnecting…");
+        updateConnectionStatus(destination.name + " unavailable · reconnecting…");
         handler.postDelayed(() -> {
             if (!stopped && failedGeneration == generation.get() && stream == null) connect();
         }, delay);
     }
 
     private void sendText(String text) {
+        MacDestination target = TailboardConfig.destination(this);
         client.postText(this, text, (clip, error) -> handler.post(() -> {
-            if (clip != null) {
-                updateStatus("Sent to Mac");
-                Toast.makeText(this, "Sent to Mac", Toast.LENGTH_SHORT).show();
-            } else {
-                updateStatus("Send failed");
-                Toast.makeText(this, error, Toast.LENGTH_LONG).show();
-            }
+            String message = clip != null ? "Sent to " + target.name
+                    : error == null ? "Unexpected reply from " + target.name : error;
+            if (target.url.equals(destination.url)) updateStatus(message);
+            Toast.makeText(this, message, clip != null ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG).show();
         }));
+    }
+
+    private void updateConnectionStatus(String status) {
+        connectionStatus = status;
+        startForeground(NOTIFICATION_ID, notification(status));
+        TileService.requestListeningState(this, new ComponentName(this, ClipboardTileService.class));
+        updateStatus(status);
     }
 
     private void updateStatus(String status) {
         handler.post(() -> {
             Intent broadcast = new Intent(ACTION_STATUS)
                     .setPackage(getPackageName())
-                    .putExtra(EXTRA_STATUS, status);
+                    .putExtra(EXTRA_STATUS, status)
+                    .putExtra(EXTRA_SERVER, destination.url);
             sendBroadcast(broadcast);
         });
     }

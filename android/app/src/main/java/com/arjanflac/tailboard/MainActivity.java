@@ -43,7 +43,8 @@ public final class MainActivity extends Activity {
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             String value = intent.getStringExtra(ClipboardSyncService.EXTRA_STATUS);
-            if (value != null) {
+            if (value != null && TailboardConfig.serverURL(context).equals(
+                    intent.getStringExtra(ClipboardSyncService.EXTRA_SERVER))) {
                 status.setText(value);
                 if (value.startsWith("Copied") || value.startsWith("Sent") || value.contains("cleared")) {
                     refresh();
@@ -57,12 +58,16 @@ public final class MainActivity extends Activity {
         palette();
         setContentView(build());
         ClipboardSyncService.start(this);
-        client.probe(this, (success, message) -> handler.post(() ->
-                status.setText(success ? "Connected through Tailscale" : "Mac unavailable")));
     }
 
     @Override protected void onResume() {
         super.onResume();
+        setContentView(build());
+        String url = TailboardConfig.serverURL(this);
+        client.probe(this, (success, message) -> handler.post(() -> {
+            if (!url.equals(TailboardConfig.serverURL(this))) return;
+            status.setText(success ? "Connected to " + TailboardConfig.destination(this).name : message);
+        }));
         refresh();
     }
 
@@ -124,10 +129,10 @@ public final class MainActivity extends Activity {
         current.addView(source);
         root.addView(current, cardParams(dp(24)));
 
-        Button send = button("Send clipboard to Mac", true);
+        Button send = button("Send clipboard to " + TailboardConfig.destination(this).name, true);
         send.setOnClickListener(view -> send());
         root.addView(send, blockParams(dp(14)));
-        Button receive = button("Copy latest from Mac", false);
+        Button receive = button("Copy latest from " + TailboardConfig.destination(this).name, false);
         receive.setOnClickListener(view -> receive());
         root.addView(receive, blockParams(dp(10)));
         Button clear = button("Clear both clipboards", false);
@@ -146,15 +151,15 @@ public final class MainActivity extends Activity {
         tile.setOnClickListener(view -> requestTile());
         root.addView(tile, blockParams(dp(10)));
 
-        TextView connectionLabel = text("CONNECTION", 12, secondary);
+        TextView connectionLabel = text("DEFAULT MAC", 12, secondary);
         connectionLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         root.addView(connectionLabel, blockParams(dp(28)));
         LinearLayout connection = card();
-        connection.addView(text("Mac\n" + TailboardConfig.serverURL(this), 14, primary));
+        connection.addView(text(TailboardConfig.destination(this).name + "\n" + TailboardConfig.serverURL(this), 14, primary));
         TextView device = text("\nThis phone\n" + TailboardConfig.deviceName(this), 14, primary);
         connection.addView(device);
         root.addView(connection, cardParams(dp(10)));
-        Button settings = button("Edit connection", false);
+        Button settings = button("Choose default Mac", false);
         settings.setOnClickListener(view -> startActivity(new Intent(this, SettingsActivity.class)));
         root.addView(settings, blockParams(dp(10)));
 
@@ -190,7 +195,9 @@ public final class MainActivity extends Activity {
 
     private void refresh() {
         if (preview == null) return;
+        String url = TailboardConfig.serverURL(this);
         client.getCurrent(this, (clip, error) -> handler.post(() -> {
+            if (!url.equals(TailboardConfig.serverURL(this))) return;
             if (clip == null) {
                 preview.setText("Nothing copied yet");
                 source.setText(error == null ? "" : error);
@@ -230,7 +237,7 @@ public final class MainActivity extends Activity {
     private void clear() {
         TextClipboard.clear(this);
         client.clear(this, (success, message) -> handler.post(() -> {
-            Toast.makeText(this, success ? "Both clipboards cleared" : message, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, success ? "Both clipboards cleared" : "Phone cleared; " + message, Toast.LENGTH_SHORT).show();
             refresh();
         }));
     }

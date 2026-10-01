@@ -53,51 +53,90 @@ final class TailboardClient {
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private final OkHttpClient http = new OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(4, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .writeTimeout(5, TimeUnit.SECONDS)
             .pingInterval(25, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
+            .callTimeout(6, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(false)
             .build();
     private final OkHttpClient streamHTTP = http.newBuilder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
+            .callTimeout(0, TimeUnit.MILLISECONDS)
+            .retryOnConnectionFailure(true)
             .build();
 
     void probe(Context context, ResultCallback callback) {
-        execute(new Request.Builder().url(endpoint(context, "/healthz")).build(), callback);
+        MacDestination destination = TailboardConfig.destination(context);
+        if (!destination.configured()) {
+            callback.onResult(false, "Choose a default Mac in Tailboard");
+            return;
+        }
+        http.newCall(new Request.Builder().url(destination.url + "/healthz").build()).enqueue(new Callback() {
+            @Override public void onFailure(Call call, java.io.IOException error) {
+                callback.onResult(false, destination.unavailable());
+            }
+            @Override public void onResponse(Call call, Response response) {
+                try (response) {
+                    boolean ready = response.isSuccessful() && response.body() != null
+                            && "ok".equals(response.body().string().trim());
+                    callback.onResult(ready, ready ? "OK"
+                            : "Tailboard not found on " + destination.name + ". Check its address.");
+                } catch (java.io.IOException error) {
+                    callback.onResult(false, destination.unavailable());
+                }
+            }
+        });
     }
 
     void postText(Context context, String text, ClipCallback callback) {
-        if (text == null || text.isEmpty()) {
-            callback.onResult(null, "Clipboard has no standalone text");
+        MacDestination destination = TailboardConfig.destination(context);
+        if (!destination.configured()) {
+            callback.onResult(null, "Choose a default Mac in Tailboard");
+            return;
+        }
+        if (!MacDestination.validText(text)) {
+            callback.onResult(null, text == null || text.isEmpty()
+                    ? "Clipboard has no standalone text" : "Clipboard text is too large (maximum 1 MiB)");
             return;
         }
         try {
             JSONObject body = new JSONObject()
                     .put("content", text)
                     .put("device_id", TailboardConfig.deviceID(context));
-            Request request = jsonRequest(context, "/api/clip", body);
-            http.newCall(request).enqueue(clipResponse(callback));
+            Request request = jsonRequest(context, destination, "/api/clip", body);
+            http.newCall(request).enqueue(clipResponse(destination, callback));
         } catch (JSONException error) {
-            callback.onResult(null, friendly(error));
+            callback.onResult(null, destination.unavailable());
         }
     }
 
     void getCurrent(Context context, ClipCallback callback) {
-        Request request = new Request.Builder().url(endpoint(context, "/api/clip")).build();
-        http.newCall(request).enqueue(clipResponse(callback));
+        MacDestination destination = TailboardConfig.destination(context);
+        if (!destination.configured()) {
+            callback.onResult(null, "Choose a default Mac in Tailboard");
+            return;
+        }
+        Request request = new Request.Builder().url(destination.url + "/api/clip").build();
+        http.newCall(request).enqueue(clipResponse(destination, callback));
     }
 
     void clear(Context context, ResultCallback callback) {
+        MacDestination destination = TailboardConfig.destination(context);
+        if (!destination.configured()) {
+            callback.onResult(false, "Choose a default Mac in Tailboard");
+            return;
+        }
         Request request = new Request.Builder()
-                .url(endpoint(context, "/api/clip"))
+                .url(destination.url + "/api/clip")
                 .delete()
                 .build();
-        execute(request, callback);
+        execute(request, destination, callback);
     }
 
     WebSocket openStream(Context context, StreamListener listener) {
-        String httpURL = HttpUrl.get(endpoint(context, "/api/clip/stream")).newBuilder()
+        MacDestination destination = TailboardConfig.destination(context);
+        String httpURL = HttpUrl.get(destination.url + "/api/clip/stream").newBuilder()
                 .addQueryParameter("device_id", TailboardConfig.deviceID(context))
                 .build().toString();
         String socketURL = httpURL.startsWith("https://")
@@ -126,15 +165,15 @@ final class TailboardClient {
                     }
 
                     @Override public void onFailure(WebSocket socket, Throwable error, Response response) {
-                        listener.onDisconnected(friendly(error));
+                        listener.onDisconnected(destination.unavailable());
                     }
                 });
     }
 
-    private Callback clipResponse(ClipCallback callback) {
+    private Callback clipResponse(MacDestination destination, ClipCallback callback) {
         return new Callback() {
             @Override public void onFailure(Call call, java.io.IOException error) {
-                callback.onResult(null, friendly(error));
+                callback.onResult(null, destination.unavailable());
             }
 
             @Override public void onResponse(Call call, Response response) {
@@ -145,46 +184,40 @@ final class TailboardClient {
                     }
                     String body = response.body() == null ? "" : response.body().string();
                     if (!response.isSuccessful()) {
-                        callback.onResult(null, "Mac returned " + response.code());
+                        callback.onResult(null, destination.httpError(response.code()));
                         return;
                     }
-                    callback.onResult(Clip.fromJSON(new JSONObject(body)), null);
+                    Clip clip = Clip.fromJSON(new JSONObject(body));
+                    if (clip.id.isEmpty() || clip.content.isEmpty()) throw new JSONException("Invalid clip");
+                    callback.onResult(clip, null);
                 } catch (Exception error) {
-                    callback.onResult(null, friendly(error));
+                    callback.onResult(null, "Unexpected reply from " + destination.name + ". Check its address.");
                 }
             }
         };
     }
 
-    private Request jsonRequest(Context context, String path, JSONObject body) {
+    private Request jsonRequest(Context context, MacDestination destination, String path, JSONObject body) {
         return new Request.Builder()
-                .url(endpoint(context, path))
+                .url(destination.url + path)
                 .header("X-Clip-Source", TailboardConfig.deviceName(context))
                 .post(RequestBody.create(body.toString(), JSON))
                 .build();
     }
 
-    private void execute(Request request, ResultCallback callback) {
+    private void execute(Request request, MacDestination destination, ResultCallback callback) {
         http.newCall(request).enqueue(new Callback() {
             @Override public void onFailure(Call call, java.io.IOException error) {
-                callback.onResult(false, friendly(error));
+                callback.onResult(false, destination.unavailable());
             }
 
             @Override public void onResponse(Call call, Response response) {
                 try (response) {
                     callback.onResult(response.isSuccessful(),
-                            response.isSuccessful() ? "OK" : "Mac returned " + response.code());
+                            response.isSuccessful() ? "OK" : destination.httpError(response.code()));
                 }
             }
         });
     }
 
-    private static String endpoint(Context context, String path) {
-        return TailboardConfig.serverURL(context) + path;
-    }
-
-    private static String friendly(Throwable error) {
-        String message = error.getMessage();
-        return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
-    }
 }

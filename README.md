@@ -25,10 +25,26 @@ After installing, open Tailboard on the Mac once to enable its background servic
 The engine waits quietly if Tailscale is disconnected and resumes automatically
 when it reconnects, including after login, sleep, or a macOS update. It listens
 only on the Mac's Tailscale address, never on a public or LAN interface.
-On Android, enter `http://<your-mac-tailscale-ip>:9437` in **Edit connection**, then
+On Android, open **Choose default Mac**, give your Mac a name, and enter its
+Tailscale IP or MagicDNS hostname (for example, `100.x.x.x` or `macbook`). Tap
+**Save as default Mac**, then
 tap **Add Send Clipboard tile**. On older Android versions, add the tile using
 the Quick Settings editor. If your phone stops receiving in the background,
 check that its battery settings allow Tailboard to run.
+
+You can save multiple named Macs and select one as the default. Selecting a saved
+Mac and tapping **Save as default Mac** switches both sending and receiving to it.
+Existing installations keep their saved Mac address when upgrading. The tile
+shows the selected Mac and checks availability when you open Quick Settings.
+A send reports **Sent to MacBook** only after that Mac confirms receipt; if it
+cannot connect, it shows **MacBook unavailable. Check Tailscale and Tailboard.**
+Tailboard cannot distinguish a powered-off Mac from a disconnected Tailscale app
+or stopped Tailboard service. Sends time out after at most six seconds.
+
+The phone sends only to its default Mac, never to every device on the tailnet.
+That Mac shares the current text with phones connected to its Tailboard server.
+No Tailscale API credentials or automatic peer discovery are required. Addresses
+with custom ports are supported, including full `http://` or `https://` URLs.
 
 **No ADB permission grant, root, or accessibility service is needed.** Android
 [requires focus to read the clipboard](https://developer.android.com/about/versions/10/privacy/changes#clipboard-data),
@@ -55,10 +71,14 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ADB needs an authorized USB connection or paired wireless debugging connection.
 Alternatively, copy the APK to the phone and open it to install.
 The Mac installer uses the Xcode selected by `xcode-select` (or `DEVELOPER_DIR`)
-and reuses the signing team of
-an existing Tailboard installation. Set `TAILBOARD_MAC_CODESIGN_IDENTITY` to
+and reuses the signing team of an existing Tailboard installation. Set `TAILBOARD_MAC_CODESIGN_IDENTITY` to
 your certificate's SHA-1 hash if you need to choose a different identity.
 Set `TAILBOARD_DEVELOPER_DIR` to override the selected Xcode.
+
+Android checks run with `(cd android && ./gradlew test lint assembleDebug)`.
+With an authorized phone attached, run `(cd android && ./gradlew connectedDebugAndroidTest)`
+to verify saved-Mac upgrades, destination switching, and send failures on device.
+These tests restore the phone's Tailboard settings and use only synthetic text.
 
 For diagnostics, `make tailboard` builds the CLI:
 

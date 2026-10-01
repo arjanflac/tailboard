@@ -1,0 +1,5 @@
+<resources>
+    <item name="mac_name" type="id" />
+    <item name="mac_address" type="id" />
+    <item name="phone_name" type="id" />
+</resources>
