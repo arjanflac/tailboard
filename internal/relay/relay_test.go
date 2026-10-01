@@ -69,6 +69,7 @@ func TestRejectsEmptyAndOversizedText(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/api/clip", bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
 			relay.Handler().ServeHTTP(response, request)
 			if response.Code != http.StatusBadRequest {
@@ -167,5 +168,43 @@ func TestListenerShutdownDisconnectsStreams(t *testing.T) {
 		}
 	case <-testContext.Done():
 		t.Fatal("listener did not stop")
+	}
+}
+
+func TestRejectsBrowserAndFormClipboardRequests(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, origin, contentType string
+		want                              int
+	}{
+		{"cross-origin POST", "POST", "https://example.org", "application/json", 403},
+		{"opaque-origin POST", "POST", "null", "application/json", 403},
+		{"cross-origin DELETE", "DELETE", "https://example.org", "", 403},
+		{"cross-origin read", "GET", "https://example.org", "", 403},
+		{"HTML form", "POST", "", "text/plain", 415},
+		{"missing content type", "POST", "", "", 415},
+		{"native JSON", "POST", "", "application/json; charset=utf-8", 201},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mutations := 0
+			r := New(func(string) error { mutations++; return nil }, func() error { mutations++; return nil })
+			req := httptest.NewRequest(tc.method, "/api/clip", bytes.NewBufferString(`{"content":"synthetic text"}`))
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			if tc.contentType != "" {
+				req.Header.Set("Content-Type", tc.contentType)
+			}
+			response := httptest.NewRecorder()
+			r.Handler().ServeHTTP(response, req)
+			if response.Code != tc.want {
+				t.Fatalf("status = %d, want %d", response.Code, tc.want)
+			}
+			if tc.want != 201 && mutations != 0 {
+				t.Fatal("rejected request changed the clipboard")
+			}
+			if tc.want == 201 && mutations != 1 {
+				t.Fatal("native request did not update clipboard")
+			}
+		})
 	}
 }

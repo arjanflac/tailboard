@@ -31,17 +31,17 @@ public final class SettingsActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(24), dp(24), dp(24), dp(32));
+        root.setPadding(dp(20), dp(20), dp(20), dp(20));
         root.setOnApplyWindowInsetsListener((view, insets) -> {
-            view.setPadding(dp(24), dp(24) + insets.getSystemWindowInsetTop(),
-                    dp(24), dp(32) + insets.getSystemWindowInsetBottom());
+            view.setPadding(dp(20), dp(20) + insets.getSystemWindowInsetTop(),
+                    dp(20), dp(20) + insets.getSystemWindowInsetBottom());
             return insets;
         });
         root.setBackgroundColor(background);
         TextView title = label("Default Mac", 28, primary, true);
         root.addView(title);
         TextView help = label("Clipboard sends and receives use only the Mac selected here. Both devices need Tailscale and Tailboard running.", 15, secondary, false);
-        help.setPadding(0, dp(8), 0, dp(24));
+        help.setPadding(0, dp(8), 0, dp(16));
         root.addView(help);
 
         RadioGroup saved = new RadioGroup(this);
@@ -57,14 +57,17 @@ public final class SettingsActivity extends Activity {
                 server.setText(destination.url);
             });
         }
-        root.addView(saved);
+        if (saved.getChildCount() > 0) {
+            root.addView(label("Saved Macs", 13, secondary, true));
+            root.addView(saved);
+        }
         MacDestination current = TailboardConfig.destination(this);
-        root.addView(label("Mac name", 13, secondary, true));
+        root.addView(label("Mac name", 13, secondary, true), spaced(16));
         macName = field(current.name, primary);
         macName.setHint("MacBook");
         macName.setId(R.id.mac_name);
         root.addView(macName);
-        root.addView(label("Tailscale address", 13, secondary, true));
+        root.addView(label("Tailscale address", 13, secondary, true), spaced(12));
         server = field(current.configured() ? current.url : "", primary);
         server.setHint("macbook or 100.x.x.x");
         server.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
@@ -79,9 +82,9 @@ public final class SettingsActivity extends Activity {
             server.setText("");
             macName.requestFocus();
         });
-        root.addView(add);
+        root.addView(add, spaced(8));
         TextView phoneLabel = label("Phone name", 13, secondary, true);
-        phoneLabel.setPadding(0, dp(20), 0, 0);
+        phoneLabel.setPadding(0, dp(16), 0, 0);
         root.addView(phoneLabel);
         name = field(TailboardConfig.deviceName(this), primary);
         name.setId(R.id.phone_name);
@@ -92,7 +95,7 @@ public final class SettingsActivity extends Activity {
         save.setAllCaps(false);
         save.setTextSize(16);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.topMargin = dp(28);
+        params.topMargin = dp(16);
         root.addView(save, params);
         save.setOnClickListener(view -> save());
         ScrollView scroll = new ScrollView(this);
@@ -125,6 +128,7 @@ public final class SettingsActivity extends Activity {
         field.setTextColor(color);
         field.setSingleLine(true);
         field.setTextSize(16);
+        field.setMinHeight(dp(48));
         return field;
     }
 
@@ -132,9 +136,16 @@ public final class SettingsActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(size);
+        view.setIncludeFontPadding(false);
         view.setTextColor(color);
         if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         return view;
+    }
+
+    private LinearLayout.LayoutParams spaced(int top) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = dp(top);
+        return params;
     }
 
     private int dp(int value) {

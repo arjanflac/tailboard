@@ -39,6 +39,7 @@ public final class MainActivity extends Activity {
     private int card;
     private int primary;
     private int secondary;
+    private String displayedConnection;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -62,7 +63,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        setContentView(build());
+        if (!connectionKey().equals(displayedConnection)) setContentView(build());
         String url = TailboardConfig.serverURL(this);
         client.probe(this, (success, message) -> handler.post(() -> {
             if (!url.equals(TailboardConfig.serverURL(this))) return;
@@ -97,7 +98,13 @@ public final class MainActivity extends Activity {
                 View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
     }
 
+    private String connectionKey() {
+        return TailboardConfig.serverURL(this) + "\n" + TailboardConfig.destination(this).name
+                + "\n" + TailboardConfig.deviceName(this);
+    }
+
     private View build() {
+        displayedConnection = connectionKey();
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(background);
         LinearLayout root = new LinearLayout(this);
@@ -127,56 +134,56 @@ public final class MainActivity extends Activity {
         current.addView(preview);
         source = text("", 13, secondary);
         current.addView(source);
-        root.addView(current, cardParams(dp(24)));
+        root.addView(current, cardParams(dp(20)));
 
         Button send = button("Send clipboard to " + TailboardConfig.destination(this).name, true);
         send.setOnClickListener(view -> send());
-        root.addView(send, blockParams(dp(14)));
+        root.addView(send, blockParams(dp(12)));
         Button receive = button("Copy latest from " + TailboardConfig.destination(this).name, false);
         receive.setOnClickListener(view -> receive());
-        root.addView(receive, blockParams(dp(10)));
+        root.addView(receive, blockParams(dp(8)));
         Button clear = button("Clear both clipboards", false);
         clear.setOnClickListener(view -> clear());
-        root.addView(clear, blockParams(dp(10)));
+        root.addView(clear, blockParams(dp(8)));
 
         TextView quickLabel = text("QUICK SETTINGS", 12, secondary);
         quickLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        root.addView(quickLabel, blockParams(dp(28)));
+        root.addView(quickLabel, blockParams(dp(24)));
         TextView quickHelp = text(
-                "Add Send Clipboard for one-tap sending. Android only lets a foreground action read copied text.",
+                "Send copied text without opening Tailboard.",
                 14, secondary);
         quickHelp.setPadding(0, dp(8), 0, dp(4));
         root.addView(quickHelp);
         Button tile = button("Add Send Clipboard tile", false);
         tile.setOnClickListener(view -> requestTile());
-        root.addView(tile, blockParams(dp(10)));
+        root.addView(tile, blockParams(dp(8)));
 
         TextView connectionLabel = text("DEFAULT MAC", 12, secondary);
         connectionLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        root.addView(connectionLabel, blockParams(dp(28)));
+        root.addView(connectionLabel, blockParams(dp(24)));
         LinearLayout connection = card();
         connection.addView(text(TailboardConfig.destination(this).name + "\n" + TailboardConfig.serverURL(this), 14, primary));
-        TextView device = text("\nThis phone\n" + TailboardConfig.deviceName(this), 14, primary);
-        connection.addView(device);
+        TextView device = text("This phone · " + TailboardConfig.deviceName(this), 14, primary);
+        connection.addView(device, blockParams(dp(12)));
         root.addView(connection, cardParams(dp(10)));
         Button settings = button("Choose default Mac", false);
         settings.setOnClickListener(view -> startActivity(new Intent(this, SettingsActivity.class)));
-        root.addView(settings, blockParams(dp(10)));
+        root.addView(settings, blockParams(dp(8)));
 
         String version = "";
         try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
         catch (PackageManager.NameNotFoundException ignored) {}
         TextView footer = text("Text only · Taildrop handles files · v" + version, 12, secondary);
         footer.setGravity(Gravity.CENTER);
-        root.addView(footer, blockParams(dp(30)));
+        root.addView(footer, blockParams(dp(24)));
         return scroll;
     }
 
     @SuppressWarnings("deprecation")
     private void applySystemInsets(View root) {
-        int horizontal = dp(22);
-        int top = dp(24);
-        int bottom = dp(30);
+        int horizontal = dp(20);
+        int top = dp(20);
+        int bottom = dp(20);
         root.setPadding(horizontal, top, horizontal, bottom);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             int statusBar;
@@ -256,7 +263,7 @@ public final class MainActivity extends Activity {
     private LinearLayout card() {
         LinearLayout view = new LinearLayout(this);
         view.setOrientation(LinearLayout.VERTICAL);
-        view.setPadding(dp(18), dp(17), dp(18), dp(17));
+        view.setPadding(dp(16), dp(16), dp(16), dp(16));
         view.setBackground(rounded(card, 18));
         return view;
     }
@@ -266,6 +273,9 @@ public final class MainActivity extends Activity {
         button.setText(label);
         button.setAllCaps(false);
         button.setTextSize(15);
+        button.setMinHeight(dp(48));
+        button.setMinimumHeight(dp(48));
+        button.setPadding(dp(16), dp(12), dp(16), dp(12));
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         button.setTextColor(filled ? background : primary);
         button.setBackground(rounded(filled ? primary : card, 14));
@@ -276,6 +286,7 @@ public final class MainActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(size);
+        view.setIncludeFontPadding(false);
         view.setTextColor(color);
         view.setLineSpacing(0, 1.08f);
         return view;
@@ -289,7 +300,7 @@ public final class MainActivity extends Activity {
     }
 
     private LinearLayout.LayoutParams blockParams(int top) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(52));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.topMargin = top;
         return params;
     }

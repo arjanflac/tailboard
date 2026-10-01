@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"strings"
@@ -121,7 +122,15 @@ func (r *Relay) Handler() http.Handler {
 	mux.HandleFunc("POST /api/clip", r.post)
 	mux.HandleFunc("DELETE /api/clip", r.delete)
 	mux.HandleFunc("GET /api/clip/stream", r.stream)
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		// Tailboard has native clients, not a browser UI. A website visited on
+		// a tailnet device must not be able to read or mutate its clipboard.
+		if len(request.Header.Values("Origin")) != 0 {
+			writeError(w, http.StatusForbidden, "browser requests are not supported")
+			return
+		}
+		mux.ServeHTTP(w, request)
+	})
 }
 
 func (r *Relay) get(w http.ResponseWriter, _ *http.Request) {
@@ -134,6 +143,11 @@ func (r *Relay) get(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (r *Relay) post(w http.ResponseWriter, request *http.Request) {
+	contentType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || contentType != "application/json" {
+		writeError(w, http.StatusUnsupportedMediaType, "use application/json")
+		return
+	}
 	var payload struct {
 		Content  string `json:"content"`
 		DeviceID string `json:"device_id"`

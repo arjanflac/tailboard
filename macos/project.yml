@@ -27,7 +27,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.arjanflac.tailboard.host
       PRODUCT_NAME: Tailboard
       MARKETING_VERSION: 2.0
-      CURRENT_PROJECT_VERSION: 15
+      CURRENT_PROJECT_VERSION: 16
       INFOPLIST_FILE: TailboardMacHost/Info.plist
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ENABLE_HARDENED_RUNTIME: true
