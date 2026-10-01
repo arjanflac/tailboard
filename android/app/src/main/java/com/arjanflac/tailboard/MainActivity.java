@@ -34,7 +34,6 @@ public final class MainActivity extends Activity {
     private TextView status;
     private TextView preview;
     private TextView source;
-    private boolean dark;
     private int background;
     private int card;
     private int primary;
@@ -86,7 +85,7 @@ public final class MainActivity extends Activity {
     }
 
     private void palette() {
-        dark = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+        boolean dark = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 == Configuration.UI_MODE_NIGHT_YES;
         background = Color.parseColor(dark ? "#111111" : "#F3F3F1");
         card = Color.parseColor(dark ? "#1C1C1C" : "#FFFFFF");
@@ -134,7 +133,7 @@ public final class MainActivity extends Activity {
         current.addView(preview);
         source = text("", 13, secondary);
         current.addView(source);
-        root.addView(current, cardParams(dp(20)));
+        root.addView(current, blockParams(dp(20)));
 
         Button send = button("Send clipboard to " + TailboardConfig.destination(this).name, true);
         send.setOnClickListener(view -> send());
@@ -165,7 +164,7 @@ public final class MainActivity extends Activity {
         connection.addView(text(TailboardConfig.destination(this).name + "\n" + TailboardConfig.serverURL(this), 14, primary));
         TextView device = text("This phone · " + TailboardConfig.deviceName(this), 14, primary);
         connection.addView(device, blockParams(dp(12)));
-        root.addView(connection, cardParams(dp(10)));
+        root.addView(connection, blockParams(dp(10)));
         Button settings = button("Choose default Mac", false);
         settings.setOnClickListener(view -> startActivity(new Intent(this, SettingsActivity.class)));
         root.addView(settings, blockParams(dp(8)));
@@ -300,12 +299,6 @@ public final class MainActivity extends Activity {
     }
 
     private LinearLayout.LayoutParams blockParams(int top) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.topMargin = top;
-        return params;
-    }
-
-    private LinearLayout.LayoutParams cardParams(int top) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.topMargin = top;
         return params;

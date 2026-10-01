@@ -36,6 +36,10 @@ Run the installer again to update. To stop and remove it:
 
 The engine waits for Tailscale and resumes when it reconnects. It listens on the
 Mac's Tailscale address at port 9437. Do not use `--listen` to expose it publicly.
+If several VPNs use Tailscale's IP range, automatic detection stops. Run the
+engine with `--listen YOUR_TAILSCALE_IP:9437` to choose the correct address.
+Clients connect directly to the selected Mac; HTTP redirects and system proxies
+are disabled.
 
 ## Optional Mac app
 

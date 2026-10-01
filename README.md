@@ -1,6 +1,8 @@
-<img src="assets/branding/tailboard-mark.png" alt="Tailboard icon" width="64" height="78">
+<p align="center">
+  <img src="assets/branding/tailboard-mark.png" alt="Tailboard icon" width="64" height="78">
+</p>
 
-# Tailboard
+<h1 align="center">Tailboard</h1>
 
 Copy text between a Mac and an Android phone over [Tailscale](https://tailscale.com).
 

@@ -114,7 +114,14 @@ func request(method, url string, body io.Reader, result any) error {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Clip-Source", "CLI")
 	}
-	client := &http.Client{Timeout: 5 * time.Second}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	client := &http.Client{
+		Timeout:       5 * time.Second,
+		Transport:     transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	defer transport.CloseIdleConnections()
 	response, err := client.Do(req)
 	if err != nil {
 		return err
@@ -128,7 +135,7 @@ func request(method, url string, body io.Reader, result any) error {
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return fmt.Errorf("Tailboard returned %s: %s", response.Status, strings.TrimSpace(string(message)))
+		return fmt.Errorf("tailboard returned %s: %s", response.Status, strings.TrimSpace(string(message)))
 	}
 	if result != nil {
 		return json.NewDecoder(response.Body).Decode(result)

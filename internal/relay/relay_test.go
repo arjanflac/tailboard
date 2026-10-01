@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,6 +60,89 @@ func TestPostGetAndClear(t *testing.T) {
 	if response.StatusCode != http.StatusNoContent || !cleared || relay.Current() != nil {
 		t.Fatalf("clear status=%d cleared=%t current=%#v", response.StatusCode, cleared, relay.Current())
 	}
+}
+
+func TestSameOriginBrowserRequestIsRejected(t *testing.T) {
+	r := New(nil, nil)
+	r.PutLocal("synthetic", "Mac")
+	req := httptest.NewRequest("GET", "/api/clip", nil)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	response := httptest.NewRecorder()
+	r.Handler().ServeHTTP(response, req)
+	if response.Code != http.StatusForbidden || strings.Contains(response.Body.String(), "synthetic") {
+		t.Fatal("browser request could read clipboard text")
+	}
+}
+
+func TestEscapedTextLimitAndDeviceMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name, text, device, source string
+		want                       int
+	}{
+		{"escaped text at limit", strings.Repeat("\n", MaxTextBytes), "phone", "Pixel", 201},
+		{"oversized device ID", "synthetic", strings.Repeat("x", 129), "Pixel", 400},
+		{"oversized source", "synthetic", "phone", strings.Repeat("x", 129), 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]string{"content": tc.text, "device_id": tc.device})
+			req := httptest.NewRequest("POST", "/api/clip", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Clip-Source", tc.source)
+			response := httptest.NewRecorder()
+			New(nil, nil).Handler().ServeHTTP(response, req)
+			if response.Code != tc.want {
+				t.Fatalf("status = %d, want %d", response.Code, tc.want)
+			}
+		})
+	}
+}
+
+func TestStreamLimitAndDisconnectedSlotsAreReleased(t *testing.T) {
+	r := New(nil, nil)
+	server := httptest.NewServer(r.Handler())
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var connections []*websocket.Conn
+	defer func() {
+		for _, conn := range connections {
+			conn.CloseNow()
+		}
+	}()
+	for range maxStreams {
+		conn, _, err := websocket.Dial(ctx, server.URL+"/api/clip/stream", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		connections = append(connections, conn)
+		var ready message
+		if err := wsjson.Read(ctx, conn, &ready); err != nil {
+			t.Fatal(err)
+		}
+	}
+	conn, response, err := websocket.Dial(ctx, server.URL+"/api/clip/stream", nil)
+	if conn != nil {
+		conn.CloseNow()
+	}
+	if err == nil || response == nil || response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatal("excess connection was not rejected")
+	}
+	response.Body.Close()
+	connections[0].CloseNow()
+	for ctx.Err() == nil {
+		r.mu.RLock()
+		count := len(r.clients)
+		r.mu.RUnlock()
+		if count < maxStreams {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	conn, _, err = websocket.Dial(ctx, server.URL+"/api/clip/stream", nil)
+	if err != nil {
+		t.Fatalf("disconnected slot was not reusable: %v", err)
+	}
+	conn.CloseNow()
 }
 
 func TestRejectsEmptyAndOversizedText(t *testing.T) {

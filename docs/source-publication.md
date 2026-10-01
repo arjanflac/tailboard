@@ -1,39 +1,49 @@
-# Source publication decision
+# Source publication review
 
-Reviewed September 30, 2026. Recommended distribution: public MIT-licensed
-source, with users building for their own Mac and Android phone. No maintainer
-signed binaries, notarization service, release downloads, or automatic updates.
-Changing GitHub visibility is a separate owner action.
+Reviewed September 30, 2026. Tailboard is shared as MIT-licensed source for users
+to build themselves. No maintainer signing service, binary releases, or support
+commitment.
 
-The repository contains the upstream MIT attribution and dependency notices.
-A redacted Gitleaks scan of all local Git history found no known secrets.
-Tracked files and history were also checked for personal device addresses,
-signing identities, local configuration, and compiled distribution artifacts.
-Build products and local settings remain ignored. Git commit attribution is
-part of the source history and remains public when the repository is public.
+## Checks
 
-The installed personal Mac app uses an Apple Development identity; it is not a
-notarized Developer ID distribution. CI uses no signing credentials and only
-builds and tests. There are no GitHub Releases or uploaded binary assets as of
-this review. The engine can run directly or as an ad-hoc-signed per-user
-LaunchAgent, without an Apple account. The optional app requires the builder's
-own development identity.
+- Full Git history and all 26 completed GitHub Actions runs: no known secrets
+  found. No personal device addresses, local paths, or signing identities in
+  Actions logs. No uploaded build artifacts or GitHub Releases.
+- Go: tests, race checks, vet, Staticcheck, dead-code analysis, and vulnerability
+  scanning. No unreachable functions or known dependency vulnerabilities found.
+- Android: runtime dependencies checked against OSV; no known vulnerabilities
+  found across the 10 resolved packages. Unit tests, lint, and builds checked.
+- Clipboard text is not written to app storage or logs. Android backup is
+  disabled; only settings and the last receipt ID are saved.
+- MIT attribution and dependency notices are retained. Git author attribution
+  remains part of the public source history.
 
-Tailboard trusts devices allowed to reach its private Tailscale listener on
-port 9437. Those devices can read, replace, and clear its current clipboard.
-The server rejects supplied browser Origin headers and requires JSON for
-updates, but has no additional client authentication. Do not expose it through
-a public proxy or a public network interface. These boundaries are documented
-in the README rather than hidden by the installation flow.
+## Footprint
 
-Validation included Go tests, race checks and vet; Android unit tests, lint,
-builds and device tests; a local Mac app build and install; and an isolated
-ad-hoc-signed engine LaunchAgent started without a signing identity. The
-engine-only installer also refused to conflict with the personal app service.
-Go vulnerability scanning found standard-library issues in the old local
-toolchain; the minimum version was raised to patched Go 1.26.8, the engine
-rebuilt, and the scan added to CI. No reachable vulnerabilities were reported
-after the update.
-Android destination settings survive an upgrade and the installed phone can
-reach the installed Mac. These checks cover the supported personal setup;
-they are not a promise to support every macOS, Android, or tailnet policy.
+An idle sample with one connected Pixel, on the maintainer's devices:
+
+| Component | Observed footprint |
+| --- | --- |
+| Mac engine | 5.6–9.8 MiB resident memory; 0–0.2% CPU over 24 seconds |
+| Android app | About 38 MiB proportional memory |
+| Build sizes | About 8.8 MiB engine; 4 MiB debug APK |
+
+These are snapshots, not memory limits or battery-life benchmarks. There is no
+embedded Tailscale node, database, analytics, or clipboard history. Android
+clients share connection pools and reconnect with backoff.
+
+## Trust boundary
+
+Tailscale access rules decide who can reach port 9437. Allowed devices can read,
+replace, or clear the clipboard; there is no additional app login. Keep the
+service private and restrict it to trusted devices.
+
+Automatic discovery excludes LAN interfaces and refuses ambiguous CGNAT VPN
+matches. Browser Origin/Fetch Metadata requests are rejected. Payloads,
+metadata, stream counts, and network waits are bounded. Clients do not follow
+HTTP redirects or use system proxies. These checks reduce specific risks;
+they do not make an untrusted tailnet safe.
+
+The optional Mac app is locally development-signed. Users can instead install
+the engine-only login agent without an Apple account. Build instructions and
+troubleshooting are in [building.md](building.md); the README keeps the setup short.

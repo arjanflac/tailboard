@@ -18,6 +18,8 @@ import (
 )
 
 const MaxTextBytes = 1 << 20
+const maxStreams = 16
+const writeTimeout = 5 * time.Second
 
 // Clip is the one current text value; there is no history or expiry schedule.
 type Clip struct {
@@ -125,7 +127,7 @@ func (r *Relay) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		// Tailboard has native clients, not a browser UI. A website visited on
 		// a tailnet device must not be able to read or mutate its clipboard.
-		if len(request.Header.Values("Origin")) != 0 {
+		if len(request.Header.Values("Origin")) != 0 || len(request.Header.Values("Sec-Fetch-Site")) != 0 {
 			writeError(w, http.StatusForbidden, "browser requests are not supported")
 			return
 		}
@@ -152,7 +154,8 @@ func (r *Relay) post(w http.ResponseWriter, request *http.Request) {
 		Content  string `json:"content"`
 		DeviceID string `json:"device_id"`
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, request.Body, MaxTextBytes+4096))
+	// A byte of text can take up to six bytes when escaped in JSON.
+	decoder := json.NewDecoder(http.MaxBytesReader(w, request.Body, 6*MaxTextBytes+4096))
 	if err := decoder.Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid text payload")
 		return
@@ -163,6 +166,10 @@ func (r *Relay) post(w http.ResponseWriter, request *http.Request) {
 	}
 	if payload.Content == "" || len(payload.Content) > MaxTextBytes {
 		writeError(w, http.StatusBadRequest, "text must contain 1 to 1048576 bytes")
+		return
+	}
+	if len(payload.DeviceID) > 128 || len(request.Header.Get("X-Clip-Source")) > 128 {
+		writeError(w, http.StatusBadRequest, "device labels must not exceed 128 bytes")
 		return
 	}
 	if r.applyRemote != nil {
@@ -200,15 +207,13 @@ func (r *Relay) status(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (r *Relay) stream(w http.ResponseWriter, request *http.Request) {
-	conn, err := websocket.Accept(w, request, nil)
-	if err != nil {
-		return
-	}
-	defer conn.CloseNow()
-	conn.SetReadLimit(4096)
-
 	updates := make(chan message, 1)
 	r.mu.Lock()
+	if len(r.clients) >= maxStreams {
+		r.mu.Unlock()
+		writeError(w, http.StatusServiceUnavailable, "too many connected devices")
+		return
+	}
 	r.clients[updates] = struct{}{}
 	current := r.current
 	r.mu.Unlock()
@@ -217,16 +222,22 @@ func (r *Relay) stream(w http.ResponseWriter, request *http.Request) {
 		delete(r.clients, updates)
 		r.mu.Unlock()
 	}()
+	conn, err := websocket.Accept(w, request, nil)
+	if err != nil {
+		return
+	}
+	defer conn.CloseNow()
+	conn.SetReadLimit(4096)
 
 	ctx, cancel := context.WithCancel(request.Context())
 	defer cancel()
 	peerClosed := conn.CloseRead(ctx)
-	if err := wsjson.Write(ctx, conn, message{Type: "ready"}); err != nil {
+	if err := writeMessage(ctx, conn, message{Type: "ready"}); err != nil {
 		return
 	}
 	if current != nil {
 		item := *current
-		if err := wsjson.Write(ctx, conn, message{Type: "clip_update", Item: &item}); err != nil {
+		if err := writeMessage(ctx, conn, message{Type: "clip_update", Item: &item}); err != nil {
 			return
 		}
 	}
@@ -238,11 +249,17 @@ func (r *Relay) stream(w http.ResponseWriter, request *http.Request) {
 		case <-peerClosed.Done():
 			return
 		case update := <-updates:
-			if err := wsjson.Write(ctx, conn, update); err != nil {
+			if err := writeMessage(ctx, conn, update); err != nil {
 				return
 			}
 		}
 	}
+}
+
+func writeMessage(ctx context.Context, conn *websocket.Conn, update message) error {
+	ctx, cancel := context.WithTimeout(ctx, writeTimeout)
+	defer cancel()
+	return wsjson.Write(ctx, conn, update)
 }
 
 func Listen(ctx context.Context, address string, r *Relay) error {
@@ -254,6 +271,8 @@ func Listen(ctx context.Context, address string, r *Relay) error {
 	}
 	server := &http.Server{
 		Handler: r.Handler(), ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second,
+		IdleTimeout: time.Minute, MaxHeaderBytes: 8192,
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 	go func() {

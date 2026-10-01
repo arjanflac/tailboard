@@ -5,11 +5,11 @@ import android.content.Context;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.net.Proxy;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
-import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -52,7 +52,10 @@ final class TailboardClient {
     }
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    private final OkHttpClient http = new OkHttpClient.Builder()
+    private static final OkHttpClient http = new OkHttpClient.Builder()
+            .proxy(Proxy.NO_PROXY)
+            .followRedirects(false)
+            .followSslRedirects(false)
             .connectTimeout(4, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
             .writeTimeout(5, TimeUnit.SECONDS)
@@ -60,7 +63,7 @@ final class TailboardClient {
             .callTimeout(6, TimeUnit.SECONDS)
             .retryOnConnectionFailure(false)
             .build();
-    private final OkHttpClient streamHTTP = http.newBuilder()
+    private static final OkHttpClient streamHTTP = http.newBuilder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .callTimeout(0, TimeUnit.MILLISECONDS)
             .retryOnConnectionFailure(true)
@@ -136,9 +139,7 @@ final class TailboardClient {
 
     WebSocket openStream(Context context, StreamListener listener) {
         MacDestination destination = TailboardConfig.destination(context);
-        String httpURL = HttpUrl.get(destination.url + "/api/clip/stream").newBuilder()
-                .addQueryParameter("device_id", TailboardConfig.deviceID(context))
-                .build().toString();
+        String httpURL = destination.url + "/api/clip/stream";
         String socketURL = httpURL.startsWith("https://")
                 ? "wss://" + httpURL.substring(8)
                 : "ws://" + httpURL.substring(7);

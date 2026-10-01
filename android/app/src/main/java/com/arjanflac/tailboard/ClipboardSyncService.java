@@ -41,6 +41,7 @@ public final class ClipboardSyncService extends Service {
     private String connectionStatus = "Connecting…";
 
     static void start(Context context) {
+        if (!TailboardConfig.destination(context).configured()) return;
         context.startForegroundService(new Intent(context, ClipboardSyncService.class)
                 .setAction(ACTION_START));
     }

@@ -197,4 +197,43 @@ public final class DestinationDeviceTest {
             responder.join(1000);
         }
     }
+
+    @Test public void redirectsCannotMoveRequestsToAnotherServer() throws Exception {
+        try (ServerSocket redirect = new ServerSocket(0); ServerSocket sink = new ServerSocket(0)) {
+            redirect.setSoTimeout(3000);
+            sink.setSoTimeout(1500);
+            TailboardConfig.save(context, "http://127.0.0.1:" + redirect.getLocalPort(), "MacBook", "Pixel");
+            CountDownLatch done = new CountDownLatch(1);
+            AtomicReference<Boolean> ready = new AtomicReference<>();
+            AtomicReference<Boolean> leaked = new AtomicReference<>(false);
+            Thread first = new Thread(() -> {
+                try (Socket socket = redirect.accept()) {
+                    socket.setSoTimeout(3000);
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                    while (!reader.readLine().isEmpty()) {}
+                    socket.getOutputStream().write(("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:"
+                            + sink.getLocalPort() + "/healthz\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                            .getBytes(StandardCharsets.UTF_8));
+                } catch (Exception ignored) {}
+            });
+            Thread second = new Thread(() -> {
+                try (Socket socket = sink.accept()) {
+                    leaked.set(true);
+                    socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+                            .getBytes(StandardCharsets.UTF_8));
+                } catch (java.io.IOException expectedTimeout) {}
+            });
+            first.start();
+            second.start();
+            new TailboardClient().probe(context, (success, message) -> {
+                ready.set(success);
+                done.countDown();
+            });
+            assertTrue(done.await(4, TimeUnit.SECONDS));
+            first.join(3500);
+            second.join(2000);
+            assertEquals(Boolean.FALSE, ready.get());
+            assertFalse("Request escaped the selected Mac", leaked.get());
+        }
+    }
 }
