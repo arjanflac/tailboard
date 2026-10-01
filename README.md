@@ -22,6 +22,9 @@ Both devices need Tailscale installed, connected, and allowed to reach each othe
 on your tailnet. Tailboard uses the existing Tailscale apps.
 
 After installing, open Tailboard on the Mac once to enable its background service.
+The engine waits quietly if Tailscale is disconnected and resumes automatically
+when it reconnects, including after login, sleep, or a macOS update. It listens
+only on the Mac's Tailscale address, never on a public or LAN interface.
 On Android, enter `http://<your-mac-tailscale-ip>:9437` in **Edit connection**, then
 tap **Add Send Clipboard tile**. On older Android versions, add the tile using
 the Quick Settings editor. If your phone stops receiving in the background,
@@ -51,9 +54,11 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 ADB needs an authorized USB connection or paired wireless debugging connection.
 Alternatively, copy the APK to the phone and open it to install.
-The Mac installer uses `/Applications/Xcode.app` and reuses the signing team of
+The Mac installer uses the Xcode selected by `xcode-select` (or `DEVELOPER_DIR`)
+and reuses the signing team of
 an existing Tailboard installation. Set `TAILBOARD_MAC_CODESIGN_IDENTITY` to
 your certificate's SHA-1 hash if you need to choose a different identity.
+Set `TAILBOARD_DEVELOPER_DIR` to override the selected Xcode.
 
 For diagnostics, `make tailboard` builds the CLI:
 
@@ -62,6 +67,12 @@ bin/tailboard status
 bin/tailboard get
 bin/tailboard clear
 ```
+
+If sync stops, check `tailscale status` and reconnect the existing account with
+`tailscale up` or the Tailscale app. The engine stays running while disconnected;
+`bin/tailboard status` becomes available again when Tailscale reconnects. If macOS
+requests background-service approval, allow Tailboard in System Settings →
+General → Login Items.
 
 ## Privacy and credit
 

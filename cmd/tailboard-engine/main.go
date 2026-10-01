@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -35,13 +34,9 @@ func main() {
 
 	debug.SetMemoryLimit(32 << 20)
 	debug.SetGCPercent(25)
-	if *listen == "" {
-		ip, err := tailnet.IPv4()
-		if err != nil {
-			slog.Error("Tailboard requires a connected Tailscale app", "error", err)
-			os.Exit(1)
-		}
-		*listen = net.JoinHostPort(ip, "9437")
+	if *poll <= 0 {
+		slog.Error("clipboard polling interval must be positive")
+		os.Exit(2)
 	}
 	if *name == "" {
 		*name = computerName()
@@ -70,6 +65,14 @@ func main() {
 		}
 	}()
 
+	if *listen == "" {
+		slog.Info("Tailboard waiting for Tailscale", "name", *name)
+		tailnet.Serve(ctx, func(ctx context.Context, address string) error {
+			slog.Info("Tailboard listening", "listen", address)
+			return relay.Listen(ctx, address, engine.Relay())
+		})
+		return
+	}
 	slog.Info("Tailboard started", "listen", *listen, "name", *name)
 	if err := relay.Listen(ctx, *listen, engine.Relay()); err != nil {
 		slog.Error("Tailboard stopped", "error", err)

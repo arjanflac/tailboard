@@ -232,11 +232,16 @@ func (r *Relay) stream(w http.ResponseWriter, request *http.Request) {
 }
 
 func Listen(ctx context.Context, address string, r *Relay) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Handler: r.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	server := &http.Server{
+		Handler: r.Handler(), ReadHeaderTimeout: 10 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return ctx },
+	}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)

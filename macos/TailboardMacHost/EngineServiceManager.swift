@@ -1,6 +1,7 @@
 import AppKit
 import CoreServices
 import CryptoKit
+import Darwin
 import Foundation
 import ServiceManagement
 
@@ -37,6 +38,21 @@ final class EngineServiceManager {
     func activate() async throws {
         registerBundleLocations()
         try await ensureEngineRegistered()
+        if !(try await waitForEngineLaunch()) {
+            // Refresh an approved job that macOS retained without a process.
+            // Launch through ServiceManagement so only the login item owns it.
+            try await service.unregister()
+            try await Task.sleep(for: .milliseconds(300))
+            try service.register()
+            guard try await waitForEngineLaunch() else {
+                if service.status == .requiresApproval {
+                    throw EngineServiceError.approvalRequired
+                }
+                throw EngineServiceError.registrationFailed(
+                    "the background service did not remain running; reopen Tailboard to retry"
+                )
+            }
+        }
         UserDefaults.standard.removeObject(forKey: Self.lastErrorKey)
     }
 
@@ -79,13 +95,6 @@ final class EngineServiceManager {
                 UserDefaults.standard.set(engineHash, forKey: Self.registeredHashKey)
                 return
             }
-            let isRunning = !NSRunningApplication.runningApplications(
-                withBundleIdentifier: Self.engineBundleIdentifier
-            ).isEmpty
-            if !isRunning {
-                try await restartEngineApplication(at: engineAppURL)
-                UserDefaults.standard.set(engineHash, forKey: Self.registeredHashKey)
-            }
             return
         case .notRegistered, .notFound:
             break
@@ -127,66 +136,34 @@ final class EngineServiceManager {
         LSRegisterURL(engineURL as CFURL, true)
     }
 
-    /// Restart the already-approved nested login item in place after updates.
-    private func restartEngineApplication(at url: URL) async throws {
-        let runningApplications = NSRunningApplication.runningApplications(
-            withBundleIdentifier: Self.engineBundleIdentifier
-        )
-        for application in runningApplications {
-            application.terminate()
-        }
-        if !runningApplications.isEmpty {
-            try await Task.sleep(for: .milliseconds(750))
-        }
-        for application in runningApplications where !application.isTerminated {
-            application.forceTerminate()
-        }
-
-        // On macOS 27 betas an enabled SMAppService can remain registered after
-        // an in-place bundle update while its previous process is recorded as a
-        // successful exit. Launch Services may acknowledge the first open
-        // request before the new executable is actually running, so verify and
-        // retry instead of silently leaving the relay stopped.
-        for attempt in 0..<4 {
-            try await requestEngineLaunch(at: url)
-            if await waitForEngineLaunch() {
-                return
-            }
-            if attempt < 3 {
-                try await Task.sleep(for: .milliseconds(500 * (attempt + 1)))
-            }
-        }
-
-        throw EngineServiceError.registrationFailed(
-            "macOS accepted the launch request but the engine did not remain running"
-        )
-    }
-
-    private func requestEngineLaunch(at url: URL) async throws {
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
-            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                continuation.resume()
-            }
-        }
-    }
-
-    private func waitForEngineLaunch() async -> Bool {
-        for _ in 0..<12 {
-            if !NSRunningApplication.runningApplications(
-                withBundleIdentifier: Self.engineBundleIdentifier
-            ).isEmpty {
+    // A Go login item launched by launchd may never appear in AppKit's
+    // runningApplications list. Match the actual executable path instead.
+    private func engineIsRunning() -> Bool {
+        let expectedPath = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Library/LoginItems/Tailboard Engine.app/Contents/MacOS/Tailboard Engine")
+            .path
+        let capacity = Int(proc_listallpids(nil, 0)) + 64
+        guard capacity > 64 else { return false }
+        var pids = [pid_t](repeating: 0, count: capacity)
+        let count = proc_listallpids(&pids, Int32(capacity * MemoryLayout<pid_t>.stride))
+        for pid in pids.prefix(max(0, min(Int(count), capacity))) where pid > 0 {
+            // PROC_PIDPATHINFO_MAXSIZE is 4 * MAXPATHLEN (not imported by Swift).
+            var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+            if proc_pidpath(pid, &path, UInt32(path.count)) > 0,
+               String(cString: path) == expectedPath {
                 return true
             }
-            try? await Task.sleep(for: .milliseconds(250))
         }
         return false
     }
 
+    private func waitForEngineLaunch() async throws -> Bool {
+        var consecutiveChecks = 0
+        for _ in 0..<24 {
+            consecutiveChecks = engineIsRunning() ? consecutiveChecks + 1 : 0
+            if consecutiveChecks >= 4 { return true }
+            try await Task.sleep(for: .milliseconds(250))
+        }
+        return false
+    }
 }

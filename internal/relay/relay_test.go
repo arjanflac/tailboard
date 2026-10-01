@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -121,5 +122,50 @@ func TestReconnectReplaysSameReceiptAndNewTextGetsNewReceipt(t *testing.T) {
 	restarted := New(nil, nil).PutLocal("old text", "Mac")
 	if restarted.ID == first.ID {
 		t.Fatal("receipt IDs must not collide after a Mac restart")
+	}
+}
+
+func TestListenerShutdownDisconnectsStreams(t *testing.T) {
+	// Reserve an ephemeral loopback port before starting the production listener.
+	reservation, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := reservation.Addr().String()
+	reservation.Close()
+	r := New(nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- Listen(ctx, address, r) }()
+	testContext, finish := context.WithTimeout(context.Background(), 3*time.Second)
+	defer finish()
+	var conn *websocket.Conn
+	for testContext.Err() == nil {
+		conn, _, err = websocket.Dial(testContext, "http://"+address+"/api/clip/stream", nil)
+		if err == nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+	var ready message
+	if err := wsjson.Read(testContext, conn, &ready); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	if err := wsjson.Read(testContext, conn, &ready); err == nil || testContext.Err() != nil {
+		t.Fatalf("stream was not disconnected on shutdown: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-testContext.Done():
+		t.Fatal("listener did not stop")
 	}
 }

@@ -15,7 +15,7 @@ if [ -f "$CONFIG_FILE" ]; then
   . "$CONFIG_FILE"
 fi
 
-DEVELOPER_DIR=${TAILBOARD_DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
+DEVELOPER_DIR=${TAILBOARD_DEVELOPER_DIR:-${DEVELOPER_DIR:-$(xcode-select -p)}}
 if [ -z "${TAILBOARD_MAC_CODESIGN_IDENTITY:-}" ]; then
   tailboard_preferred_team=${TAILBOARD_APPLE_DEVELOPMENT_TEAM:-}
   if [ -z "$tailboard_preferred_team" ] && [ -d "$DESTINATION" ]; then
@@ -49,9 +49,9 @@ EOF
   fi
 fi
 : "${TAILBOARD_MAC_CODESIGN_IDENTITY:?no Apple Development signing identity found}"
-: "${DEVELOPER_DIR:?missing stable Xcode developer directory}"
+: "${DEVELOPER_DIR:?missing Xcode developer directory}"
 if [ ! -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]; then
-  echo "stable Xcode not found at $DEVELOPER_DIR" >&2
+  echo "Xcode not found at $DEVELOPER_DIR; select Xcode with xcode-select or set TAILBOARD_DEVELOPER_DIR" >&2
   exit 1
 fi
 export DEVELOPER_DIR
@@ -116,36 +116,14 @@ LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 
 open -W "$DESTINATION"
 
-ENGINE_DESTINATION="$DESTINATION/Contents/Library/LoginItems/Tailboard Engine.app"
-ENGINE_SERVICE="gui/$(id -u)/com.arjanflac.tailboard.engine.background"
 engine_running() {
   pgrep -f '^(com[.]arjanflac[.]tailboard[.]engine[.]background|/Applications/Tailboard[.]app/Contents/Library/LoginItems/Tailboard Engine[.]app/Contents/MacOS/Tailboard Engine)$' >/dev/null
 }
 
-# Wait for the one-shot host to finish registration, remove any direct
-# Launch Services instance it used while recovering, then start the registered
-# SMAppService job itself. `kickstart` is needed on macOS 27 betas when the job
-# remains enabled but records the replaced executable as a successful exit.
-pkill -f '^/Applications/Tailboard[.]app/Contents/Library/LoginItems/Tailboard Engine[.]app/Contents/MacOS/Tailboard Engine$' 2>/dev/null || true
-launchctl kickstart -kp "$ENGINE_SERVICE" >/dev/null 2>&1 || true
-
-launch_attempt=0
-while [ "$launch_attempt" -lt 20 ] && ! engine_running; do
-  sleep 0.5
-  launch_attempt=$((launch_attempt + 1))
-done
-
-if ! engine_running; then
-  # Last-resort recovery for systems where the service job is still importing.
-  open -gj "$ENGINE_DESTINATION"
-  launch_attempt=0
-  while [ "$launch_attempt" -lt 20 ] && ! engine_running; do
-    sleep 0.5
-    launch_attempt=$((launch_attempt + 1))
-  done
-fi
-
+# The host registers and verifies the ServiceManagement process, even when
+# Tailscale is offline. Do not launch a second copy through Launch Services.
 if ! engine_running; then
   echo "Tailboard Engine did not start after installation" >&2
   exit 1
 fi
+echo "Installed Tailboard; its background engine is running."
