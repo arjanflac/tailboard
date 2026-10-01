@@ -7,6 +7,9 @@ Copy text between a Mac and an Android phone over [Tailscale](https://tailscale.
 A small personal utility, shared as-is. Build it for your own devices. No prebuilt
 apps or promised support.
 
+Tailboard uses the native Tailscale apps already installed and connected on your
+devices. It doesn't bundle Tailscale or add another device to your tailnet.
+
 ## What it does
 
 - **Mac → phone:** copied text arrives automatically.
@@ -18,7 +21,7 @@ for files and photos.
 
 ## Install
 
-Requires macOS 14+, Android 10+, and Tailscale connected on both devices.
+Requires macOS 14+ and Android 10+.
 Clone this repository and run these commands from its root.
 
 ### Mac
